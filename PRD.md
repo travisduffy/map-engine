@@ -97,7 +97,7 @@ The following are **out of scope** and must not be implemented in v1, even parti
 const response = await fetch(source)
 if (!response.ok) {
   throw new Error(
-    `SectorBitmapParser: failed to load bitmap — HTTP ${response.status} ${response.statusText}`,
+    `SectorBitmapParser: failed to load bitmap — HTTP ${response.status} ${response.statusText}`
   )
 }
 const blob = await response.blob()
@@ -195,7 +195,7 @@ this._colorParserCtx = this._colorParserCanvas.getContext('2d')!
 
 function parseCSSColor(
   ctx: OffscreenCanvasRenderingContext2D,
-  color: string,
+  color: string
 ): [number, number, number] {
   ctx.clearRect(0, 0, 1, 1)
   ctx.fillStyle = color
@@ -220,7 +220,7 @@ ctx.putImageData(
   bbox.minX,
   bbox.minY, // dirty rect origin
   bbox.maxX - bbox.minX + 1, // dirty rect width
-  bbox.maxY - bbox.minY + 1, // dirty rect height
+  bbox.maxY - bbox.minY + 1 // dirty rect height
 )
 ```
 
@@ -254,7 +254,7 @@ This writes only the bounding-box region back to the canvas element, avoiding a 
 const rect = canvas.getBoundingClientRect()
 const ndc = new THREE.Vector2(
   ((event.clientX - rect.left) / rect.width) * 2 - 1,
-  -((event.clientY - rect.top) / rect.height) * 2 + 1, // Y is negated: screen-down → NDC-down
+  -((event.clientY - rect.top) / rect.height) * 2 + 1 // Y is negated: screen-down → NDC-down
 )
 raycaster.setFromCamera(ndc, camera)
 ```
@@ -339,7 +339,7 @@ const camera = new THREE.OrthographicCamera(
   frustumHalfH,
   -frustumHalfH, // top, bottom
   -1000,
-  1000, // near, far
+  1000 // near, far
 )
 camera.position.set(0, 0, 1)
 camera.zoom = 1.0
@@ -390,7 +390,7 @@ canvas.addEventListener(
     camera.updateProjectionMatrix()
     clampPan() // re-enforce pan bounds (zoom changes effective world view)
   },
-  { passive: false },
+  { passive: false }
 )
 ```
 
@@ -404,12 +404,12 @@ function clampPan() {
   camera.position.x = THREE.MathUtils.clamp(
     camera.position.x,
     -(registry.width / 2 + registry.width * 0.1),
-    +(registry.width / 2 + registry.width * 0.1),
+    +(registry.width / 2 + registry.width * 0.1)
   )
   camera.position.y = THREE.MathUtils.clamp(
     camera.position.y,
     -(registry.height / 2 + registry.height * 0.1),
-    +(registry.height / 2 + registry.height * 0.1),
+    +(registry.height / 2 + registry.height * 0.1)
   )
 }
 ```
@@ -727,7 +727,7 @@ The engine uses RGBA format everywhere — `SectorBitmapParser` outputs RGBA, `d
 if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
   throw new Error(
     'MapEngine: canvas has zero dimensions — ensure the canvas element is in the DOM ' +
-      'and has non-zero CSS dimensions before calling loadMap()',
+      'and has non-zero CSS dimensions before calling loadMap()'
   )
 }
 
@@ -993,7 +993,7 @@ Do not use relative paths (e.g., `'../fixtures/test-4x4.png'`), filesystem paths
     ```typescript
     class SectorBitmapParser {
       parse(
-        source: string | Blob,
+        source: string | Blob
       ): Promise<{ buffer: Uint8ClampedArray; width: number; height: number }>
     }
     ```
@@ -1003,7 +1003,7 @@ Do not use relative paths (e.g., `'../fixtures/test-4x4.png'`), filesystem paths
     const response = await fetch(source)
     if (!response.ok)
       throw new Error(
-        `SectorBitmapParser: failed to load bitmap — HTTP ${response.status} ${response.statusText}`,
+        `SectorBitmapParser: failed to load bitmap — HTTP ${response.status} ${response.statusText}`
       )
     const blob = await response.blob()
     const bitmap = await createImageBitmap(blob)
@@ -1213,7 +1213,7 @@ Do not use relative paths (e.g., `'../fixtures/test-4x4.png'`), filesystem paths
       clientX: rect.left + 250, // center of red quadrant
       clientY: rect.top + 150,
       bubbles: true,
-    }),
+    })
   )
   ```
 
