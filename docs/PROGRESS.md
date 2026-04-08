@@ -38,8 +38,8 @@
 
 ## Current Status
 
-**Phase:** Epic 2 complete. Epic 3 starting.
-**Next task:** Task 3.1 — `MapEngine` Constructor and Event Subscription System (`on` / `off`).
+**Phase:** Epic 3 in progress.
+**Next task:** Task 3.2 — `loadMap()`, Lifecycle Guards, `destroy()`, and Pass-Through Methods.
 **Blocking issues:** None.
 
 ---
@@ -78,7 +78,7 @@
 
 | Status | Task    | Description                                                                           |
 | ------ | ------- | ------------------------------------------------------------------------------------- |
-| `[ ]`  | **3.1** | `MapEngine` Constructor and Event Subscription System (`on` / `off`)                  |
+| `[x]`  | **3.1** | `MapEngine` Constructor and Event Subscription System (`on` / `off`)                  |
 | `[ ]`  | **3.2** | `loadMap()`, Lifecycle Guards, `destroy()`, and Pass-Through Methods                  |
 | `[ ]`  | **3.3** | Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping                 |
 | `[ ]`  | **3.4** | Sector Resolution, `PickResult` Construction, and Event Emission                      |
@@ -108,6 +108,23 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 3.1: `MapEngine` Constructor and Event Subscription System
+
+**Tasks touched:** 3.1
+**Outcome:** completed
+
+**What happened:**
+Added lifecycle flags (`_loaded`, `_destroyed`, `_loading`), `_lastHexKey`, `_parser` (instantiated once in constructor), and `_handlers: Map<string, Set<Function>>` to `MapEngine`. Implemented `on()` with overloaded TypeScript signatures — checks `_destroyed`, creates the handler Set on first use, adds handler. Implemented `off()` with same `_destroyed` guard, performs `Set.delete`. Implemented private `_emit(event, payload)` that iterates the handler Set and calls each function. Remaining stubs (`loadMap`, `destroy`, etc.) reference private fields via `void` expressions to satisfy `noUnusedLocals`. Wrote 9 node-mode tests (constructor, on/off pre-load, \_emit dispatch, off removes only target handler, no-op on unregistered). 99 total tests, all pass.
+
+**Decisions made:**
+
+- Post-destroy guard test for `on()`/`off()` deferred to Task 3.2 integration tests since `destroy()` is not yet implemented; added a placeholder test with a note.
+
+**Left off at:**
+Task 3.2 — `loadMap()`, Lifecycle Guards, `destroy()`, and Pass-Through Methods. Ready to start.
+
+---
 
 ### 2026-04-08 — Task 2.6: Scroll-Wheel Zoom, `destroy()` Teardown, and Full Camera/Navigation Tests
 
