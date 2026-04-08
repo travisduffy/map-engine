@@ -161,8 +161,35 @@ export class MapRenderer {
     this._texture.needsUpdate = true
   }
 
-  resetSectorColor(_hexKey: string): void {
-    throw new Error('Not implemented')
+  resetSectorColor(hexKey: string): void {
+    if (!this._registry.pixelIndices.has(hexKey)) {
+      console.warn('[MapEngine] resetSectorColor: sector has no pixel data')
+      return
+    }
+
+    const indices = this._registry.pixelIndices.get(hexKey)!
+    const src = this._registry.sourceBuffer
+    const data = this.displayImageData.data
+    for (let n = 0; n < indices.length; n++) {
+      const offset = indices[n] * 4
+      data[offset] = src[offset]
+      data[offset + 1] = src[offset + 1]
+      data[offset + 2] = src[offset + 2]
+      data[offset + 3] = 255
+    }
+
+    const bbox = this._registry.bboxes.get(hexKey)!
+    this.displayCtx.putImageData(
+      this.displayImageData,
+      0,
+      0,
+      bbox.minX,
+      bbox.minY,
+      bbox.maxX - bbox.minX + 1,
+      bbox.maxY - bbox.minY + 1
+    )
+
+    this._texture.needsUpdate = true
   }
 
   destroy(): void {

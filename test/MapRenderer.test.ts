@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as THREE from 'three'
 import { MapRenderer } from '../src/MapRenderer'
 import { SectorRegistry } from '../src/SectorRegistry'
@@ -214,6 +214,124 @@ describe('MapRenderer', () => {
 
     it('material.map is assigned (texture is wired into material)', () => {
       expect(renderer.material.map).not.toBeNull()
+    })
+  })
+
+  describe('color mutation (Tasks 2.3 / 2.4)', () => {
+    beforeEach(() => {
+      renderer = new MapRenderer(canvas, registry)
+    })
+
+    // ── setSectorColor ────────────────────────────────────────────────────────
+
+    it('setSectorColor writes the correct RGB to all sector pixels', () => {
+      renderer.setSectorColor('ff0000', '#0000ff')
+      const data = renderer.displayCtx.getImageData(0, 0, 4, 4).data
+      // pixel (0,0) → flat index 0 → byte offset 0
+      expect(data[0]).toBe(0)
+      expect(data[1]).toBe(0)
+      expect(data[2]).toBe(255)
+      expect(data[3]).toBe(255)
+      // pixel (1,1) → flat index 5 → byte offset 20
+      expect(data[20]).toBe(0)
+      expect(data[21]).toBe(0)
+      expect(data[22]).toBe(255)
+      expect(data[23]).toBe(255)
+    })
+
+    it('setSectorColor does not mutate an adjacent sector', () => {
+      renderer.setSectorColor('ff0000', '#0000ff')
+      const data = renderer.displayCtx.getImageData(0, 0, 4, 4).data
+      // pixel (2,0) belongs to green sector — must remain green
+      const offset = 2 * 4 // x=2, y=0
+      expect(data[offset]).toBe(0)
+      expect(data[offset + 1]).toBe(255)
+      expect(data[offset + 2]).toBe(0)
+      expect(data[offset + 3]).toBe(255)
+    })
+
+    it('setSectorColor does not mutate registry.sourceBuffer', () => {
+      renderer.setSectorColor('ff0000', '#0000ff')
+      // pixel (0,0) in sourceBuffer must still be red
+      expect(registry.sourceBuffer[0]).toBe(255)
+      expect(registry.sourceBuffer[1]).toBe(0)
+      expect(registry.sourceBuffer[2]).toBe(0)
+      expect(registry.sourceBuffer[3]).toBe(255)
+    })
+
+    it('setSectorColor: unknown hex key emits console.warn and does not throw', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      expect(() => renderer.setSectorColor('aabbcc', '#ff0000')).not.toThrow()
+      expect(warn).toHaveBeenCalledWith(
+        '[MapEngine] setSectorColor: sector has no pixel data'
+      )
+      warn.mockRestore()
+    })
+
+    it('setSectorColor: zero-pixel sector (in definition, not in bitmap) emits console.warn and does not throw', () => {
+      // Build a registry with an extra definition entry that has no bitmap pixels
+      const defWithGhost = {
+        ...definition,
+        aabbcc: { name: 'Ghost Sector' },
+      }
+      const regWithGhost = new SectorRegistry(
+        make4x4Buffer(),
+        4,
+        4,
+        defWithGhost
+      )
+      const ghostRenderer = new MapRenderer(canvas, regWithGhost)
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      expect(() =>
+        ghostRenderer.setSectorColor('aabbcc', '#ff0000')
+      ).not.toThrow()
+      expect(warn).toHaveBeenCalledWith(
+        '[MapEngine] setSectorColor: sector has no pixel data'
+      )
+      warn.mockRestore()
+      ghostRenderer.destroy()
+    })
+
+    it('setSectorColor: invalid CSS color does not throw', () => {
+      expect(() =>
+        renderer.setSectorColor('ff0000', 'not-a-valid-color')
+      ).not.toThrow()
+    })
+
+    // ── resetSectorColor ──────────────────────────────────────────────────────
+
+    it('resetSectorColor restores original RGB after setSectorColor', () => {
+      renderer.setSectorColor('ff0000', '#0000ff')
+      renderer.resetSectorColor('ff0000')
+      const data = renderer.displayCtx.getImageData(0, 0, 4, 4).data
+      // pixel (0,0) must be back to red
+      expect(data[0]).toBe(255)
+      expect(data[1]).toBe(0)
+      expect(data[2]).toBe(0)
+      expect(data[3]).toBe(255)
+      // pixel (1,1) too
+      expect(data[20]).toBe(255)
+      expect(data[21]).toBe(0)
+      expect(data[22]).toBe(0)
+      expect(data[23]).toBe(255)
+    })
+
+    it('resetSectorColor does not mutate registry.sourceBuffer', () => {
+      renderer.setSectorColor('ff0000', '#0000ff')
+      renderer.resetSectorColor('ff0000')
+      expect(registry.sourceBuffer[0]).toBe(255)
+      expect(registry.sourceBuffer[1]).toBe(0)
+      expect(registry.sourceBuffer[2]).toBe(0)
+      expect(registry.sourceBuffer[3]).toBe(255)
+    })
+
+    it('resetSectorColor: unknown hex key emits console.warn and does not throw', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      expect(() => renderer.resetSectorColor('aabbcc')).not.toThrow()
+      expect(warn).toHaveBeenCalledWith(
+        '[MapEngine] resetSectorColor: sector has no pixel data'
+      )
+      warn.mockRestore()
     })
   })
 
