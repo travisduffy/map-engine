@@ -39,7 +39,7 @@
 ## Current Status
 
 **Phase:** Epic 1 in progress.
-**Next task:** Task 1.6 — `SectorRegistry`: Border Edges, Load-Time Validation, Public Methods, and Tests.
+**Next task:** Task 2.1 — Three.js Scene, Renderer, Camera, Geometry, and Render Loop.
 **Blocking issues:** None.
 
 ---
@@ -57,7 +57,7 @@
 | `[x]`  | **1.3** | `SectorBitmapParser`: Core Decode Pipeline                                      |
 | `[x]`  | **1.4** | `SectorBitmapParser`: Error Handling and Tests                                  |
 | `[x]`  | **1.5** | `SectorRegistry`: Single Scan Pass and Spatial Structures                       |
-| `[ ]`  | **1.6** | `SectorRegistry`: Border Edges, Load-Time Validation, Public Methods, and Tests |
+| `[x]`  | **1.6** | `SectorRegistry`: Border Edges, Load-Time Validation, Public Methods, and Tests |
 
 ### Epic 2: WebGL Rendering and Camera Architecture
 
@@ -109,6 +109,23 @@
 
 -->
 
+### 2026-04-08 — Task 1.6: `SectorRegistry` Border Edges, Load-Time Validation, Public Methods, and Tests
+
+**Tasks touched:** 1.6
+**Outcome:** completed
+
+**What happened:**
+Promoted `_borderEdges` to public `readonly borderEdges: BorderEdge[]`. Tracked bitmap-only hex keys in a `bitmapOnlyKeys` Set during the scan. After scan: emits `console.warn` for each JSON-only sector (no pixels) and each bitmap-only color (no JSON entry). Implemented `getSectorAt` (floors inputs, bounds checks, reads sourceBuffer), `getSector` (O(1) map lookup), `getSectorKeys` (returns definition keys only). Wrote 37 browser-mode tests covering all Phase 3 acceptance criteria — all 37 pass alongside the 11 existing parser tests.
+
+**Decisions made:**
+
+- Dropped `protected` on `_sectorMap` and `_borderEdges` — Task 1.6 integrated everything into the same class, so they became `private`/`readonly` respectively. No subclassing needed.
+
+**Left off at:**
+Epic 1 complete. Task 2.1 — Three.js Scene, Renderer, Camera, Geometry, and Render Loop. Ready to start.
+
+---
+
 ### 2026-04-08 — Task 1.5: `SectorRegistry` Single Scan Pass and Spatial Structures
 
 **Tasks touched:** 1.5
@@ -118,6 +135,7 @@
 Implemented `SectorRegistry` constructor with: buffer length validation; single O(W×H) scan pass building bboxes, centroid accumulators, pixelIndex arrays, and border edge accumulator; post-scan finalization (divide centroid sums, sort+convert pixelIndex arrays to Uint32Array). Pre-populated sector map from definition entries before the scan (handles zero-pixel JSON sectors). Border edge accumulator stored as `protected _borderEdges` for Task 1.6 to expose. `typecheck`, `build`, `test`, and `format` all pass.
 
 **Decisions made:**
+
 - Pre-populated `_sectorMap` from all definition keys upfront (not "on first encounter") — simpler and correctly handles zero-pixel sectors without extra logic.
 - `_sectorMap` and `_borderEdges` marked `protected` so Task 1.6 can expose them without needing a second scan pass.
 - Centroid uses raw pixel coordinates (x, y as integers); averaging them gives the pixel-center centroid (0.5 offset emerges naturally from the math for uniform grids).

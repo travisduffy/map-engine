@@ -13,9 +13,9 @@ export class SectorRegistry {
   readonly bboxes: Map<string, SectorBBox>
   readonly centroids: Map<string, { x: number; y: number }>
   readonly pixelIndices: Map<string, Uint32Array>
+  readonly borderEdges: BorderEdge[]
 
-  protected _sectorMap: Map<string, SectorData>
-  protected _borderEdges: BorderEdge[]
+  private _sectorMap: Map<string, SectorData>
 
   constructor(
     buffer: Uint8ClampedArray,
@@ -40,7 +40,7 @@ export class SectorRegistry {
     }
 
     this.bboxes = new Map<string, SectorBBox>()
-    this._borderEdges = []
+    this.borderEdges = []
 
     // Per-sector accumulators
     const centroidSums = new Map<
@@ -48,6 +48,8 @@ export class SectorRegistry {
       { sumX: number; sumY: number; count: number }
     >()
     const pixelIndexArrays = new Map<string, number[]>()
+    // Tracks bitmap hex keys with no definition entry (for load-time validation)
+    const bitmapOnlyKeys = new Set<string>()
 
     // Single O(W×H) scan pass — builds all structures in one traversal
     for (let y = 0; y < height; y++) {
@@ -90,6 +92,8 @@ export class SectorRegistry {
           } else {
             indices.push(flat)
           }
+        } else {
+          bitmapOnlyKeys.add(hexKey)
         }
 
         // Border edges: check neighbors for every pixel regardless of definition membership
@@ -101,7 +105,7 @@ export class SectorRegistry {
             buffer[rOff + 2]
           )
           if (rHex !== hexKey) {
-            this._borderEdges.push({
+            this.borderEdges.push({
               x,
               y,
               direction: 'h',
@@ -119,7 +123,7 @@ export class SectorRegistry {
             buffer[bOff + 2]
           )
           if (bHex !== hexKey) {
-            this._borderEdges.push({
+            this.borderEdges.push({
               x,
               y,
               direction: 'v',
@@ -145,5 +149,44 @@ export class SectorRegistry {
       pixelIndicesMap.set(key, new Uint32Array(indices))
     }
     this.pixelIndices = pixelIndicesMap
+
+    // Load-time validation — warn but never throw
+    for (const hexKey of this._sectorMap.keys()) {
+      if (!this.bboxes.has(hexKey)) {
+        console.warn(
+          `[MapEngine] Sector '${hexKey}' is defined in sectors.json but has no pixels in the bitmap.`
+        )
+      }
+    }
+    for (const hexKey of bitmapOnlyKeys) {
+      console.warn(
+        `[MapEngine] Color '${hexKey}' found in the bitmap has no corresponding entry in sectors.json.`
+      )
+    }
+  }
+
+  /** Returns the hex key of the sector at the given pixel coordinates. */
+  getSectorAt(pixelX: number, pixelY: number): string {
+    const x = Math.floor(pixelX)
+    const y = Math.floor(pixelY)
+    if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
+      throw new Error('getSectorAt: coordinates out of bounds')
+    }
+    const offset = (y * this.width + x) * 4
+    return toHexKey(
+      this.sourceBuffer[offset],
+      this.sourceBuffer[offset + 1],
+      this.sourceBuffer[offset + 2]
+    )
+  }
+
+  /** Returns the SectorData for the given hex key, or undefined if not found. */
+  getSector(hexKey: string): SectorData | undefined {
+    return this._sectorMap.get(hexKey)
+  }
+
+  /** Returns all hex keys in the sector map (definition keys only; bitmap-only colors excluded). */
+  getSectorKeys(): string[] {
+    return Array.from(this._sectorMap.keys())
   }
 }
