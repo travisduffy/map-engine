@@ -1,3 +1,4 @@
+import * as THREE from 'three'
 import { SectorBitmapParser } from './SectorBitmapParser'
 import { SectorRegistry } from './SectorRegistry'
 import { MapRenderer } from './MapRenderer'
@@ -15,10 +16,12 @@ export class MapEngine {
   private _renderer: MapRenderer | null = null
   private _boundPointerMove: ((e: PointerEvent) => void) | null = null
   private _boundClick: ((e: MouseEvent) => void) | null = null
+  private readonly _raycaster: THREE.Raycaster
 
   constructor() {
     this._parser = new SectorBitmapParser()
     this._handlers = new Map<string, Set<Function>>()
+    this._raycaster = new THREE.Raycaster()
   }
 
   on(event: 'sectorClick', handler: (result: PickResult) => void): void
@@ -48,8 +51,41 @@ export class MapEngine {
     }
   }
 
-  // Picking logic implemented in Task 3.3
-  private _handlePointerEvent(_event: MouseEvent, _isClick: boolean): void {
+  private _handlePointerEvent(event: MouseEvent, isClick: boolean): void {
+    if (!this._renderer || !this._registry || !this._canvas) return
+
+    // Step 1: NDC conversion via getBoundingClientRect()
+    const rect = this._canvas.getBoundingClientRect()
+    const ndc = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    )
+
+    // Step 2: Raycast
+    this._raycaster.setFromCamera(ndc, this._renderer.camera)
+    const intersections = this._raycaster.intersectObject(this._renderer.mesh)
+
+    // Step 3: Miss — ray did not hit the map plane
+    if (intersections.length === 0) {
+      // Task 3.4 handles null sectorHover emission on miss
+      void isClick
+      return
+    }
+
+    // Step 4: UV → clamped pixel coords (mandatory Y-inversion)
+    const uv = intersections[0].uv!
+    const width = this._registry.width
+    const height = this._registry.height
+    const pixelX = Math.max(0, Math.min(width - 1, Math.floor(uv.x * width)))
+    const pixelY = Math.max(
+      0,
+      Math.min(height - 1, Math.floor((1 - uv.y) * height))
+    )
+
+    // Task 3.4: sector resolution and event emission
+    void pixelX
+    void pixelY
+    void isClick
     void this._lastHexKey
     void this._emit
   }

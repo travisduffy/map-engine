@@ -39,7 +39,7 @@
 ## Current Status
 
 **Phase:** Epic 3 in progress.
-**Next task:** Task 3.3 — Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping.
+**Next task:** Task 3.4 — Sector Resolution, `PickResult` Construction, and Event Emission.
 **Blocking issues:** None.
 
 ---
@@ -80,7 +80,7 @@
 | ------ | ------- | ------------------------------------------------------------------------------------- |
 | `[x]`  | **3.1** | `MapEngine` Constructor and Event Subscription System (`on` / `off`)                  |
 | `[x]`  | **3.2** | `loadMap()`, Lifecycle Guards, `destroy()`, and Pass-Through Methods                  |
-| `[ ]`  | **3.3** | Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping                 |
+| `[x]`  | **3.3** | Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping                 |
 | `[ ]`  | **3.4** | Sector Resolution, `PickResult` Construction, and Event Emission                      |
 | `[ ]`  | **3.5** | Core API Documentation: Quickstart, API Reference, and Asset Contracts                |
 | `[ ]`  | **3.6** | Known Limitations, Web Worker Opt-In, Out-of-Scope List, and Bundle Size Verification |
@@ -108,6 +108,24 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 3.3: Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping
+
+**Tasks touched:** 3.3
+**Outcome:** completed
+
+**What happened:**
+Added `THREE.Raycaster` instance (`_raycaster`) to `MapEngine`, created once in the constructor and reused on every pointer event. Replaced the `_handlePointerEvent` no-op stub with the full 4-step picking geometry pipeline: (1) NDC conversion via `getBoundingClientRect()` using `clientX/Y` (not `offsetX/Y` or `canvas.width`); (2) `raycaster.setFromCamera(ndc, renderer.camera)` + `intersectObject(renderer.mesh)`; (3) early return on empty intersection (miss); (4) UV extraction with mandatory Y-inversion and clamping: `pixelX = clamp(floor(uv.x * width), 0, width-1)`, `pixelY = clamp(floor((1-uv.y) * height), 0, height-1)`. Steps 5–8 (sector resolution + event emission) remain as `void` stubs for Task 3.4. Accesses `renderer.camera` and `renderer.mesh` via the existing public `readonly` fields on `MapRenderer`. Used `void this._lastHexKey; void this._emit` to satisfy `noUnusedLocals` until Task 3.4 fills in the emission logic. 115 tests pass, typecheck and build clean.
+
+**Decisions made:**
+
+- Accessed `this._renderer.camera` / `this._renderer.mesh` directly (already public `readonly` on `MapRenderer`) rather than caching separate `_mesh`/`_camera` fields on `MapEngine`.
+- Guard `if (!this._renderer || !this._registry || !this._canvas) return` at method entry — listeners are only registered post-load, so this guard is purely defensive.
+
+**Left off at:**
+Task 3.4 — Sector Resolution, `PickResult` Construction, and Event Emission. Ready to start.
+
+---
 
 ### 2026-04-08 — Task 3.2: `loadMap()`, Lifecycle Guards, `destroy()`, and Pass-Through Methods
 
