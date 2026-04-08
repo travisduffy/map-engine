@@ -38,8 +38,8 @@
 
 ## Current Status
 
-**Phase:** Epic 1 in progress.
-**Next task:** Task 2.1 — Three.js Scene, Renderer, Camera, Geometry, and Render Loop.
+**Phase:** Epic 2 in progress.
+**Next task:** Task 2.2 — Display Canvas, `displayImageData`, `CanvasTexture`, and Color Parser Setup.
 **Blocking issues:** None.
 
 ---
@@ -65,7 +65,7 @@
 
 | Status | Task    | Description                                                                 |
 | ------ | ------- | --------------------------------------------------------------------------- |
-| `[ ]`  | **2.1** | Three.js Scene, Renderer, Camera, Geometry, and Render Loop                 |
+| `[x]`  | **2.1** | Three.js Scene, Renderer, Camera, Geometry, and Render Loop                 |
 | `[ ]`  | **2.2** | Display Canvas, `displayImageData`, `CanvasTexture`, and Color Parser Setup |
 | `[ ]`  | **2.3** | `setSectorColor`: CSS Color Parsing and Pixel Write                         |
 | `[ ]`  | **2.4** | `resetSectorColor`, Edge Cases, and Color Mutation Tests                    |
@@ -108,6 +108,26 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 2.1: Three.js Scene, Renderer, Camera, Geometry, and Render Loop
+
+**Tasks touched:** 2.1
+**Outcome:** completed
+
+**What happened:**
+Implemented `MapRenderer` constructor: canvas zero-dimension guard; `THREE.WebGLRenderer` with `antialias: false`, `setPixelRatio`, `setSize(..., false)`; `THREE.Scene`; `THREE.PlaneGeometry(registry.width, registry.height)`; `THREE.MeshBasicMaterial({ map: null, side: DoubleSide })`; `THREE.Mesh` added to scene; `THREE.OrthographicCamera` with "contain" framing (canvasAspect vs bitmapAspect); `camera.position.set(0,0,1)`, `zoom=1.0`, `updateProjectionMatrix()`; continuous `requestAnimationFrame` loop storing `_animFrameId`. Exposed `scene`, `camera`, `mesh`, `renderer`, and `material` as readonly fields. Wrote 14 browser-mode tests — all pass alongside 48 existing tests (62 total). Installed `@types/three` (required for typecheck).
+
+**Decisions made:**
+
+- `setSectorColor`/`resetSectorColor` still throw "Not implemented" — Task 2.3/2.4 implement them.
+- `material` exposed as `readonly` field (not private) so Task 2.2 can assign `material.map = texture` from a subclass or the same class.
+- `_canvas`, `_registry`, `_frustumHalfW`, `_frustumHalfH` marked `protected` so Tasks 2.5/2.6 can access them in the same class without needing getters.
+- `destroy()` partially implemented (cancels rAF, disposes renderer/geometry/material) — texture disposal added in Task 2.6 once texture exists.
+
+**Left off at:**
+Task 2.2 — Display Canvas, `displayImageData`, `CanvasTexture`, and Color Parser Setup. Ready to start.
+
+---
 
 ### 2026-04-08 — Task 1.6: `SectorRegistry` Border Edges, Load-Time Validation, Public Methods, and Tests
 

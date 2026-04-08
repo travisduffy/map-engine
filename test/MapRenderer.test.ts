@@ -1,0 +1,179 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import * as THREE from 'three'
+import { MapRenderer } from '../src/MapRenderer'
+import { SectorRegistry } from '../src/SectorRegistry'
+import type { SectorDefinitionFile } from '../src/types'
+
+// 4×4 RGBA buffer — same layout as SectorRegistry tests
+function make4x4Buffer(): Uint8ClampedArray {
+  // prettier-ignore
+  return new Uint8ClampedArray([
+    // row 0
+    255, 0, 0, 255,   255, 0, 0, 255,   0, 255, 0, 255,   0, 255, 0, 255,
+    // row 1
+    255, 0, 0, 255,   255, 0, 0, 255,   0, 255, 0, 255,   0, 255, 0, 255,
+    // row 2
+    0, 0, 255, 255,   0, 0, 255, 255,   255, 255, 0, 255,   255, 255, 0, 255,
+    // row 3
+    0, 0, 255, 255,   0, 0, 255, 255,   255, 255, 0, 255,   255, 255, 0, 255,
+  ])
+}
+
+const definition: SectorDefinitionFile = {
+  ff0000: { name: 'Red Sector' },
+  '00ff00': { name: 'Green Sector' },
+  '0000ff': { name: 'Blue Sector' },
+  ffff00: { name: 'Yellow Sector' },
+}
+
+function makeCanvas(width = 800, height = 600): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${height}px`
+  // Force clientWidth/clientHeight by setting actual size too
+  canvas.width = width
+  canvas.height = height
+  Object.defineProperty(canvas, 'clientWidth', {
+    value: width,
+    configurable: true,
+  })
+  Object.defineProperty(canvas, 'clientHeight', {
+    value: height,
+    configurable: true,
+  })
+  document.body.appendChild(canvas)
+  return canvas
+}
+
+describe('MapRenderer', () => {
+  let canvas: HTMLCanvasElement
+  let registry: SectorRegistry
+  let renderer: MapRenderer
+
+  beforeEach(() => {
+    canvas = makeCanvas(800, 600)
+    registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
+  })
+
+  afterEach(() => {
+    renderer?.destroy()
+    canvas.remove()
+  })
+
+  it('throws when canvas has zero clientWidth', () => {
+    const zeroCanvas = document.createElement('canvas')
+    Object.defineProperty(zeroCanvas, 'clientWidth', {
+      value: 0,
+      configurable: true,
+    })
+    Object.defineProperty(zeroCanvas, 'clientHeight', {
+      value: 600,
+      configurable: true,
+    })
+    document.body.appendChild(zeroCanvas)
+    expect(() => new MapRenderer(zeroCanvas, registry)).toThrow(
+      'MapEngine: canvas has zero dimensions'
+    )
+    zeroCanvas.remove()
+  })
+
+  it('throws when canvas has zero clientHeight', () => {
+    const zeroCanvas = document.createElement('canvas')
+    Object.defineProperty(zeroCanvas, 'clientWidth', {
+      value: 800,
+      configurable: true,
+    })
+    Object.defineProperty(zeroCanvas, 'clientHeight', {
+      value: 0,
+      configurable: true,
+    })
+    document.body.appendChild(zeroCanvas)
+    expect(() => new MapRenderer(zeroCanvas, registry)).toThrow(
+      'MapEngine: canvas has zero dimensions'
+    )
+    zeroCanvas.remove()
+  })
+
+  it('error message matches spec exactly', () => {
+    const zeroCanvas = document.createElement('canvas')
+    Object.defineProperty(zeroCanvas, 'clientWidth', {
+      value: 0,
+      configurable: true,
+    })
+    Object.defineProperty(zeroCanvas, 'clientHeight', {
+      value: 0,
+      configurable: true,
+    })
+    document.body.appendChild(zeroCanvas)
+    expect(() => new MapRenderer(zeroCanvas, registry)).toThrow(
+      'MapEngine: canvas has zero dimensions — ensure the canvas element is in the DOM and has non-zero CSS dimensions before calling loadMap()'
+    )
+    zeroCanvas.remove()
+  })
+
+  describe('after construction', () => {
+    beforeEach(() => {
+      renderer = new MapRenderer(canvas, registry)
+    })
+
+    it('canvas has non-zero dimensions after construction', () => {
+      expect(canvas.width).toBeGreaterThan(0)
+      expect(canvas.height).toBeGreaterThan(0)
+    })
+
+    it('scene is a THREE.Scene', () => {
+      expect(renderer.scene).toBeInstanceOf(THREE.Scene)
+    })
+
+    it('camera is a THREE.OrthographicCamera', () => {
+      expect(renderer.camera).toBeInstanceOf(THREE.OrthographicCamera)
+    })
+
+    it('mesh is a THREE.Mesh added to the scene', () => {
+      expect(renderer.mesh).toBeInstanceOf(THREE.Mesh)
+      expect(renderer.scene.children).toContain(renderer.mesh)
+    })
+
+    it('renderer is a THREE.WebGLRenderer', () => {
+      expect(renderer.renderer).toBeInstanceOf(THREE.WebGLRenderer)
+    })
+
+    it('PlaneGeometry UV at vertex 0 is u≈0.0, v≈1.0 (Three.js bottom-left UV origin)', () => {
+      const geo = renderer.mesh.geometry as THREE.BufferGeometry
+      const uvAttr = geo.getAttribute('uv') as THREE.BufferAttribute
+      // Three.js PlaneGeometry vertex order: top-left, top-right, bottom-left, bottom-right
+      // Vertex 0 = top-left → UV (0, 1)
+      expect(uvAttr.getX(0)).toBeCloseTo(0.0, 5)
+      expect(uvAttr.getY(0)).toBeCloseTo(1.0, 5)
+    })
+
+    it('camera zoom is 1.0 at construction', () => {
+      expect(renderer.camera.zoom).toBe(1.0)
+    })
+
+    it('camera position is at (0, 0, 1)', () => {
+      expect(renderer.camera.position.x).toBe(0)
+      expect(renderer.camera.position.y).toBe(0)
+      expect(renderer.camera.position.z).toBe(1)
+    })
+
+    it('render loop fires at least one frame', async () => {
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+      expect(renderer.renderer.info.render.frame).toBeGreaterThanOrEqual(1)
+    })
+
+    it('camera uses contain framing — 800×600 canvas with 4×4 bitmap (square) → frustum wider than tall', () => {
+      // canvasAspect = 800/600 ≈ 1.333; bitmapAspect = 4/4 = 1.0
+      // canvasAspect >= bitmapAspect → frustumHalfH = 2, frustumHalfW = 2 * 1.333... ≈ 2.667
+      expect(renderer.camera.top).toBeCloseTo(2, 5)
+      expect(renderer.camera.bottom).toBeCloseTo(-2, 5)
+    })
+  })
+
+  describe('destroy', () => {
+    it('does not throw', () => {
+      renderer = new MapRenderer(canvas, registry)
+      expect(() => renderer.destroy()).not.toThrow()
+    })
+  })
+})
