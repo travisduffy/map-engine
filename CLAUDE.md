@@ -58,7 +58,7 @@ Located at `test/fixtures/`. The `test-4x4.png` (4×4 pixel, 4 sectors) is gener
 
 ### Post-task checklist
 
-Before concluding any task: build (`npm run build`), lint/typecheck, run tests, update relevant `.claude/rules/*.md` files if domain patterns changed.
+Before concluding any task: build (`npm run build`), lint/typecheck, run tests, update relevant `.claude/rules/*.md` files if domain patterns changed, and update `docs/PROGRESS.md`.
 
 ## Dev dependencies (when installing)
 
@@ -83,4 +83,16 @@ sharp@^0.33.0           # fixture generation only
 ## Documentation
 
 - `docs/PRD.md` — full implementation spec including exact algorithms, acceptance criteria, and known risks
+- `docs/epics/` — 18 tasks across 3 epics; each task has a full work spec and done-when criteria
+- `docs/PROGRESS.md` — **read this first at the start of every session**; tracks task completion status, session logs, and lessons learned
 - `docs/claude-strategy.md` — three-tier docs strategy (CLAUDE.md → `.claude/rules/*.md` → README.md)
+
+## Session Workflow
+
+**Every session must follow this protocol:**
+
+1. **Read `docs/PROGRESS.md` first.** It tells you exactly what has been done, what is in progress, what is blocked, and where the last session left off. Never start implementation work without reading it.
+2. **Find the next task.** The Task Registry in `docs/PROGRESS.md` lists all 18 tasks with their current status. Pick up from the first `[ ]` (not started) or `[~]` (in progress) task.
+3. **Read the epic file for that task.** Epic files are in `docs/epics/`. They contain the full work spec, PRD references, and done-when criteria for every task.
+4. **Cross-reference the PRD.** `docs/PRD.md` is the canonical authority. Epic files cite specific PRD sections — go there for algorithm details and acceptance criteria.
+5. **Update `docs/PROGRESS.md` when done.** Before closing a session: mark completed tasks `[x]`, mark any blocked task `[!]`, append a Session Log entry (date, tasks touched, outcome, decisions made, where you left off), and add any non-obvious discoveries to Lessons Learned.
