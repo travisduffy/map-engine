@@ -38,8 +38,8 @@
 
 ## Current Status
 
-**Phase:** Not started — no implementation tasks have begun.
-**Next task:** Task 1.1 — Toolchain and Build Configuration.
+**Phase:** Epic 1 in progress.
+**Next task:** Task 1.5 — `SectorRegistry`: Single Scan Pass and Spatial Structures.
 **Blocking issues:** None.
 
 ---
@@ -52,10 +52,10 @@
 
 | Status | Task    | Description                                                                     |
 | ------ | ------- | ------------------------------------------------------------------------------- |
-| `[ ]`  | **1.1** | Toolchain and Build Configuration                                               |
-| `[ ]`  | **1.2** | Shared Types, Utilities, Module Stubs, and Test Fixtures                        |
-| `[ ]`  | **1.3** | `SectorBitmapParser`: Core Decode Pipeline                                      |
-| `[ ]`  | **1.4** | `SectorBitmapParser`: Error Handling and Tests                                  |
+| `[x]`  | **1.1** | Toolchain and Build Configuration                                               |
+| `[x]`  | **1.2** | Shared Types, Utilities, Module Stubs, and Test Fixtures                        |
+| `[x]`  | **1.3** | `SectorBitmapParser`: Core Decode Pipeline                                      |
+| `[x]`  | **1.4** | `SectorBitmapParser`: Error Handling and Tests                                  |
 | `[ ]`  | **1.5** | `SectorRegistry`: Single Scan Pass and Spatial Structures                       |
 | `[ ]`  | **1.6** | `SectorRegistry`: Border Edges, Load-Time Validation, Public Methods, and Tests |
 
@@ -108,6 +108,76 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 1.4: `SectorBitmapParser` Error Handling and Tests
+
+**Tasks touched:** 1.4
+**Outcome:** completed
+
+**What happened:**
+Added runtime type guard (`typeof source !== 'string' && !(source instanceof Blob)` → throws descriptive error). Wrote 11 browser-mode tests covering: URL path (dimensions, 4 quadrant pixel checks, all-alpha-255), Blob path, invalid file type, 404, unreachable host, non-string/Blob input. All 11 pass.
+
+**Decisions made:**
+
+- Vite's SPA fallback returns HTTP 200 + HTML for any unknown static path, so `/test/fixtures/nonexistent.png` passed `response.ok` and failed only at `createImageBitmap`. Added a `test404Plugin()` Vite plugin in `vite.config.ts` that registers a `/test/__404__` middleware returning a genuine HTTP 404. Test uses that endpoint instead of a fake static path.
+
+**Left off at:**
+Task 1.5 — `SectorRegistry`: Single Scan Pass and Spatial Structures. Ready to start.
+
+---
+
+### 2026-04-08 — Task 1.3: `SectorBitmapParser` Core Decode Pipeline
+
+**Tasks touched:** 1.3
+**Outcome:** completed
+
+**What happened:**
+Implemented `SectorBitmapParser.parse(source: string | Blob)`. String path: `fetch` → `response.ok` check (throws with HTTP status) → `response.blob()` → `createImageBitmap(blob)`. Blob path: `createImageBitmap(source)` directly. Both paths draw to `OffscreenCanvas`, call `ctx.getImageData`, return `{ buffer, width, height }`. Verified zero references to `document`, `window`, `HTMLElement`, `HTMLCanvasElement`, and zero `from 'three'` imports. `tsc --noEmit` passes; `vite build` outputs 0.56 kB gzip.
+
+**Decisions made:**
+
+- Used non-null assertion `canvas.getContext('2d')!` — `OffscreenCanvas` always supports `'2d'`; null check would add dead code.
+
+**Left off at:**
+Task 1.4 — `SectorBitmapParser`: Error Handling and Tests. Ready to start.
+
+---
+
+### 2026-04-08 — Task 1.2: Shared Types, Utilities, Module Stubs, and Test Fixtures
+
+**Tasks touched:** 1.2
+**Outcome:** completed
+
+**What happened:**
+Created `src/types.ts` with all 6 required types (`SectorData`, `SectorDefinitionFile`, `MapConfig`, `BorderEdge`, `SectorBBox`, `PickResult`). Created `src/utils.ts` with `toHexKey`. Created stub classes for `SectorBitmapParser`, `SectorRegistry`, `MapRenderer`, `MapEngine` — all methods throw `new Error("Not implemented")`. Replaced placeholder `src/index.ts` with barrel exports (`MapEngine` as default + all named exports). Created all fixture files: `generate-fixtures.js` (ESM), ran it to produce `test-4x4.png`, created `test-4x4.json`, `test-4x4-mismatch.json`, `test-invalid.txt`. `toHexKey(0, 77, 153) === "004d99"` verified. `tsc --noEmit` and `vite build` pass clean.
+
+**Decisions made:**
+
+- Used `Function` type for `on()` implementation signature to satisfy overload compatibility (TypeScript strict mode). Public overloads retain the precise typed signatures from PRD.
+- `src/index.ts` uses `export type * from './types'` (TypeScript 5+) for type-only re-exports, per `verbatimModuleSyntax: true` constraint.
+- `generate-fixtures.js` written as ESM (with `import` + `__dirname` polyfill via `fileURLToPath`) because `package.json` has `"type": "module"`.
+
+**Left off at:**
+Task 1.3 — `SectorBitmapParser`: Core Decode Pipeline. Ready to start.
+
+---
+
+### 2026-04-08 — Task 1.1: Toolchain and Build Configuration
+
+**Tasks touched:** 1.1
+**Outcome:** completed
+
+**What happened:**
+Vite boilerplate already had `"type": "module"`, `typescript@~6.0.2`, and `vite@^8.0.4`. Created `vite.config.ts` with `build.lib` (entry `src/index.ts`, ES format), `rollupOptions.external: ['three']`, and `test.browser` (playwright/chromium). Updated `package.json` with `"main"/"module": "dist/index.js"`, `peerDependencies.three`, and `"size"` script. Updated `tsconfig.json` to add `strict: true` and set `target: ES2020`, `module: ESNext`. Installed `vitest`, `@vitest/browser`, `playwright`, `sharp`. Created placeholder `src/index.ts` (to be replaced in Task 1.2). Verified `tsc --noEmit` passes, `vite build` emits `dist/index.js`, and `npm run size` prints a byte count.
+
+**Decisions made:**
+
+- Installed vitest@^3.2.4 (not v2.1 as PRD specifies) because the boilerplate already uses vite@^8 which requires vitest 3 for compatibility. The `instances` browser config syntax is the same.
+- Removed `"private": true` from `package.json` since this is a distributable library.
+- Added placeholder `src/index.ts` containing only a comment so the build target exists; Task 1.2 replaces it with the real barrel export.
+
+**Left off at:**
+Task 1.2 — Shared Types, Utilities, Module Stubs, and Test Fixtures. Ready to start immediately.
 
 _(No sessions logged yet.)_
 

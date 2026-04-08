@@ -1,16 +1,27 @@
 {
   "name": "map-engine",
-  "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
   "scripts": {
     "dev": "vite --port 3000",
     "build": "tsc && vite build",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "size": "vite build && gzip -c dist/index.js | wc -c"
+  },
+  "peerDependencies": {
+    "three": "^0.160.0"
   },
   "devDependencies": {
+    "@vitest/browser": "^3.2.4",
+    "playwright": "^1.59.1",
     "prettier": "^3.8.1",
+    "sharp": "^0.33.5",
     "typescript": "~6.0.2",
-    "vite": "^8.0.4"
+    "vite": "^8.0.4",
+    "vitest": "^3.2.4"
   }
 }

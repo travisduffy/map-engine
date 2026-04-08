@@ -5,11 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev       # Vite dev server on port 3000
-npm run build     # tsc + vite build (library mode, outputs dist/index.js)
-npm run format    # prettier --write .
-npm run size      # gzip -c dist/index.js | wc -c  (verify <15 KB gzipped; add this script)
-npx vitest        # run tests (browser mode via Playwright; Node mode for non-browser tests)
+npm run dev           # Vite dev server on port 3000
+npm run typecheck     # tsc --noEmit (type errors only, no emit)
+npm run build         # tsc + vite build (library mode, outputs dist/index.js)
+npm run format        # prettier --write .
+npm run test          # run full test suite (vitest run — all test files, single pass)
+npm run size          # gzip -c dist/index.js | wc -c  (verify <15 KB gzipped)
 ```
 
 Tests requiring browser APIs (`OffscreenCanvas`, `createImageBitmap`, DOM) run under Vitest browser mode with the Playwright provider. Tests without browser API dependencies may use Vitest in Node mode.
@@ -58,7 +59,13 @@ Located at `test/fixtures/`. The `test-4x4.png` (4×4 pixel, 4 sectors) is gener
 
 ### Post-task checklist
 
-Before concluding any task: build (`npm run build`), lint/typecheck, run tests, update relevant `.claude/rules/*.md` files if domain patterns changed, and update `docs/PROGRESS.md`.
+Before concluding any task, run in this order:
+
+1. `npm run typecheck` — zero type errors
+2. `npm run build` — clean library output
+3. `npm run test` — full test suite passes
+4. Update relevant `.claude/rules/*.md` files if domain patterns changed, then update `docs/PROGRESS.md`
+5. `npm run format` — apply Prettier to all edited files
 
 ## Dev dependencies (when installing)
 

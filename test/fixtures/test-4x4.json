@@ -1,0 +1,6 @@
+{
+  "ff0000": { "name": "Red Sector" },
+  "00ff00": { "name": "Green Sector" },
+  "0000ff": { "name": "Blue Sector" },
+  "ffff00": { "name": "Yellow Sector" }
+}
