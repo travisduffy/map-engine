@@ -120,10 +120,45 @@ export class MapRenderer {
     this._animFrameId = requestAnimationFrame(loop)
   }
 
-  setSectorColor(_hexKey: string, _color: string): void {
-    // _colorParserCtx is used here in Task 2.3
-    void this._colorParserCtx
-    throw new Error('Not implemented')
+  setSectorColor(hexKey: string, color: string): void {
+    if (!this._registry.pixelIndices.has(hexKey)) {
+      console.warn('[MapEngine] setSectorColor: sector has no pixel data')
+      return
+    }
+
+    // Parse CSS color via 1×1 canvas
+    this._colorParserCtx.clearRect(0, 0, 1, 1)
+    this._colorParserCtx.fillStyle = color
+    this._colorParserCtx.fillRect(0, 0, 1, 1)
+    const parsed = this._colorParserCtx.getImageData(0, 0, 1, 1).data
+    const r = parsed[0]
+    const g = parsed[1]
+    const b = parsed[2]
+
+    // Write color to all pixels in this sector
+    const indices = this._registry.pixelIndices.get(hexKey)!
+    const data = this.displayImageData.data
+    for (let n = 0; n < indices.length; n++) {
+      const offset = indices[n] * 4
+      data[offset] = r
+      data[offset + 1] = g
+      data[offset + 2] = b
+      data[offset + 3] = 255
+    }
+
+    // Dirty-rect flush scoped to sector bbox
+    const bbox = this._registry.bboxes.get(hexKey)!
+    this.displayCtx.putImageData(
+      this.displayImageData,
+      0,
+      0,
+      bbox.minX,
+      bbox.minY,
+      bbox.maxX - bbox.minX + 1,
+      bbox.maxY - bbox.minY + 1
+    )
+
+    this._texture.needsUpdate = true
   }
 
   resetSectorColor(_hexKey: string): void {

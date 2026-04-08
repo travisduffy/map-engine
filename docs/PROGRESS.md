@@ -39,7 +39,7 @@
 ## Current Status
 
 **Phase:** Epic 2 in progress.
-**Next task:** Task 2.3 — `setSectorColor`: CSS Color Parsing and Pixel Write.
+**Next task:** Task 2.4 — `resetSectorColor`, Edge Cases, and Color Mutation Tests.
 **Blocking issues:** None.
 
 ---
@@ -67,7 +67,7 @@
 | ------ | ------- | --------------------------------------------------------------------------- |
 | `[x]`  | **2.1** | Three.js Scene, Renderer, Camera, Geometry, and Render Loop                 |
 | `[x]`  | **2.2** | Display Canvas, `displayImageData`, `CanvasTexture`, and Color Parser Setup |
-| `[ ]`  | **2.3** | `setSectorColor`: CSS Color Parsing and Pixel Write                         |
+| `[x]`  | **2.3** | `setSectorColor`: CSS Color Parsing and Pixel Write                         |
 | `[ ]`  | **2.4** | `resetSectorColor`, Edge Cases, and Color Mutation Tests                    |
 | `[ ]`  | **2.5** | Pointer-Drag Pan and `clampPan()`                                           |
 | `[ ]`  | **2.6** | Scroll-Wheel Zoom, `destroy()` Teardown, and Full Camera/Navigation Tests   |
@@ -108,6 +108,22 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 2.3: `setSectorColor`: CSS Color Parsing and Pixel Write
+
+**Tasks touched:** 2.3
+**Outcome:** completed
+
+**What happened:**
+Implemented `setSectorColor(hexKey, color)` on `MapRenderer`. Guards on `pixelIndices.has(hexKey)` — emits `console.warn` and returns if missing. Parses CSS color via `_colorParserCtx` 1×1 canvas (clearRect → fillStyle → fillRect → getImageData). Iterates `pixelIndices.get(hexKey)`, writing `r, g, b, 255` to `displayImageData.data` at each flat byte offset. Flushes with dirty-rect `putImageData` scoped to `bboxes.get(hexKey)`. Sets `texture.needsUpdate = true`. All 68 tests pass; typecheck and build clean.
+
+**Decisions made:**
+No deviations from spec — implementation follows PRD §3 exactly.
+
+**Left off at:**
+Task 2.4 — `resetSectorColor`, Edge Cases, and Color Mutation Tests. Ready to start.
+
+---
 
 ### 2026-04-08 — Task 2.2: Display Canvas, `displayImageData`, `CanvasTexture`, and Color Parser Setup
 
