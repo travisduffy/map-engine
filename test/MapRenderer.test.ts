@@ -439,9 +439,64 @@ describe('MapRenderer', () => {
     })
   })
 
+  describe('scroll-wheel zoom (Task 2.6)', () => {
+    beforeEach(() => {
+      renderer = new MapRenderer(canvas, registry)
+    })
+
+    it('wheel with deltaY: -100 increases camera.zoom', () => {
+      const before = renderer.camera.zoom
+      canvas.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: -100, bubbles: true })
+      )
+      expect(renderer.camera.zoom).toBeGreaterThan(before)
+    })
+
+    it('wheel with deltaY: +100 decreases camera.zoom', () => {
+      const before = renderer.camera.zoom
+      canvas.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: 100, bubbles: true })
+      )
+      expect(renderer.camera.zoom).toBeLessThan(before)
+    })
+
+    it('zoom clamps at max 20.0 — further zoom-in does not exceed 20', () => {
+      renderer.camera.zoom = 20.0
+      renderer.camera.updateProjectionMatrix()
+      canvas.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: -100, bubbles: true })
+      )
+      expect(renderer.camera.zoom).toBe(20.0)
+    })
+
+    it('zoom clamps at min 0.5 — further zoom-out does not go below 0.5', () => {
+      renderer.camera.zoom = 0.5
+      renderer.camera.updateProjectionMatrix()
+      canvas.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: 100, bubbles: true })
+      )
+      expect(renderer.camera.zoom).toBe(0.5)
+    })
+
+    it('clampPan is called after zoom — out-of-bounds pan position is corrected', () => {
+      renderer.camera.position.x = registry.width * 2
+      canvas.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: -100, bubbles: true })
+      )
+      const maxX = registry.width / 2 + registry.width * 0.1
+      expect(renderer.camera.position.x).toBeLessThanOrEqual(maxX)
+    })
+  })
+
   describe('destroy', () => {
     it('does not throw', () => {
       renderer = new MapRenderer(canvas, registry)
+      expect(() => renderer.destroy()).not.toThrow()
+    })
+
+    it('second destroy() call does not throw (idempotent)', () => {
+      renderer = new MapRenderer(canvas, registry)
+      renderer.destroy()
       expect(() => renderer.destroy()).not.toThrow()
     })
   })

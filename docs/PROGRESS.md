@@ -38,8 +38,8 @@
 
 ## Current Status
 
-**Phase:** Epic 2 in progress.
-**Next task:** Task 2.6 — Scroll-Wheel Zoom, `destroy()` Teardown, and Full Camera/Navigation Tests.
+**Phase:** Epic 2 complete. Epic 3 starting.
+**Next task:** Task 3.1 — `MapEngine` Constructor and Event Subscription System (`on` / `off`).
 **Blocking issues:** None.
 
 ---
@@ -70,7 +70,7 @@
 | `[x]`  | **2.3** | `setSectorColor`: CSS Color Parsing and Pixel Write                         |
 | `[x]`  | **2.4** | `resetSectorColor`, Edge Cases, and Color Mutation Tests                    |
 | `[x]`  | **2.5** | Pointer-Drag Pan and `clampPan()`                                           |
-| `[ ]`  | **2.6** | Scroll-Wheel Zoom, `destroy()` Teardown, and Full Camera/Navigation Tests   |
+| `[x]`  | **2.6** | Scroll-Wheel Zoom, `destroy()` Teardown, and Full Camera/Navigation Tests   |
 
 ### Epic 3: Interaction, Public API Facade, and Distribution
 
@@ -108,6 +108,22 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 2.6: Scroll-Wheel Zoom, `destroy()` Teardown, and Full Camera/Navigation Tests
+
+**Tasks touched:** 2.6
+**Outcome:** completed
+
+**What happened:**
+Added `_onWheel` bound handler and `_destroyed` guard flag to `MapRenderer`. Registered `wheel` listener with `{ passive: false }` so `preventDefault()` works. Zoom math: `Math.pow(1.1, -deltaY/100)` multiplied into `camera.zoom`, clamped to `[0.5, 20.0]` via `THREE.MathUtils.clamp`, followed by `camera.updateProjectionMatrix()` and `clampPan()`. Updated `destroy()` to remove `wheel` listener and added idempotency guard (`_destroyed` flag returns early on second call). Wrote 7 tests (zoom-in, zoom-out, max clamp, min clamp, clampPan-after-zoom, destroy-no-throw, destroy-idempotent). 90 total tests, all pass.
+
+**Decisions made:**
+No deviations from spec.
+
+**Left off at:**
+Epic 2 complete. Task 3.1 — `MapEngine` Constructor and Event Subscription System. Ready to start.
+
+---
 
 ### 2026-04-08 — Task 2.5: Pointer-Drag Pan and `clampPan()`
 

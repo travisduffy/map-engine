@@ -33,6 +33,9 @@ export class MapRenderer {
   private readonly _onPointerDown: (e: PointerEvent) => void
   private readonly _onPointerMove: (e: PointerEvent) => void
   private readonly _onPointerUp: () => void
+  private readonly _onWheel: (e: WheelEvent) => void
+
+  private _destroyed = false
 
   constructor(canvas: HTMLCanvasElement, registry: SectorRegistry) {
     if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
@@ -144,6 +147,20 @@ export class MapRenderer {
     canvas.addEventListener('pointermove', this._onPointerMove)
     canvas.addEventListener('pointerup', this._onPointerUp)
 
+    // Scroll-wheel zoom (Task 2.6)
+    this._onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const zoomFactor = Math.pow(1.1, -e.deltaY / 100)
+      this.camera.zoom = THREE.MathUtils.clamp(
+        this.camera.zoom * zoomFactor,
+        0.5,
+        20.0
+      )
+      this.camera.updateProjectionMatrix()
+      this.clampPan()
+    }
+    canvas.addEventListener('wheel', this._onWheel, { passive: false })
+
     // Continuous render loop (v1 decision — render-on-demand deferred to v2)
     const loop = () => {
       this._animFrameId = requestAnimationFrame(loop)
@@ -238,10 +255,13 @@ export class MapRenderer {
   }
 
   destroy(): void {
+    if (this._destroyed) return
+    this._destroyed = true
     cancelAnimationFrame(this._animFrameId)
     this._canvas.removeEventListener('pointerdown', this._onPointerDown)
     this._canvas.removeEventListener('pointermove', this._onPointerMove)
     this._canvas.removeEventListener('pointerup', this._onPointerUp)
+    this._canvas.removeEventListener('wheel', this._onWheel)
     this.renderer.dispose()
     ;(this.mesh.geometry as THREE.BufferGeometry).dispose()
     this.material.dispose()
