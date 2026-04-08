@@ -170,6 +170,53 @@ describe('MapRenderer', () => {
     })
   })
 
+  describe('display canvas and texture (Task 2.2)', () => {
+    beforeEach(() => {
+      renderer = new MapRenderer(canvas, registry)
+    })
+
+    it('displayCtx is a non-null OffscreenCanvasRenderingContext2D', () => {
+      expect(renderer.displayCtx).toBeTruthy()
+      // OffscreenCanvasRenderingContext2D does not have a named constructor to instanceof-check,
+      // but we can verify it has the expected API
+      expect(typeof renderer.displayCtx.putImageData).toBe('function')
+      expect(typeof renderer.displayCtx.getImageData).toBe('function')
+    })
+
+    it('displayImageData has the correct dimensions', () => {
+      expect(renderer.displayImageData.width).toBe(registry.width)
+      expect(renderer.displayImageData.height).toBe(registry.height)
+    })
+
+    it('displayImageData reflects the source bitmap colors on construction', () => {
+      // Pixel (0,0) in the 4×4 buffer = red (255,0,0,255)
+      const data = renderer.displayImageData.data
+      expect(data[0]).toBe(255) // r
+      expect(data[1]).toBe(0) // g
+      expect(data[2]).toBe(0) // b
+      expect(data[3]).toBe(255) // a
+    })
+
+    it('displayImageData is a separate copy from registry.sourceBuffer', () => {
+      // Mutate displayImageData.data
+      renderer.displayImageData.data[0] = 42
+      // registry.sourceBuffer must be unchanged
+      expect(registry.sourceBuffer[0]).toBe(255)
+    })
+
+    it('mutating registry.sourceBuffer does not affect displayImageData', () => {
+      // Cast away readonly to simulate a mutation attempt
+      ;(registry.sourceBuffer as Uint8ClampedArray)[0] = 99
+      expect(renderer.displayImageData.data[0]).toBe(255)
+      // Restore
+      ;(registry.sourceBuffer as Uint8ClampedArray)[0] = 255
+    })
+
+    it('material.map is assigned (texture is wired into material)', () => {
+      expect(renderer.material.map).not.toBeNull()
+    })
+  })
+
   describe('destroy', () => {
     it('does not throw', () => {
       renderer = new MapRenderer(canvas, registry)

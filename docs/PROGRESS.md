@@ -39,7 +39,7 @@
 ## Current Status
 
 **Phase:** Epic 2 in progress.
-**Next task:** Task 2.2 — Display Canvas, `displayImageData`, `CanvasTexture`, and Color Parser Setup.
+**Next task:** Task 2.3 — `setSectorColor`: CSS Color Parsing and Pixel Write.
 **Blocking issues:** None.
 
 ---
@@ -66,7 +66,7 @@
 | Status | Task    | Description                                                                 |
 | ------ | ------- | --------------------------------------------------------------------------- |
 | `[x]`  | **2.1** | Three.js Scene, Renderer, Camera, Geometry, and Render Loop                 |
-| `[ ]`  | **2.2** | Display Canvas, `displayImageData`, `CanvasTexture`, and Color Parser Setup |
+| `[x]`  | **2.2** | Display Canvas, `displayImageData`, `CanvasTexture`, and Color Parser Setup |
 | `[ ]`  | **2.3** | `setSectorColor`: CSS Color Parsing and Pixel Write                         |
 | `[ ]`  | **2.4** | `resetSectorColor`, Edge Cases, and Color Mutation Tests                    |
 | `[ ]`  | **2.5** | Pointer-Drag Pan and `clampPan()`                                           |
@@ -108,6 +108,24 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 2.2: Display Canvas, `displayImageData`, `CanvasTexture`, and Color Parser Setup
+
+**Tasks touched:** 2.2
+**Outcome:** completed
+
+**What happened:**
+Added `OffscreenCanvas` display buffer (sized `registry.width × registry.height`), `displayCtx`, and `displayImageData` initialized with `registry.sourceBuffer.slice()` (mandatory copy — Task 2.4 verifies immutability). Created 1×1 `_colorParserCanvas`/`_colorParserCtx` for CSS color parsing (used in Task 2.3). Created `THREE.CanvasTexture<OffscreenCanvas>` with `NearestFilter` on both min/mag and `generateMipmaps = false`; assigned to `material.map`. Updated `destroy()` to call `texture.dispose()`. Wrote 5 browser-mode tests — 68 total (up from 62), all pass.
+
+**Decisions made:**
+
+- Field type declared as `THREE.CanvasTexture<OffscreenCanvas>` (not plain `THREE.CanvasTexture`) to avoid TypeScript type mismatch with the OffscreenCanvas argument.
+- `_colorParserCtx` is referenced via `void this._colorParserCtx` in the `setSectorColor` stub to satisfy `noUnusedLocals` until Task 2.3 implements it fully.
+
+**Left off at:**
+Task 2.3 — `setSectorColor`: CSS Color Parsing and Pixel Write. Ready to start.
+
+---
 
 ### 2026-04-08 — Task 2.1: Three.js Scene, Renderer, Camera, Geometry, and Render Loop
 

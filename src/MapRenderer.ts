@@ -10,6 +10,13 @@ export class MapRenderer {
   // Exposed for Task 2.2+ (display canvas and texture setup)
   readonly material: THREE.MeshBasicMaterial
 
+  // Display canvas and texture (Task 2.2)
+  readonly displayCtx: OffscreenCanvasRenderingContext2D
+  readonly displayImageData: ImageData
+  private readonly _texture: THREE.CanvasTexture<OffscreenCanvas>
+  private readonly _colorParserCanvas: OffscreenCanvas
+  private readonly _colorParserCtx: OffscreenCanvasRenderingContext2D
+
   // Stored for pan/zoom in Tasks 2.5/2.6
   protected readonly _canvas: HTMLCanvasElement
   protected readonly _registry: SectorRegistry
@@ -79,6 +86,32 @@ export class MapRenderer {
     this.camera.zoom = 1.0
     this.camera.updateProjectionMatrix()
 
+    // Display canvas and displayImageData (Task 2.2)
+    // OffscreenCanvas mirrors the bitmap dimensions exactly
+    const displayCanvas = new OffscreenCanvas(registry.width, registry.height)
+    this.displayCtx = displayCanvas.getContext('2d')!
+
+    // Mandatory .slice() — keeps displayImageData.data independent from registry.sourceBuffer
+    this.displayImageData = new ImageData(
+      registry.sourceBuffer.slice(),
+      registry.width,
+      registry.height
+    )
+    this.displayCtx.putImageData(this.displayImageData, 0, 0)
+
+    // Color parser helper — created once, reused in setSectorColor
+    this._colorParserCanvas = new OffscreenCanvas(1, 1)
+    this._colorParserCtx = this._colorParserCanvas.getContext('2d')!
+
+    // CanvasTexture wired to the display OffscreenCanvas
+    this._texture = new THREE.CanvasTexture(displayCanvas)
+    this._texture.minFilter = THREE.NearestFilter
+    this._texture.magFilter = THREE.NearestFilter
+    this._texture.generateMipmaps = false
+
+    // Wire texture into the material created above
+    this.material.map = this._texture
+
     // Continuous render loop (v1 decision — render-on-demand deferred to v2)
     const loop = () => {
       this._animFrameId = requestAnimationFrame(loop)
@@ -88,6 +121,8 @@ export class MapRenderer {
   }
 
   setSectorColor(_hexKey: string, _color: string): void {
+    // _colorParserCtx is used here in Task 2.3
+    void this._colorParserCtx
     throw new Error('Not implemented')
   }
 
@@ -100,5 +135,6 @@ export class MapRenderer {
     this.renderer.dispose()
     ;(this.mesh.geometry as THREE.BufferGeometry).dispose()
     this.material.dispose()
+    this._texture.dispose()
   }
 }
