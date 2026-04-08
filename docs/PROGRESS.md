@@ -39,7 +39,7 @@
 ## Current Status
 
 **Phase:** Epic 1 in progress.
-**Next task:** Task 1.5 — `SectorRegistry`: Single Scan Pass and Spatial Structures.
+**Next task:** Task 1.6 — `SectorRegistry`: Border Edges, Load-Time Validation, Public Methods, and Tests.
 **Blocking issues:** None.
 
 ---
@@ -56,7 +56,7 @@
 | `[x]`  | **1.2** | Shared Types, Utilities, Module Stubs, and Test Fixtures                        |
 | `[x]`  | **1.3** | `SectorBitmapParser`: Core Decode Pipeline                                      |
 | `[x]`  | **1.4** | `SectorBitmapParser`: Error Handling and Tests                                  |
-| `[ ]`  | **1.5** | `SectorRegistry`: Single Scan Pass and Spatial Structures                       |
+| `[x]`  | **1.5** | `SectorRegistry`: Single Scan Pass and Spatial Structures                       |
 | `[ ]`  | **1.6** | `SectorRegistry`: Border Edges, Load-Time Validation, Public Methods, and Tests |
 
 ### Epic 2: WebGL Rendering and Camera Architecture
@@ -108,6 +108,24 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 1.5: `SectorRegistry` Single Scan Pass and Spatial Structures
+
+**Tasks touched:** 1.5
+**Outcome:** completed
+
+**What happened:**
+Implemented `SectorRegistry` constructor with: buffer length validation; single O(W×H) scan pass building bboxes, centroid accumulators, pixelIndex arrays, and border edge accumulator; post-scan finalization (divide centroid sums, sort+convert pixelIndex arrays to Uint32Array). Pre-populated sector map from definition entries before the scan (handles zero-pixel JSON sectors). Border edge accumulator stored as `protected _borderEdges` for Task 1.6 to expose. `typecheck`, `build`, `test`, and `format` all pass.
+
+**Decisions made:**
+- Pre-populated `_sectorMap` from all definition keys upfront (not "on first encounter") — simpler and correctly handles zero-pixel sectors without extra logic.
+- `_sectorMap` and `_borderEdges` marked `protected` so Task 1.6 can expose them without needing a second scan pass.
+- Centroid uses raw pixel coordinates (x, y as integers); averaging them gives the pixel-center centroid (0.5 offset emerges naturally from the math for uniform grids).
+
+**Left off at:**
+Task 1.6 — `SectorRegistry`: Border Edges, Load-Time Validation, Public Methods, and Tests. Ready to start.
+
+---
 
 ### 2026-04-08 — Task 1.4: `SectorBitmapParser` Error Handling and Tests
 
