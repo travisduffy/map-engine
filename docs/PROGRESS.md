@@ -39,7 +39,7 @@
 ## Current Status
 
 **Phase:** Epic 3 in progress.
-**Next task:** Task 3.5 — Core API Documentation: Quickstart, API Reference, and Asset Contracts.
+**Next task:** Task 3.6 — Known Limitations, Web Worker Opt-In, Out-of-Scope List, and Bundle Size Verification.
 **Blocking issues:** None.
 
 ---
@@ -82,7 +82,7 @@
 | `[x]`  | **3.2** | `loadMap()`, Lifecycle Guards, `destroy()`, and Pass-Through Methods                  |
 | `[x]`  | **3.3** | Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping                 |
 | `[x]`  | **3.4** | Sector Resolution, `PickResult` Construction, and Event Emission                      |
-| `[ ]`  | **3.5** | Core API Documentation: Quickstart, API Reference, and Asset Contracts                |
+| `[x]`  | **3.5** | Core API Documentation: Quickstart, API Reference, and Asset Contracts                |
 | `[ ]`  | **3.6** | Known Limitations, Web Worker Opt-In, Out-of-Scope List, and Bundle Size Verification |
 
 ---
@@ -108,6 +108,22 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 3.5: Core API Documentation
+
+**Tasks touched:** 3.5
+**Outcome:** completed
+
+**What happened:**
+Rewrote `README.md` to satisfy all Phase 6 acceptance criteria 1–10. Added: complete copy-pasteable quickstart (imports `MapEngine`, calls `loadMap`, subscribes `sectorHover`/`sectorClick`, valid TypeScript); explicit bitmap constraints (no anti-aliasing, no blending, no transparency, unique RGB, solid fills); recommended tooling (Aseprite indexed-color, GIMP pencil); violation consequences (null hover flicker at anti-aliased edges); validation warning interpretation; hex key zero-padding table with correct (`"004d99"`) and incorrect (`"4d99"`, `"04d99"`, `"FF0000"`) examples; case-sensitivity note; `getSectorKeys()` with legend-building example; full method-by-method API reference with error conditions; `destroy()` never-throws and idempotency note; `on()`/`off()` pre-load exemption; `loadMap()` partial-failure retry pattern; `sectorHover` null case documented; `@experimental` `borderEdges` with direction label semantics clarification; CORS + `SecurityError` note; void-color optimization advisory.
+
+**Decisions made:**
+No deviations from spec. All content drawn directly from PRD Phase 6 scope.
+
+**Left off at:**
+Task 3.6 — Known Limitations, Web Worker Opt-In, Out-of-Scope List, and Bundle Size Verification. Ready to start.
+
+---
 
 ### 2026-04-08 — Task 3.4: Sector Resolution, `PickResult` Construction, and Event Emission
 
