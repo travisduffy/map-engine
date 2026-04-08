@@ -38,8 +38,8 @@
 
 ## Current Status
 
-**Phase:** Epic 3 in progress.
-**Next task:** Task 3.6 — Known Limitations, Web Worker Opt-In, Out-of-Scope List, and Bundle Size Verification.
+**Phase:** All epics complete. Project is v1-feature-complete.
+**Next task:** None — all 18 tasks done.
 **Blocking issues:** None.
 
 ---
@@ -83,7 +83,7 @@
 | `[x]`  | **3.3** | Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping                 |
 | `[x]`  | **3.4** | Sector Resolution, `PickResult` Construction, and Event Emission                      |
 | `[x]`  | **3.5** | Core API Documentation: Quickstart, API Reference, and Asset Contracts                |
-| `[ ]`  | **3.6** | Known Limitations, Web Worker Opt-In, Out-of-Scope List, and Bundle Size Verification |
+| `[x]`  | **3.6** | Known Limitations, Web Worker Opt-In, Out-of-Scope List, and Bundle Size Verification |
 
 ---
 
@@ -108,6 +108,22 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 3.6: Known Limitations, Web Worker Opt-In, Out-of-Scope List, and Bundle Size Verification
+
+**Tasks touched:** 3.6
+**Outcome:** completed
+
+**What happened:**
+Appended five new sections to `README.md`: (1) Web Worker opt-in with a code example showing `SectorBitmapParser` + `SectorRegistry` inside a worker and `postMessage` buffer transfer; (2) UV coordinate system note with the `pixelY = Math.floor((1 - uv.y) * height)` inversion formula; (3) Known limitations covering all four PRD-specified risks (memory ~400–500 MB for 8K bitmaps, full `texImage2D` re-upload per `setSectorColor`, `gl.MAX_TEXTURE_SIZE` mobile crash risk, main-thread O(W×H) scan blocking) plus canvas resize, continuous rAF, hover-during-drag, and single-instance constraints; (4) Out-of-scope for v1 — explicit enumerated list drawn from PRD §"What v1 Explicitly Does Not Include"; (5) Upgrade paths table mapping each limitation to its v2 mitigation. Also added a Bundle size section confirming 3.78 KB gzipped. All 124 tests pass; typecheck and build clean.
+
+**Decisions made:**
+No deviations from spec. Bundle size (3.78 KB) is well under the 15 KB target.
+
+**Left off at:**
+All 18 tasks complete. v1 feature-complete.
+
+---
 
 ### 2026-04-08 — Task 3.5: Core API Documentation
 

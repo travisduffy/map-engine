@@ -359,3 +359,123 @@ npm run typecheck # tsc --noEmit
 | `MapEngine`          | Public facade wiring all modules.                                                                                   |
 
 ESM only. No UMD or CJS bundles. `SectorBitmapParser` and `SectorRegistry` have zero DOM global references and are safe to use inside a Web Worker.
+
+## Web Worker opt-in
+
+`SectorBitmapParser` and `SectorRegistry` have zero DOM global references by design and are safe to instantiate inside a Web Worker. This lets you offload the O(W×H) scan pass off the main thread for large bitmaps.
+
+```typescript
+// worker.ts
+import { SectorBitmapParser, SectorRegistry } from 'map-engine'
+
+self.onmessage = async ({ data }) => {
+  const { bitmapUrl, definition } = data
+  const parser = new SectorBitmapParser()
+  const { buffer, width, height } = await parser.parse(bitmapUrl)
+  const registry = new SectorRegistry(buffer, width, height, definition)
+  // Transfer the buffer back to avoid a copy
+  self.postMessage({ buffer, width, height }, [buffer.buffer])
+}
+```
+
+```typescript
+// main.ts
+const worker = new Worker(new URL('./worker.ts', import.meta.url), {
+  type: 'module',
+})
+worker.postMessage({ bitmapUrl: '/assets/sectors.png', definition })
+worker.onmessage = ({ data }) => {
+  // Construct MapRenderer on the main thread with the transferred buffer
+}
+```
+
+> **Note:** `MapRenderer` and `MapEngine` are main-thread only (they require `HTMLCanvasElement` and `requestAnimationFrame`). Worker wiring is not built into the v1 `MapEngine.loadMap()` call — this is a manual integration pattern for advanced use cases.
+
+## UV coordinate system note
+
+Three.js UV coordinates have their origin at the bottom-left of the texture, but image/bitmap coordinates have their origin at the top-left. When building custom overlay systems on top of the engine, apply the following inversion when converting UV to bitmap pixel coordinates:
+
+```typescript
+const pixelX = Math.max(0, Math.min(width - 1, Math.floor(uv.x * width)))
+const pixelY = Math.max(
+  0,
+  Math.min(height - 1, Math.floor((1 - uv.y) * height))
+)
+//                                                              ^^^^^^^^^^
+//                                    Y-inversion: Three.js UV origin is bottom-left
+```
+
+Omitting the `(1 - uv.y)` inversion causes the top and bottom halves of the map to swap identities.
+
+## Known limitations
+
+These are documented constraints in v1. See the Upgrade paths section for the planned v2 mitigations.
+
+**Memory usage:**  
+Three full-resolution pixel buffer copies are held in memory simultaneously: `sourceBuffer` (original bitmap RGBA), `displayImageData` (mutable overlay copy), and `pixelIndices` flat arrays per sector (`Uint32Array`), plus the GPU texture copy and `Map`/object overhead. For an 8192×4096 bitmap (~134 MB per buffer), realistic total RAM usage is **400–500 MB**. Plan capacity accordingly.
+
+**Full texture re-upload on every `setSectorColor` call:**  
+`setSectorColor` sets `texture.needsUpdate = true`, which triggers a full `texImage2D` re-upload of the entire texture on the next render frame — not a partial `texSubImage2D` update. For frequent color changes across many sectors this is expensive. The v2 shader-based overlay eliminates this cost entirely.
+
+**`gl.MAX_TEXTURE_SIZE` hardware cap:**  
+WebGL textures cannot exceed the device's `gl.MAX_TEXTURE_SIZE` limit — commonly 4096 px on mobile GPUs and 8192 px on desktop. A bitmap exceeding this limit throws a fatal `INVALID_VALUE` WebGL error. The engine does not query or check this limit in v1. If targeting mobile, keep bitmaps within 4096×4096.
+
+**Main-thread scan pass:**  
+`SectorRegistry` performs a synchronous O(W×H) scan on construction. For an 8192×4096 bitmap, this blocks the main thread for 200–500 ms. Use the Web Worker opt-in pattern above to move this work off the main thread.
+
+**Canvas resize not handled:**  
+After `loadMap()` resolves, resizing the canvas element does not update the Three.js renderer or camera frustum. Destroy and reload to handle resize.
+
+**Continuous render loop:**  
+The engine runs `requestAnimationFrame` continuously. Render-on-demand (only re-render when the scene is dirty) is deferred to v2.
+
+**`sectorHover` fires during active pan drag:**  
+Pointer events during a drag pan still pass through the picking pipeline and may emit `sectorHover`. Suppression during drag is deferred to v2.
+
+**Single map instance assumption:**  
+Multiple simultaneous `MapEngine` instances sharing a canvas, or managing multiple canvases independently, are not supported in v1.
+
+## What v1 does not include
+
+The following features are explicitly out of scope for v1:
+
+- Adjacency graph (which sectors border which)
+- Area / region hierarchy (grouping sectors into provinces, countries, etc.)
+- River layer or heightmap rendering
+- Shader-based political overlay (v2 upgrade path for `setSectorColor`)
+- CSV definition format — JSON only
+- Built-in UI controls, tooltips, or legend components
+- SSR / Node.js support
+- Multiple simultaneous map instances
+- Touch event support (tap, pinch-to-zoom)
+- Canvas resize handling after construction
+- Render-on-demand (engine always runs rAF)
+- UMD / CommonJS bundles — ESM only
+- React or any framework integration layer
+- Pre-fetched `ArrayBuffer` or `ImageBitmap` as `loadMap()` inputs — URL strings and `Blob` only
+- `gl.MAX_TEXTURE_SIZE` querying or texture tiling
+- Automatic Web Worker wiring in `loadMap()`
+
+## Upgrade paths (v2)
+
+| Limitation                                       | v2 approach                                                                                                 |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Full `texImage2D` re-upload per `setSectorColor` | Shader-based sector color overlay using a palette texture — eliminates CPU pixel writes entirely            |
+| `texImage2D` → partial update                    | `texSubImage2D` dirty-rect upload                                                                           |
+| Main-thread O(W×H) scan                          | Move `SectorBitmapParser` + `SectorRegistry` construction into a Web Worker; transfer buffer to main thread |
+| Memory: three buffer copies                      | Explore sharing `sourceBuffer` and `displayImageData` via `SharedArrayBuffer`                               |
+| `gl.MAX_TEXTURE_SIZE` crash                      | Query limit at init; tile oversized bitmaps into multiple textures                                          |
+| No adjacency graph                               | Post-scan edge-list → adjacency `Map<hexKey, hexKey[]>`                                                     |
+| Continuous rAF loop                              | Render-on-demand — only call `renderer.render()` when the scene is dirty                                    |
+| Hover during drag                                | Track drag state in `MapEngine`; suppress `sectorHover` emissions while `_isDragging` is true               |
+| River / heightmap layers                         | Additional `PlaneGeometry` layers with separate textures composited over the base map                       |
+
+## Bundle size
+
+`dist/index.js` gzipped: **3.78 KB** (Three.js is external — not bundled).
+
+```bash
+npm run build && npm run size
+```
+
+If the size far exceeds 15 KB, verify that `rollupOptions.external: ['three']` is present in `vite.config.ts`. Omitting it bundles the entire Three.js library (~600 KB gzipped) and silently fails the size check.
