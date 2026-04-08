@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { MapEngine } from '../src/MapEngine'
 
 describe('MapEngine — constructor and event subscription', () => {
@@ -336,5 +336,140 @@ describe('MapEngine — pass-through methods and getters', () => {
     )
     expect(() => engine.renderer).toThrow('MapEngine: destroyed')
     expect(() => engine.registry).toThrow('MapEngine: destroyed')
+  })
+})
+
+// --- Picking tests ---
+
+const MISMATCH_DEFINITION_URL = '/test/fixtures/test-4x4-mismatch.json'
+
+function firePointer(
+  canvas: HTMLCanvasElement,
+  type: 'pointermove' | 'click',
+  canvasX: number,
+  canvasY: number
+): void {
+  const rect = canvas.getBoundingClientRect()
+  const event = new (type === 'pointermove' ? PointerEvent : MouseEvent)(type, {
+    bubbles: true,
+    clientX: rect.left + canvasX,
+    clientY: rect.top + canvasY,
+  })
+  canvas.dispatchEvent(event)
+}
+
+describe('MapEngine — picking (sectorHover and sectorClick)', () => {
+  let canvas: HTMLCanvasElement
+  let engine: MapEngine
+
+  beforeEach(async () => {
+    canvas = makeCanvas(800, 600)
+    engine = new MapEngine()
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+  })
+
+  afterEach(() => {
+    engine?.destroy()
+    canvas?.remove()
+  })
+
+  it('pointermove at (250,150) emits sectorHover with hexKey "ff0000"', () => {
+    const handler = vi.fn()
+    engine.on('sectorHover', handler)
+    firePointer(canvas, 'pointermove', 250, 150)
+    expect(handler).toHaveBeenCalledOnce()
+    const result = handler.mock.calls[0][0]
+    expect(result.hexKey).toBe('ff0000')
+    expect(result.sectorData.name).toBe('Red Sector')
+  })
+
+  it('second pointermove at same location emits no second sectorHover', () => {
+    const handler = vi.fn()
+    engine.on('sectorHover', handler)
+    firePointer(canvas, 'pointermove', 250, 150)
+    firePointer(canvas, 'pointermove', 250, 150)
+    expect(handler).toHaveBeenCalledOnce()
+  })
+
+  it('pointermove from (250,150) to (550,150) emits one sectorHover with hexKey "00ff00"', () => {
+    const handler = vi.fn()
+    engine.on('sectorHover', handler)
+    firePointer(canvas, 'pointermove', 250, 150)
+    handler.mockClear()
+    firePointer(canvas, 'pointermove', 550, 150)
+    expect(handler).toHaveBeenCalledOnce()
+    expect(handler.mock.calls[0][0].hexKey).toBe('00ff00')
+  })
+
+  it('pointermove at (50,300) (off-plane) emits sectorHover null after prior hover', () => {
+    const handler = vi.fn()
+    engine.on('sectorHover', handler)
+    firePointer(canvas, 'pointermove', 250, 150)
+    handler.mockClear()
+    firePointer(canvas, 'pointermove', 50, 300)
+    expect(handler).toHaveBeenCalledOnce()
+    expect(handler.mock.calls[0][0]).toBeNull()
+  })
+
+  it('click at (250,150) emits sectorClick with hexKey "ff0000" and pixelX/Y in [0,1]', () => {
+    const handler = vi.fn()
+    engine.on('sectorClick', handler)
+    firePointer(canvas, 'click', 250, 150)
+    expect(handler).toHaveBeenCalledOnce()
+    const result = handler.mock.calls[0][0]
+    expect(result.hexKey).toBe('ff0000')
+    expect(result.pixelX).toBeGreaterThanOrEqual(0)
+    expect(result.pixelX).toBeLessThanOrEqual(1)
+    expect(result.pixelY).toBeGreaterThanOrEqual(0)
+    expect(result.pixelY).toBeLessThanOrEqual(1)
+  })
+
+  it('pointermove at (250,450) (blue bottom-left) emits sectorHover with hexKey "0000ff"', () => {
+    const handler = vi.fn()
+    engine.on('sectorHover', handler)
+    firePointer(canvas, 'pointermove', 250, 450)
+    expect(handler).toHaveBeenCalledOnce()
+    expect(handler.mock.calls[0][0].hexKey).toBe('0000ff')
+  })
+
+  it('click at (50,300) (off-plane) emits no sectorClick', () => {
+    const handler = vi.fn()
+    engine.on('sectorClick', handler)
+    firePointer(canvas, 'click', 50, 300)
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('mismatch fixture: pointermove at (550,450) emits sectorHover null for bitmap-only color', async () => {
+    // Load a new engine with the mismatch definition (ffff00 not in JSON)
+    const canvas2 = makeCanvas(800, 600)
+    const engine2 = new MapEngine()
+    await engine2.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: MISMATCH_DEFINITION_URL,
+      canvas: canvas2,
+    })
+    const handler = vi.fn()
+    engine2.on('sectorHover', handler)
+    // First hover on red (defined in mismatch.json) to set _lastHexKey
+    firePointer(canvas2, 'pointermove', 250, 150)
+    handler.mockClear()
+    // Hover on yellow (ffff00) — not in mismatch.json → getSector returns undefined → null
+    firePointer(canvas2, 'pointermove', 550, 450)
+    expect(handler).toHaveBeenCalledOnce()
+    expect(handler.mock.calls[0][0]).toBeNull()
+    engine2.destroy()
+    canvas2.remove()
+  })
+
+  it('after destroy(), pointermove does not invoke sectorHover callback', () => {
+    const handler = vi.fn()
+    engine.on('sectorHover', handler)
+    engine.destroy()
+    firePointer(canvas, 'pointermove', 250, 150)
+    expect(handler).not.toHaveBeenCalled()
   })
 })

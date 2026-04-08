@@ -67,8 +67,10 @@ export class MapEngine {
 
     // Step 3: Miss — ray did not hit the map plane
     if (intersections.length === 0) {
-      // Task 3.4 handles null sectorHover emission on miss
-      void isClick
+      if (!isClick && this._lastHexKey !== null) {
+        this._lastHexKey = null
+        this._emit('sectorHover', null)
+      }
       return
     }
 
@@ -82,12 +84,32 @@ export class MapEngine {
       Math.min(height - 1, Math.floor((1 - uv.y) * height))
     )
 
-    // Task 3.4: sector resolution and event emission
-    void pixelX
-    void pixelY
-    void isClick
-    void this._lastHexKey
-    void this._emit
+    // Step 5: getSectorAt → hex key
+    const hexKey = this._registry.getSectorAt(pixelX, pixelY)
+
+    // Step 6: getSector → SectorData | undefined
+    const sectorData = this._registry.getSector(hexKey)
+
+    // Step 7: undefined means bitmap-only color — treat as miss
+    if (sectorData === undefined) {
+      if (!isClick && this._lastHexKey !== null) {
+        this._lastHexKey = null
+        this._emit('sectorHover', null)
+      }
+      return
+    }
+
+    // Step 8: construct PickResult and emit
+    const result: PickResult = { hexKey, sectorData, pixelX, pixelY }
+
+    if (!isClick) {
+      if (hexKey !== this._lastHexKey) {
+        this._lastHexKey = hexKey
+        this._emit('sectorHover', result)
+      }
+    } else {
+      this._emit('sectorClick', result)
+    }
   }
 
   async loadMap(config: MapConfig): Promise<void> {

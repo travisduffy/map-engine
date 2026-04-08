@@ -39,7 +39,7 @@
 ## Current Status
 
 **Phase:** Epic 3 in progress.
-**Next task:** Task 3.4 — Sector Resolution, `PickResult` Construction, and Event Emission.
+**Next task:** Task 3.5 — Core API Documentation: Quickstart, API Reference, and Asset Contracts.
 **Blocking issues:** None.
 
 ---
@@ -81,7 +81,7 @@
 | `[x]`  | **3.1** | `MapEngine` Constructor and Event Subscription System (`on` / `off`)                  |
 | `[x]`  | **3.2** | `loadMap()`, Lifecycle Guards, `destroy()`, and Pass-Through Methods                  |
 | `[x]`  | **3.3** | Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping                 |
-| `[ ]`  | **3.4** | Sector Resolution, `PickResult` Construction, and Event Emission                      |
+| `[x]`  | **3.4** | Sector Resolution, `PickResult` Construction, and Event Emission                      |
 | `[ ]`  | **3.5** | Core API Documentation: Quickstart, API Reference, and Asset Contracts                |
 | `[ ]`  | **3.6** | Known Limitations, Web Worker Opt-In, Out-of-Scope List, and Bundle Size Verification |
 
@@ -108,6 +108,22 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 3.4: Sector Resolution, `PickResult` Construction, and Event Emission
+
+**Tasks touched:** 3.4
+**Outcome:** completed
+
+**What happened:**
+Replaced the `void` stubs in `_handlePointerEvent` with the full steps 5–8: `getSectorAt(pixelX, pixelY)` → hex key; `getSector(hexKey)` → `SectorData | undefined`; miss handling (both empty intersection and undefined getSector) emits `sectorHover` null only if `_lastHexKey !== null`; hit path constructs `PickResult` and emits `sectorHover` (change-detected) or `sectorClick` (unconditional). Added 9 browser-mode picking tests covering: red/green/blue/yellow quadrant hover, change-detection no-op, off-plane null emission, Y-axis inversion validation (blue bottom-left), click pixelX/Y bounds, click on off-plane no-emit, mismatch fixture null, post-destroy listener removal. 124 total tests, all pass.
+
+**Decisions made:**
+No deviations from spec.
+
+**Left off at:**
+Task 3.5 — Core API Documentation: Quickstart, API Reference, and Asset Contracts. Ready to start.
+
+---
 
 ### 2026-04-08 — Task 3.3: Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping
 
