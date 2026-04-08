@@ -1,4 +1,6 @@
 import { SectorBitmapParser } from './SectorBitmapParser'
+import { SectorRegistry } from './SectorRegistry'
+import { MapRenderer } from './MapRenderer'
 import type { MapConfig, SectorData, PickResult } from './types'
 
 export class MapEngine {
@@ -8,6 +10,11 @@ export class MapEngine {
   private _lastHexKey: string | null = null
   private _parser: SectorBitmapParser
   private _handlers: Map<string, Set<Function>>
+  private _canvas: HTMLCanvasElement | null = null
+  private _registry: SectorRegistry | null = null
+  private _renderer: MapRenderer | null = null
+  private _boundPointerMove: ((e: PointerEvent) => void) | null = null
+  private _boundClick: ((e: MouseEvent) => void) | null = null
 
   constructor() {
     this._parser = new SectorBitmapParser()
@@ -41,28 +48,130 @@ export class MapEngine {
     }
   }
 
-  loadMap(_config: MapConfig): Promise<void> {
-    void this._parser
-    void this._loaded
-    void this._loading
+  // Picking logic implemented in Task 3.3
+  private _handlePointerEvent(_event: MouseEvent, _isClick: boolean): void {
     void this._lastHexKey
     void this._emit
-    throw new Error('Not implemented')
   }
 
-  getSector(_hexKey: string): SectorData | undefined {
-    throw new Error('Not implemented')
-  }
+  async loadMap(config: MapConfig): Promise<void> {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (this._loaded)
+      throw new Error(
+        'MapEngine: already loaded — call destroy() before loading a new map'
+      )
+    if (this._loading)
+      throw new Error('MapEngine: loadMap() is already in progress')
 
-  setSectorColor(_hexKey: string, _color: string): void {
-    throw new Error('Not implemented')
-  }
+    this._loading = true
 
-  resetSectorColor(_hexKey: string): void {
-    throw new Error('Not implemented')
+    try {
+      const [{ buffer, width, height }, definition] = await Promise.all([
+        this._parser.parse(config.bitmapUrl),
+        fetch(config.definitionUrl).then(r => {
+          if (!r.ok)
+            throw new Error(
+              `Failed to load definition: HTTP ${r.status} ${r.statusText}`
+            )
+          return r.json()
+        }),
+      ])
+
+      const registry = new SectorRegistry(buffer, width, height, definition)
+      const renderer = new MapRenderer(config.canvas, registry)
+
+      this._canvas = config.canvas
+      this._registry = registry
+      this._renderer = renderer
+
+      this._boundPointerMove = (e: PointerEvent) =>
+        this._handlePointerEvent(e, false)
+      this._boundClick = (e: MouseEvent) => this._handlePointerEvent(e, true)
+      this._canvas.addEventListener('pointermove', this._boundPointerMove)
+      this._canvas.addEventListener('click', this._boundClick)
+
+      this._loaded = true
+      this._loading = false
+    } catch (err) {
+      this._loading = false
+      throw err
+    }
   }
 
   destroy(): void {
-    throw new Error('Not implemented')
+    // Step 1: idempotent — never throws
+    if (this._destroyed) return
+
+    // Step 2: destroy renderer (disposes rAF, geometry, material, texture, MapRenderer listeners)
+    if (this._renderer) {
+      this._renderer.destroy()
+    }
+
+    // Step 3: remove MapEngine-owned canvas listeners (picking)
+    if (this._canvas) {
+      if (this._boundPointerMove)
+        this._canvas.removeEventListener('pointermove', this._boundPointerMove)
+      if (this._boundClick)
+        this._canvas.removeEventListener('click', this._boundClick)
+    }
+
+    // Step 4: clear event handler map
+    this._handlers.clear()
+
+    // Step 5: null out refs
+    this._registry = null
+    this._renderer = null
+    this._canvas = null
+    this._boundPointerMove = null
+    this._boundClick = null
+    this._loading = false
+
+    // Steps 6–7: conditionally mark destroyed
+    if (this._loaded) {
+      this._destroyed = true
+    }
+    // If _loaded === false (partial failure), do NOT set _destroyed — allow retry via loadMap()
+  }
+
+  get renderer(): MapRenderer {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    return this._renderer!
+  }
+
+  get registry(): SectorRegistry {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    return this._registry!
+  }
+
+  getSector(hexKey: string): SectorData | undefined {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    return this._registry!.getSector(hexKey)
+  }
+
+  getSectorKeys(): string[] {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    return this._registry!.getSectorKeys()
+  }
+
+  setSectorColor(hexKey: string, color: string): void {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    this._renderer!.setSectorColor(hexKey, color)
+  }
+
+  resetSectorColor(hexKey: string): void {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    this._renderer!.resetSectorColor(hexKey)
   }
 }

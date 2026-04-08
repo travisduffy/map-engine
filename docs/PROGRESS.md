@@ -39,7 +39,7 @@
 ## Current Status
 
 **Phase:** Epic 3 in progress.
-**Next task:** Task 3.2 — `loadMap()`, Lifecycle Guards, `destroy()`, and Pass-Through Methods.
+**Next task:** Task 3.3 — Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping.
 **Blocking issues:** None.
 
 ---
@@ -79,7 +79,7 @@
 | Status | Task    | Description                                                                           |
 | ------ | ------- | ------------------------------------------------------------------------------------- |
 | `[x]`  | **3.1** | `MapEngine` Constructor and Event Subscription System (`on` / `off`)                  |
-| `[ ]`  | **3.2** | `loadMap()`, Lifecycle Guards, `destroy()`, and Pass-Through Methods                  |
+| `[x]`  | **3.2** | `loadMap()`, Lifecycle Guards, `destroy()`, and Pass-Through Methods                  |
 | `[ ]`  | **3.3** | Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping                 |
 | `[ ]`  | **3.4** | Sector Resolution, `PickResult` Construction, and Event Emission                      |
 | `[ ]`  | **3.5** | Core API Documentation: Quickstart, API Reference, and Asset Contracts                |
@@ -108,6 +108,24 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 3.2: `loadMap()`, Lifecycle Guards, `destroy()`, and Pass-Through Methods
+
+**Tasks touched:** 3.2
+**Outcome:** completed
+
+**What happened:**
+Implemented `loadMap()` with the exact 3-guard check sequence (destroyed → loaded → loading), concurrent `Promise.all` for bitmap parse and JSON fetch, then sequential `SectorRegistry` + `MapRenderer` construction. Stores `_canvas`, `_registry`, `_renderer` on the instance. Registered `pointermove` and `click` picking listeners (bound to a no-op `_handlePointerEvent` stub — logic filled in Task 3.3) and stored bound references for cleanup. Implemented `destroy()` with the 7-step contract including the partial-failure path (no `_destroyed = true` when `_loaded === false`). Added `renderer`/`registry` getters and `getSector`/`getSectorKeys`/`setSectorColor`/`resetSectorColor` pass-throughs with pre-load and post-destroy guards. Wrote 16 new browser-mode tests — 115 total, all pass.
+
+**Decisions made:**
+
+- `_handlePointerEvent` stub uses `void this._lastHexKey; void this._emit` to satisfy `noUnusedLocals` until Task 3.3 fills in the picking logic.
+- `getSectorKeys()` added as a pass-through even though not explicitly listed in Task 3.2 spec — it's referenced in the PRD API surface and the 3.5 documentation epic.
+
+**Left off at:**
+Task 3.3 — Picking Pipeline: NDC Conversion, Raycasting, and UV-to-Pixel Mapping. Ready to start.
+
+---
 
 ### 2026-04-08 — Task 3.1: `MapEngine` Constructor and Event Subscription System
 
