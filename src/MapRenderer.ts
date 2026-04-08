@@ -25,6 +25,15 @@ export class MapRenderer {
 
   private _animFrameId: number
 
+  // Pan state (Task 2.5)
+  private _isDragging = false
+  private _lastPointerPos = { x: 0, y: 0 }
+
+  // Bound handler references — stored so destroy() can removeEventListener
+  private readonly _onPointerDown: (e: PointerEvent) => void
+  private readonly _onPointerMove: (e: PointerEvent) => void
+  private readonly _onPointerUp: () => void
+
   constructor(canvas: HTMLCanvasElement, registry: SectorRegistry) {
     if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
       throw new Error(
@@ -112,12 +121,48 @@ export class MapRenderer {
     // Wire texture into the material created above
     this.material.map = this._texture
 
+    // Pointer-drag pan handlers (Task 2.5)
+    this._onPointerDown = (e: PointerEvent) => {
+      this._isDragging = true
+      this._lastPointerPos = { x: e.clientX, y: e.clientY }
+    }
+    this._onPointerMove = (e: PointerEvent) => {
+      if (!this._isDragging) return
+      const deltaScreenX = e.clientX - this._lastPointerPos.x
+      const deltaScreenY = e.clientY - this._lastPointerPos.y
+      this._lastPointerPos = { x: e.clientX, y: e.clientY }
+      const scaleX = (this._frustumHalfW * 2) / this._canvas.clientWidth
+      const scaleY = (this._frustumHalfH * 2) / this._canvas.clientHeight
+      this.camera.position.x -= (deltaScreenX * scaleX) / this.camera.zoom
+      this.camera.position.y += (deltaScreenY * scaleY) / this.camera.zoom
+      this.clampPan()
+    }
+    this._onPointerUp = () => {
+      this._isDragging = false
+    }
+    canvas.addEventListener('pointerdown', this._onPointerDown)
+    canvas.addEventListener('pointermove', this._onPointerMove)
+    canvas.addEventListener('pointerup', this._onPointerUp)
+
     // Continuous render loop (v1 decision — render-on-demand deferred to v2)
     const loop = () => {
       this._animFrameId = requestAnimationFrame(loop)
       this.renderer.render(this.scene, this.camera)
     }
     this._animFrameId = requestAnimationFrame(loop)
+  }
+
+  clampPan(): void {
+    const maxX = this._registry.width / 2 + this._registry.width * 0.1
+    const maxY = this._registry.height / 2 + this._registry.height * 0.1
+    this.camera.position.x = Math.max(
+      -maxX,
+      Math.min(maxX, this.camera.position.x)
+    )
+    this.camera.position.y = Math.max(
+      -maxY,
+      Math.min(maxY, this.camera.position.y)
+    )
   }
 
   setSectorColor(hexKey: string, color: string): void {
@@ -194,6 +239,9 @@ export class MapRenderer {
 
   destroy(): void {
     cancelAnimationFrame(this._animFrameId)
+    this._canvas.removeEventListener('pointerdown', this._onPointerDown)
+    this._canvas.removeEventListener('pointermove', this._onPointerMove)
+    this._canvas.removeEventListener('pointerup', this._onPointerUp)
     this.renderer.dispose()
     ;(this.mesh.geometry as THREE.BufferGeometry).dispose()
     this.material.dispose()

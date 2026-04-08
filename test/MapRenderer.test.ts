@@ -335,6 +335,110 @@ describe('MapRenderer', () => {
     })
   })
 
+  describe('pointer-drag pan (Task 2.5)', () => {
+    beforeEach(() => {
+      renderer = new MapRenderer(canvas, registry)
+    })
+
+    it('rightward drag decreases camera.position.x', () => {
+      const before = renderer.camera.position.x
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 150,
+          clientY: 100,
+          bubbles: true,
+        })
+      )
+      expect(renderer.camera.position.x).toBeLessThan(before)
+    })
+
+    it('downward drag increases camera.position.y', () => {
+      const before = renderer.camera.position.y
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 100,
+          clientY: 150,
+          bubbles: true,
+        })
+      )
+      expect(renderer.camera.position.y).toBeGreaterThan(before)
+    })
+
+    it('pointermove without pointerdown does not move camera', () => {
+      const before = renderer.camera.position.x
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 100,
+          clientY: 100,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 200,
+          clientY: 100,
+          bubbles: true,
+        })
+      )
+      expect(renderer.camera.position.x).toBe(before)
+    })
+
+    it('pointerup stops dragging', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+      const after = renderer.camera.position.x
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 200,
+          clientY: 100,
+          bubbles: true,
+        })
+      )
+      expect(renderer.camera.position.x).toBe(after)
+    })
+
+    it('clampPan clamps camera.position.x to bitmap + 10% margin', () => {
+      renderer.camera.position.x = registry.width * 2
+      renderer.clampPan()
+      const maxX = registry.width / 2 + registry.width * 0.1
+      expect(renderer.camera.position.x).toBeLessThanOrEqual(maxX)
+    })
+
+    it('clampPan clamps camera.position.y to bitmap + 10% margin', () => {
+      renderer.camera.position.y = registry.height * 2
+      renderer.clampPan()
+      const maxY = registry.height / 2 + registry.height * 0.1
+      expect(renderer.camera.position.y).toBeLessThanOrEqual(maxY)
+    })
+
+    it('clampPan clamps negative x', () => {
+      renderer.camera.position.x = -registry.width * 2
+      renderer.clampPan()
+      const minX = -(registry.width / 2 + registry.width * 0.1)
+      expect(renderer.camera.position.x).toBeGreaterThanOrEqual(minX)
+    })
+  })
+
   describe('destroy', () => {
     it('does not throw', () => {
       renderer = new MapRenderer(canvas, registry)

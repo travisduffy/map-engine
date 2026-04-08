@@ -39,7 +39,7 @@
 ## Current Status
 
 **Phase:** Epic 2 in progress.
-**Next task:** Task 2.5 — Pointer-Drag Pan and `clampPan()`.
+**Next task:** Task 2.6 — Scroll-Wheel Zoom, `destroy()` Teardown, and Full Camera/Navigation Tests.
 **Blocking issues:** None.
 
 ---
@@ -69,7 +69,7 @@
 | `[x]`  | **2.2** | Display Canvas, `displayImageData`, `CanvasTexture`, and Color Parser Setup |
 | `[x]`  | **2.3** | `setSectorColor`: CSS Color Parsing and Pixel Write                         |
 | `[x]`  | **2.4** | `resetSectorColor`, Edge Cases, and Color Mutation Tests                    |
-| `[ ]`  | **2.5** | Pointer-Drag Pan and `clampPan()`                                           |
+| `[x]`  | **2.5** | Pointer-Drag Pan and `clampPan()`                                           |
 | `[ ]`  | **2.6** | Scroll-Wheel Zoom, `destroy()` Teardown, and Full Camera/Navigation Tests   |
 
 ### Epic 3: Interaction, Public API Facade, and Distribution
@@ -108,6 +108,22 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-08 — Task 2.5: Pointer-Drag Pan and `clampPan()`
+
+**Tasks touched:** 2.5
+**Outcome:** completed
+
+**What happened:**
+Added `_isDragging`, `_lastPointerPos`, and three bound handler fields (`_onPointerDown`, `_onPointerMove`, `_onPointerUp`) to `MapRenderer`. Registered all three listeners on the canvas in the constructor. `_onPointerMove` applies the world-space scale conversion (`frustumHalfW*2 / clientWidth`) and Y-inversion, then calls `clampPan()`. Implemented `clampPan()` as a public method clamping both axes to `±(dimension/2 + dimension*0.1)`. Updated `destroy()` to `removeEventListener` for all three handlers. Wrote 7 browser-mode tests — 84 total, all pass.
+
+**Decisions made:**
+No deviations from spec.
+
+**Left off at:**
+Task 2.6 — Scroll-Wheel Zoom, `destroy()` Teardown, and Full Camera/Navigation Tests. Ready to start.
+
+---
 
 ### 2026-04-08 — Task 2.4: `resetSectorColor`, Edge Cases, and Color Mutation Tests
 
