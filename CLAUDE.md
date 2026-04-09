@@ -11,6 +11,7 @@ npm run build         # tsc + vite build (library mode, outputs dist/index.js)
 npm run format        # prettier --write .
 npm run test          # run full test suite (vitest run — all test files, single pass)
 npm run size          # gzip -c dist/index.js | wc -c  (verify <15 KB gzipped)
+npm run knowledge     # repomix CLAUDE.md + README.md + docs/** → stdout (pipe to clipboard etc.)
 ```
 
 Tests requiring browser APIs (`OffscreenCanvas`, `createImageBitmap`, DOM) run under Vitest browser mode with the Playwright provider. Tests without browser API dependencies may use Vitest in Node mode.

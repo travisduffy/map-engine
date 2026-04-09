@@ -10,7 +10,8 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "size": "vite build && gzip -c dist/index.js | wc -c"
+    "size": "vite build && gzip -c dist/index.js | wc -c",
+    "knowledge": "repomix --include 'README.md,CLAUDE.md,docs/**' --stdout"
   },
   "peerDependencies": {
     "three": "^0.160.0"
@@ -20,6 +21,7 @@
     "@vitest/browser": "^3.2.4",
     "playwright": "^1.59.1",
     "prettier": "^3.8.1",
+    "repomix": "^1.13.1",
     "sharp": "^0.33.5",
     "typescript": "~6.0.2",
     "vite": "^8.0.4",
