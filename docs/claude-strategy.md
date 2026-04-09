@@ -32,6 +32,41 @@ The core of this strategy is the strict separation of concerns between human-fac
 - **Contains:** Domain-specific architectural choices (e.g., "No state management libraries in `client/`"), explicit anti-patterns, data schemas, API response conventions, and testing strategies.
 - **Rule:** Every distinct domain (e.g., frontend, backend, testing) must have its own path-scoped rule file.
 
+## Active vs. Archive: Development Cycle Management
+
+### The Two States
+
+The `docs/` directory is always in one of two states:
+
+| State      | Indicator                                                                       | What it means                                                                             |
+| ---------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Active** | `docs/PROGRESS.md` Task Registry has tasks; `docs/PRD.md` Overview is populated | A development cycle is underway. Implementation work is authorized.                       |
+| **Idle**   | Task Registry is empty; PRD Overview is `TODO`                                  | Between cycles. Do not begin implementation. Wait for the user to populate PRD and epics. |
+
+### The Archive Structure
+
+Completed development cycles are archived under `docs/archive/` using [Semantic Versioning](https://semver.org/) (`vMAJOR.MINOR.PATCH`):
+
+```
+docs/
+  archive/
+    v1.0.0/
+      PRD.md          # snapshot of the spec at ship
+      PROGRESS.md     # full session log and task history
+      epics/          # all epic files for that version
+  epics/              # active epics only (empty between cycles)
+  PRD.md              # active PRD (placeholder when idle)
+  PROGRESS.md         # active progress tracker
+  claude-strategy.md  # this file
+```
+
+### Rules for AI Agents
+
+1. **`docs/archive/` is strictly read-only historical context.** Reference it only when explicitly asked. Never modify its contents.
+2. **Archiving is a human-triggered event.** Claude must never autonomously move files into `docs/archive/`. An archive sequence only happens when the user explicitly instructs it in that session.
+3. **SemVer tags are assigned by the human.** Claude does not determine the version number for an archive.
+4. **Between cycles, the active `PRD.md` and `PROGRESS.md` are placeholder files.** They define the standard structure for the next cycle but contain no implementation requirements yet.
+
 ## The Self-Maintaining Loop
 
 The AI is strictly required to verify its own execution and maintain the accuracy of this three-tier system via a mandatory Post-Task Checklist embedded in `CLAUDE.md`.

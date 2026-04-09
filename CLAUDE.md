@@ -21,7 +21,7 @@ To run a single test file: `npx vitest run test/path/to/file.test.ts`
 
 This is a **TypeScript ESM library** (not an app) that renders Paradox-style grand strategy maps in the browser using Three.js. The entry point will be `src/index.ts`; `src/main.ts` is currently just Vite boilerplate.
 
-### The four modules (not yet implemented)
+### The four modules (v1 — implemented)
 
 | Module               | Role                                                                                                                                                                                        |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -89,17 +89,21 @@ sharp@^0.33.0           # fixture generation only
 
 ## Documentation
 
-- `docs/PRD.md` — full implementation spec including exact algorithms, acceptance criteria, and known risks
-- `docs/epics/` — 18 tasks across 3 epics; each task has a full work spec and done-when criteria
-- `docs/PROGRESS.md` — **read this first at the start of every session**; tracks task completion status, session logs, and lessons learned
-- `docs/claude-strategy.md` — three-tier docs strategy (CLAUDE.md → `.claude/rules/*.md` → README.md)
+- `docs/PROGRESS.md` — **read this first at the start of every session**; tracks task completion status, session logs, and lessons learned. If the Task Registry is empty or the active version is `None`, do not begin implementation — wait for the user to start a new cycle.
+- `docs/PRD.md` — full implementation spec for the active version. If the Overview section is empty or marked `TODO`, do not infer requirements — stop and ask.
+- `docs/epics/` — epic files for the active version; each task has a full work spec and done-when criteria. Empty between development cycles.
+- `docs/archive/` — completed versions organized by SemVer tag (e.g., `v1.0.0/`). Treat as read-only historical reference; never modify archive contents.
+- `docs/claude-strategy.md` — three-tier docs strategy and Active vs. Archive directory conventions.
+
+> **Archiving is a human-triggered event.** NEVER move files into `docs/archive/` autonomously. Only execute an archive sequence when the user explicitly instructs you to do so in that session.
 
 ## Session Workflow
 
 **Every session must follow this protocol:**
 
 1. **Read `docs/PROGRESS.md` first.** It tells you exactly what has been done, what is in progress, what is blocked, and where the last session left off. Never start implementation work without reading it.
-2. **Find the next task.** The Task Registry in `docs/PROGRESS.md` lists all 18 tasks with their current status. Pick up from the first `[ ]` (not started) or `[~]` (in progress) task.
-3. **Read the epic file for that task.** Epic files are in `docs/epics/`. They contain the full work spec, PRD references, and done-when criteria for every task.
-4. **Cross-reference the PRD.** `docs/PRD.md` is the canonical authority. Epic files cite specific PRD sections — go there for algorithm details and acceptance criteria.
-5. **Update `docs/PROGRESS.md` when done.** Before closing a session: mark completed tasks `[x]`, mark any blocked task `[!]`, append a Session Log entry (date, tasks touched, outcome, decisions made, where you left off), and add any non-obvious discoveries to Lessons Learned.
+2. **Check if a development cycle is active.** If the Task Registry is empty or the active version is `None`, stop — do not begin implementation. Wait for the user to populate `docs/PRD.md` and `docs/epics/` to start the next cycle.
+3. **Find the next task.** The Task Registry lists all tasks with their current status. Pick up from the first `[ ]` (not started) or `[~]` (in progress) task.
+4. **Read the epic file for that task.** Epic files are in `docs/epics/`. They contain the full work spec, PRD references, and done-when criteria for every task.
+5. **Cross-reference the PRD.** `docs/PRD.md` is the canonical authority. Epic files cite specific PRD sections — go there for algorithm details and acceptance criteria.
+6. **Update `docs/PROGRESS.md` when done.** Before closing a session: mark completed tasks `[x]`, mark any blocked task `[!]`, append a Session Log entry (date, tasks touched, outcome, decisions made, where you left off), and add any non-obvious discoveries to Lessons Learned.
