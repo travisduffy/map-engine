@@ -4,13 +4,23 @@
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "workspaces": [
     "example"
   ],
   "scripts": {
     "dev": "vitest",
     "example": "npm run dev -w example",
-    "build": "tsc && vite build",
+    "build": "vite build && tsc -p tsconfig.build.json",
     "build:example": "npm run build -w example",
     "typecheck:example": "npm run typecheck -w example",
     "format": "prettier --write .",

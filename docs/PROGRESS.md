@@ -88,9 +88,9 @@ _(No active tasks. Populate when the next development cycle begins.)_
 
 -->
 
-### 2026-04-10 — canonical example application + dev tooling cleanup
+### 2026-04-10 — canonical example app, dev tooling cleanup, and library publishing hygiene
 
-**Tasks touched:** (out-of-cycle — tooling work, no sprint active)
+**Tasks touched:** (out-of-cycle — tooling and maintenance, no sprint active)
 **Outcome:** completed
 
 **What happened:**
@@ -104,17 +104,27 @@ Example UI: two-panel layout (canvas + sidebar). Demonstrates `sectorHover` (tra
 
 Dev tooling: dropped `concurrently`. Split the old combined `npm run dev` into two independent scripts: `npm run dev` (vitest watch mode) and `npm run example` (example Vite dev server at localhost:3000). Added `browser.headless: true` and `browser.screenshotFailures: false` to suppress the Playwright browser popup and `test/__screenshots__` artifact generation. Added `server.watch.usePolling: true` for reliable file-watch triggering.
 
+Publishing hygiene (later in the same session): codebase health check identified missing type declarations, missing package.json fields, and dead scaffolding files.
+
+**Type declarations:** The build produced no `.d.ts` output. Added `tsconfig.build.json` extending the root config with `emitDeclarationOnly: true`, `declaration: true`, `declarationMap: true`, `outDir: dist`, `rootDir: src`. Updated build script to `vite build && tsc -p tsconfig.build.json` — declarations emitted after Vite (which empties `dist/` first). Dropped the redundant leading `tsc` from the old build script since `tsconfig.build.json` runs a full type check anyway. Tried `vite-plugin-dts` first but its output landed under `dist/src/` and `rollupTypes: true` produced an empty `export {}` due to a TypeScript 6.x / API Extractor version mismatch; uninstalled in favour of plain `tsc`.
+
+**package.json fields:** Added `"types": "dist/index.d.ts"`, a modern `"exports"` block with `types` and `import` conditions, and `"files": ["dist"]`.
+
+**Dead scaffolding removal:** `src/main.ts`, `src/style.css`, and root `index.html` were leftover Vite project scaffolding never used by any workflow (root `npm run dev` is vitest, not a Vite dev server). Removed all three, which also eliminated the need for the `exclude: ["src/main.ts"]` workaround in `tsconfig.build.json`.
+
 **Decisions made:**
 
 - `file:..` (not `"*"`) as the workspace version specifier — `"*"` hit the npm registry instead of resolving locally.
-- `new URL('../src/index.ts', import.meta.url).pathname` in `vite.config.ts` instead of `path.resolve(__dirname, ...)` to avoid needing `@types/node` in the example.
+- `new URL('../src/index.ts', import.meta.url).pathname` in example `vite.config.ts` instead of `path.resolve(__dirname, ...)` to avoid needing `@types/node` in the example.
 - `tsconfig.json` `"paths"` entry in the example to mirror the Vite alias so `tsc --noEmit` resolves `map-engine` to source.
-- Skeleton rows hardcoded to match the known SectorData shape (`population`, `capital`, `climate`) — acceptable because the example owns its own fixture data.
-- Advanced panel (`bbox`, `centroid`, `pixels`) made permanently visible with skeleton, not hidden/shown, to eliminate a second layout thrash point.
+- Skeleton rows hardcoded to match the known SectorData shape — acceptable because the example owns its own fixture data.
+- Advanced panel (`bbox`, `centroid`, `pixels`) made permanently visible with skeleton, not hidden/shown, to eliminate layout thrash.
 - Dropped `concurrently` entirely rather than debugging watch mode interaction between two concurrent Vite servers.
+- `declarationMap: true` included in `tsconfig.build.json` — lets consumers "Go to definition" and land in the original `.ts` source.
+- CI (#2) and ESLint (#4) deferred per user decision.
 
 **Left off at:**
-All documentation updated (CLAUDE.md, README.md, PROGRESS.md). No active sprint. Example is complete and passes full typecheck + test suite.
+All checks pass (typecheck, typecheck:example, build, test, format). No active sprint.
 
 ---
 
