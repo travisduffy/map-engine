@@ -1,0 +1,50 @@
+{
+  "8b0000": {
+    "name": "Northern Reach",
+    "population": 312000,
+    "capital": "Frostmark",
+    "climate": "subarctic"
+  },
+  "004d99": {
+    "name": "Coastal Basin",
+    "population": 890000,
+    "capital": "Harborgate",
+    "climate": "temperate"
+  },
+  "5c3d99": {
+    "name": "Violet Uplands",
+    "population": 214000,
+    "capital": "Highspire",
+    "climate": "highland"
+  },
+  "2d6a4f": {
+    "name": "Verdant March",
+    "population": 530000,
+    "capital": "Greenhollow",
+    "climate": "temperate"
+  },
+  "e07b00": {
+    "name": "Amber Steppe",
+    "population": 178000,
+    "capital": "Dustridge",
+    "climate": "semi-arid"
+  },
+  "b5451b": {
+    "name": "Crimson Expanse",
+    "population": 405000,
+    "capital": "Emberfeld",
+    "climate": "arid"
+  },
+  "1a6b8a": {
+    "name": "Azure Tidewater",
+    "population": 623000,
+    "capital": "Saltmere",
+    "climate": "maritime"
+  },
+  "7a6b00": {
+    "name": "Gilded Plain",
+    "population": 291000,
+    "capital": "Wheatholm",
+    "climate": "continental"
+  }
+}

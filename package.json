@@ -4,9 +4,15 @@
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
+  "workspaces": [
+    "example"
+  ],
   "scripts": {
-    "dev": "vite --port 3000",
+    "dev": "vitest",
+    "example": "npm run dev -w example",
     "build": "tsc && vite build",
+    "build:example": "npm run build -w example",
+    "typecheck:example": "npm run typecheck -w example",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

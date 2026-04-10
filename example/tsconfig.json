@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client"],
+    "paths": {
+      "map-engine": ["../src/index.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

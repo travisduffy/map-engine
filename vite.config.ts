@@ -16,6 +16,11 @@ function test404Plugin(): Plugin {
 
 export default defineConfig({
   plugins: [test404Plugin()],
+  server: {
+    watch: {
+      usePolling: true,
+    },
+  },
   build: {
     lib: {
       entry: 'src/index.ts',
@@ -29,6 +34,8 @@ export default defineConfig({
   test: {
     browser: {
       enabled: true,
+      headless: true,
+      screenshotFailures: false,
       provider: 'playwright',
       instances: [{ browser: 'chromium' }],
     },

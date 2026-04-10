@@ -338,15 +338,41 @@ await engine.loadMap({ bitmapUrl, definitionUrl, canvas })
 
 When bitmap or definition assets are hosted on a different origin, the asset server must send `Access-Control-Allow-Origin` headers. Standard `fetch` CORS semantics apply — the browser will block cross-origin requests without proper headers. In some browsers, `getImageData()` on a tainted canvas may throw a `SecurityError`. This is an operational deployment concern, not an engine bug.
 
+## Canonical example
+
+The `example/` directory is a permanent part of the repository — a vanilla TypeScript Vite app that exercises every public API surface and serves as the primary browser-based development tool.
+
+```bash
+npm run example   # example app at localhost:3000
+npm run dev       # vitest watcher
+```
+
+The example demonstrates:
+
+- `MapEngine` instantiation, `loadMap()`, and `destroy()` / reload
+- `sectorHover` — transient highlight with `setSectorColor` / `resetSectorColor`
+- `sectorClick` — persistent selection with toggle deselect
+- `getSectorKeys()` / `getSector()` — sector enumeration in the sidebar
+- `engine.registry.bboxes` / `.centroids` / `.pixelIndices` — spatial data display
+- `on()` / `off()` — live unsubscribe toggle for the hover handler
+- `toHexKey()` — round-trip verification on load
+
+The example assets (`example/public/example-map.png`, `example/public/sectors.json`) are committed and generated once via `node example/generate-map.js`. The bitmap is a 320×240 RGB map with 8 adjacent sectors — no void gaps, matching real Paradox-style province bitmap conventions.
+
+**The example must be kept in sync with every API change.** If a public method signature changes, the example is the first place to update.
+
 ## Development
 
 ```bash
-npm run dev       # Vite dev server on port 3000
-npm run build     # tsc + vite build (outputs dist/index.js)
-npm run format    # prettier --write .
-npm run size      # gzip -c dist/index.js | wc -c  (verify < 15 KB)
-npm run test      # run full test suite (vitest run)
-npm run typecheck # tsc --noEmit
+npm run example           # example app (localhost:3000, HMR)
+npm run dev               # vitest watcher
+npm run build             # tsc + vite build (outputs dist/index.js)
+npm run build:example     # vite build for the example app
+npm run typecheck         # tsc --noEmit (root library)
+npm run typecheck:example # tsc --noEmit (example workspace)
+npm run format            # prettier --write .
+npm run size              # gzip -c dist/index.js | wc -c  (verify < 15 KB)
+npm run test              # run full test suite (vitest run)
 ```
 
 ## Architecture

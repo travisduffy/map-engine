@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>map-engine example</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="map-container">
+        <canvas id="map"></canvas>
+        <div id="status">Loading map…</div>
+      </div>
+
+      <aside id="sidebar">
+        <h1>map-engine</h1>
+
+        <section id="hover-panel">
+          <h2>Hover</h2>
+          <div id="hover-content" class="empty-state">— none —</div>
+        </section>
+
+        <section id="selected-panel">
+          <h2>Selected</h2>
+          <div id="selected-content" class="empty-state">
+            — click a sector —
+          </div>
+        </section>
+
+        <section id="advanced-panel">
+          <h2>Advanced (registry)</h2>
+          <div id="advanced-content"></div>
+        </section>
+
+        <section id="controls-panel">
+          <h2>Controls</h2>
+          <label class="toggle">
+            <input type="checkbox" id="chk-hover" checked />
+            Hover highlighting
+          </label>
+          <button id="btn-reload">Reload engine</button>
+        </section>
+
+        <section id="sector-list-panel">
+          <h2>All sectors (<span id="sector-count">0</span>)</h2>
+          <ul id="sector-list"></ul>
+        </section>
+      </aside>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -5,22 +5,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev           # Vite dev server on port 3000
+npm run dev           # vitest watcher (watch mode, re-runs on file changes)
+npm run example       # example app dev server (localhost:3000, HMR)
 npm run typecheck     # tsc --noEmit (type errors only, no emit)
 npm run build         # tsc + vite build (library mode, outputs dist/index.js)
-npm run format        # prettier --write .
-npm run test          # run full test suite (vitest run — all test files, single pass)
-npm run size          # gzip -c dist/index.js | wc -c  (verify <15 KB gzipped)
-npm run knowledge     # repomix CLAUDE.md + README.md + docs/** → stdout (pipe to clipboard etc.)
+npm run build:example     # vite build for the example app (example/ workspace)
+npm run typecheck:example # tsc --noEmit for the example workspace
+npm run format            # prettier --write .
+npm run test              # run full test suite (vitest run — all test files, single pass)
+npm run size              # gzip -c dist/index.js | wc -c  (verify <15 KB gzipped)
+npm run knowledge         # repomix CLAUDE.md + README.md + docs/** → stdout (pipe to clipboard etc.)
 ```
 
 Tests requiring browser APIs (`OffscreenCanvas`, `createImageBitmap`, DOM) run under Vitest browser mode with the Playwright provider. Tests without browser API dependencies may use Vitest in Node mode.
 
 To run a single test file: `npx vitest run test/path/to/file.test.ts`
 
+## Workspace structure
+
+This is an npm workspace with two packages:
+
+| Package              | Path       | Role                                                              |
+| -------------------- | ---------- | ----------------------------------------------------------------- |
+| `map-engine`         | `/` (root) | The library — TypeScript ESM, built to `dist/index.js`            |
+| `map-engine-example` | `example/` | Canonical example app — vanilla TS Vite app consuming the library |
+
+The example is a **permanent fixture** of the repo, not a throwaway demo. It serves as the living integration reference for all public API surfaces and as the primary browser-based development tool. It must be kept in sync with every API change.
+
+`example/vite.config.ts` aliases `map-engine` → `../src/index.ts`, so the example runs directly against library source with HMR — no pre-build required.
+
 ## Architecture
 
-This is a **TypeScript ESM library** (not an app) that renders Paradox-style grand strategy maps in the browser using Three.js. The entry point will be `src/index.ts`; `src/main.ts` is currently just Vite boilerplate.
+This is a **TypeScript ESM library** (not an app) that renders Paradox-style grand strategy maps in the browser using Three.js. The entry point is `src/index.ts`; `src/main.ts` is Vite boilerplate only — the real development surface is `example/`.
 
 ### The four modules (v1 — implemented)
 
@@ -58,23 +74,30 @@ Every pixel's RGB value encodes a sector identity. The hex key (`"ff0000"` lower
 
 Located at `test/fixtures/`. The `test-4x4.png` (4×4 pixel, 4 sectors) is generated programmatically via `test/fixtures/generate-fixtures.js` using `sharp`. Use absolute paths in browser-mode tests (e.g., `'/test/fixtures/test-4x4.png'`), not relative paths.
 
+### Example app assets
+
+`example/public/example-map.png` and `example/public/sectors.json` are the demo map assets. They are generated once by `node example/generate-map.js` (uses `sharp`, hoisted from root devDeps) and committed. Re-run the script only if the sector layout needs to change. The map is a 320×240 RGB bitmap with 8 adjacent sectors (no void pixels) — representative of real Paradox-style province bitmaps where sector colors meet at hard pixel edges.
+
 ### Post-task checklist
 
 Before concluding any task, run in this order:
 
-1. `npm run typecheck` — zero type errors
-2. `npm run build` — clean library output
-3. `npm run test` — full test suite passes
-4. Update relevant `.claude/rules/*.md` files if domain patterns changed, then update `docs/PROGRESS.md`
-5. `npm run format` — apply Prettier to all edited files
+1. `npm run typecheck` — zero type errors (root library)
+2. `npm run typecheck:example` — zero type errors (example workspace)
+3. `npm run build` — clean library output
+4. `npm run test` — full test suite passes
+5. Update relevant `.claude/rules/*.md` files if domain patterns changed, then update `docs/PROGRESS.md`
+6. `npm run format` — apply Prettier to all edited files
+
+**When modifying the public API:** also update `example/src/main.ts` to reflect the change — the example must always demonstrate the current, accurate API surface.
 
 ## Dev dependencies (when installing)
 
 ```
 three@^0.160.0          # peer dep — external in build
-vitest@^2.1.0
-@vitest/browser@^2.1.0
-playwright@^1.40.0
+vitest@^3.2.0
+@vitest/browser@^3.2.0
+playwright@^1.59.0
 sharp@^0.33.0           # fixture generation only
 ```
 
