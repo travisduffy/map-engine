@@ -20,10 +20,16 @@ export class MapRenderer {
   // Stored for pan/zoom in Tasks 2.5/2.6
   protected readonly _canvas: HTMLCanvasElement
   protected readonly _registry: SectorRegistry
-  protected readonly _frustumHalfW: number
-  protected readonly _frustumHalfH: number
+  protected _frustumHalfW: number
+  protected _frustumHalfH: number
 
   private _animFrameId: number
+  // Fixed world-units-per-pixel scale (set from initial "contain" computation).
+  // Used to proportionally resize the frustum when the canvas CSS size changes so
+  // the map appears the same physical size — only the viewport boundary moves.
+  private readonly _worldUnitsPerPixel: number
+  private _currentW: number
+  private _currentH: number
 
   // Pan state (Task 2.5)
   private _isDragging = false
@@ -85,6 +91,9 @@ export class MapRenderer {
 
     this._frustumHalfW = frustumHalfW
     this._frustumHalfH = frustumHalfH
+    this._worldUnitsPerPixel = (frustumHalfW * 2) / canvas.clientWidth
+    this._currentW = canvas.clientWidth
+    this._currentH = canvas.clientHeight
 
     this.camera = new THREE.OrthographicCamera(
       -frustumHalfW,
@@ -161,9 +170,30 @@ export class MapRenderer {
     }
     canvas.addEventListener('wheel', this._onWheel, { passive: false })
 
-    // Continuous render loop (v1 decision — render-on-demand deferred to v2)
+    // Continuous render loop (v1 decision — render-on-demand deferred to v2).
+    // Canvas size is checked at the top of every frame (webgl2fundamentals pattern):
+    // if the CSS size changed, resize the draw buffer and update the camera frustum
+    // proportionally before rendering — all within the same rAF callback so the
+    // browser composites the correctly-sized result with no intermediate flash.
     const loop = () => {
       this._animFrameId = requestAnimationFrame(loop)
+      const w = this._canvas.clientWidth
+      const h = this._canvas.clientHeight
+      if (w !== this._currentW || h !== this._currentH) {
+        this._currentW = w
+        this._currentH = h
+        this.renderer.setSize(w, h, false)
+        const fhw = (w * this._worldUnitsPerPixel) / 2
+        const fhh = (h * this._worldUnitsPerPixel) / 2
+        this._frustumHalfW = fhw
+        this._frustumHalfH = fhh
+        this.camera.left = -fhw
+        this.camera.right = fhw
+        this.camera.top = fhh
+        this.camera.bottom = -fhh
+        this.camera.updateProjectionMatrix()
+        this.clampPan()
+      }
       this.renderer.render(this.scene, this.camera)
     }
     this._animFrameId = requestAnimationFrame(loop)

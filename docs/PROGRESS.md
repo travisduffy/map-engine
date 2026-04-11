@@ -88,6 +88,51 @@ _(No active tasks. Populate when the next development cycle begins.)_
 
 -->
 
+### 2026-04-11 — responsive canvas: fixed-scale resize via rAF size check
+
+**Tasks touched:** (out-of-cycle — responsiveness bug fix, no sprint active)
+**Outcome:** completed
+
+**What happened:**
+
+Addressed a user-reported bug: resizing the browser window distorted the map (squish/stretch). Went through four iterations before landing on the correct approach.
+
+**Iteration 1 — ResizeObserver, synchronous `_handleResize`**
+Added a `ResizeObserver` on the canvas that synchronously called `renderer.setSize()` and recomputed the camera frustum using the original "contain" strategy. This eliminated squishing but introduced two problems: (a) a visible "wiggle" on every resize, and (b) the map appeared to zoom in/out because the "contain" recomputation changed how many world units fit on screen.
+
+Root cause of wiggle: calling `renderer.setSize()` sets `canvas.width`, which per the HTML spec clears the WebGL drawing buffer. Even though we re-rendered immediately, there was still a perceptible flash. Root cause of zoom: "contain" recalculates the frustum from scratch based on the new canvas aspect ratio, which changes the scale.
+
+**Iteration 2 — ResizeObserver with rAF drain, proportional frustum**
+Changed to storing `_pendingResize` in the ResizeObserver callback and draining it at the top of the rAF render loop, plus switched to proportional frustum scaling (storing `_worldUnitsPerPixel` once at construction, scaling frustum half-dimensions proportionally to canvas size on resize). This preserved the constant world-to-pixel ratio — map appears the same size, viewport just grows/shrinks at the edges.
+
+Still had "very subtle warping stutter." Root cause discovered via web research: `requestAnimationFrame` fires **before** `ResizeObserver` in the HTML spec rendering pipeline (rAF → layout → ResizeObserver → paint). So the "drain in rAF" approach was always exactly one full frame late — the CSS-scaled old buffer was composited before the drain ran.
+
+**Iteration 3 — Locked CSS dimensions, no ResizeObserver**
+Removed all resize-reactive code and locked the canvas CSS dimensions via `canvas.style.width/height = initialPx`. This overrides the `width: 100%; height: 100%` CSS rule. Container already had `overflow: hidden`, so the canvas became a fixed-size static asset — browser grows reveals more, browser shrinks crops. Zero wiggle, zero race conditions.
+
+User liked this behaviour exactly but identified a follow-up bug: if the page was loaded at a small window size, then the window was grown larger, the canvas stayed at the initial locked size, cropping pan and zoom.
+
+**Iteration 4 — rAF size check (final, shipped)**
+Removed the CSS lock. Instead: check `canvas.clientWidth/clientHeight` at the top of every rAF frame (the canonical webgl2fundamentals.org pattern by Gregg Tavares). If the dimensions changed, `renderer.setSize()` + proportional frustum update + `clampPan()` all happen within the same rAF callback, immediately before `renderer.render()`. The browser composites the correctly-sized, correctly-rendered frame — no intermediate scaled or cleared state is ever painted.
+
+Web research confirmed: modern browsers (post-2015) double-buffer the canvas drawing buffer internally (Mozilla bug 691347), meaning the one-frame clear from `canvas.width` reassignment is no longer visually perceivable. The rAF-internal approach also avoids all ResizeObserver timing ambiguity since no external event handler is involved.
+
+**Decisions made:**
+
+- **No ResizeObserver** — avoided entirely. The rAF loop already runs at 60fps; checking two integer reads (`clientWidth/clientHeight`) per frame is negligible overhead.
+- **Proportional frustum (constant `_worldUnitsPerPixel`)** — frustum half-dimensions scale linearly with canvas CSS dimensions. The world-to-pixel ratio is frozen at the initial "contain" computation. The map appears exactly the same pixel size regardless of window dimensions; only the viewport boundary moves.
+- **No CSS manipulation by the library** — after the locked-CSS experiment, decided the library should not write `canvas.style.width/height`. CSS sizing is the consumer's responsibility per the existing API contract.
+- **`clampPan()` called on resize** — camera position stays valid after frustum change. In practice the clamp limits are generous (bitmap extents + 10%), so this is a no-op for typical usage, but correct to call.
+- **`_frustumHalfW`/`_frustumHalfH` made mutable** — changed from `readonly` (they were readonly when fixed at construction) to mutable fields since the rAF loop now updates them on resize.
+
+**Research finding worth preserving:**
+HTML spec rendering order within a single frame: rAF callbacks → style/layout → ResizeObserver → paint. This ordering is why any "defer to rAF" approach from ResizeObserver is always one frame late, and why checking size inside rAF itself is the correct pattern.
+
+**Left off at:**
+All checks pass (typecheck, typecheck:example, build, test, format). No active sprint. Canvas grows and shrinks with the browser with no visual artifacts.
+
+---
+
 ### 2026-04-10 — canonical example app, dev tooling cleanup, and library publishing hygiene
 
 **Tasks touched:** (out-of-cycle — tooling and maintenance, no sprint active)

@@ -319,7 +319,7 @@ The engine does not consume `borderEdges` internally — it is provided for cons
 | Pointer drag | Pan               |
 | Scroll wheel | Zoom (0.5× – 20×) |
 
-Initial view fits the entire bitmap ("contain" strategy, preserving aspect ratio). Pan is bounded to the bitmap extents + 10% margin.
+Initial view fits the entire bitmap ("contain" strategy, preserving aspect ratio). Pan is bounded to the bitmap extents + 10% margin. When the canvas CSS size changes (e.g. browser resize), the engine updates the draw buffer and camera frustum in the same rAF frame — the map stays at the same pixel scale and the viewport boundary grows or shrinks around it.
 
 ## Canvas setup
 
@@ -332,7 +332,7 @@ document.body.appendChild(canvas)
 await engine.loadMap({ bitmapUrl, definitionUrl, canvas })
 ```
 
-`map-engine` does not resize or restyle the canvas element — CSS sizing is your responsibility. Canvas resize after construction is not handled in v1.
+`map-engine` does not restyle the canvas element — CSS sizing is your responsibility. After `loadMap()` resolves, the engine automatically tracks canvas size changes via the rAF loop and updates the WebGL draw buffer and camera frustum accordingly. The map appears at a fixed pixel scale; a larger canvas reveals more, a smaller canvas crops.
 
 ## Deployment note (CORS)
 
@@ -449,9 +449,6 @@ WebGL textures cannot exceed the device's `gl.MAX_TEXTURE_SIZE` limit — common
 **Main-thread scan pass:**  
 `SectorRegistry` performs a synchronous O(W×H) scan on construction. For an 8192×4096 bitmap, this blocks the main thread for 200–500 ms. Use the Web Worker opt-in pattern above to move this work off the main thread.
 
-**Canvas resize not handled:**  
-After `loadMap()` resolves, resizing the canvas element does not update the Three.js renderer or camera frustum. Destroy and reload to handle resize.
-
 **Continuous render loop:**  
 The engine runs `requestAnimationFrame` continuously. Render-on-demand (only re-render when the scene is dirty) is deferred to v2.
 
@@ -474,7 +471,6 @@ The following features are explicitly out of scope for v1:
 - SSR / Node.js support
 - Multiple simultaneous map instances
 - Touch event support (tap, pinch-to-zoom)
-- Canvas resize handling after construction
 - Render-on-demand (engine always runs rAF)
 - UMD / CommonJS bundles — ESM only
 - React or any framework integration layer
@@ -498,7 +494,7 @@ The following features are explicitly out of scope for v1:
 
 ## Bundle size
 
-`dist/index.js` gzipped: **3.78 KB** (Three.js is external — not bundled).
+`dist/index.js` gzipped: **3.92 KB** (Three.js is external — not bundled).
 
 ```bash
 npm run build && npm run size
