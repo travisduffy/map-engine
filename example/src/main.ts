@@ -93,7 +93,7 @@ async function startEngine(): Promise<void> {
   setStatus('Loading map…')
 
   await engine.loadMap({
-    bitmapUrl: '/example-map.png',
+    bitmapUrl: '/map.png',
     definitionUrl: '/sectors.json',
     canvas,
   })
@@ -282,7 +282,7 @@ btnReload.addEventListener('click', async () => {
  *   import { SectorBitmapParser, SectorRegistry } from 'map-engine'
  *
  *   const parser = new SectorBitmapParser()
- *   const { buffer, width, height } = await parser.parse('/example-map.png')
+ *   const { buffer, width, height } = await parser.parse('/map.png')
  *
  *   const response = await fetch('/sectors.json')
  *   const definition = await response.json()

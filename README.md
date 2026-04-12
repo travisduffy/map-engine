@@ -357,7 +357,7 @@ The example demonstrates:
 - `on()` / `off()` — live unsubscribe toggle for the hover handler
 - `toHexKey()` — round-trip verification on load
 
-The example assets (`example/public/example-map.png`, `example/public/sectors.json`) are committed and generated once via `node example/generate-map.js`. The bitmap is a 320×240 RGB map with 8 adjacent sectors — no void gaps, matching real Paradox-style province bitmap conventions.
+The example assets (`example/public/map.png`, `example/public/sectors.json`) are committed static files. The bitmap is a 320×240 RGB map with 8 adjacent sectors — no void gaps, matching real Paradox-style province bitmap conventions.
 
 **The example must be kept in sync with every API change.** If a public method signature changes, the example is the first place to update.
 

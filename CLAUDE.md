@@ -2,6 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Documentation Architecture — Read Before Anything Else
+
+This repo uses a strict three-tier documentation system defined in `docs/claude-strategy.md`. **All persistent AI context lives inside the repo, version-controlled, in one of exactly three places:**
+
+1. `CLAUDE.md` — global directives, loaded every session
+2. `.claude/rules/*.md` — path-scoped domain rules
+3. `docs/` — project docs (PRD, PROGRESS, ROADMAP, epics, archive)
+
+**Never create any external or machine-local persistence for this project.** This means:
+
+- No `memory/` directory anywhere in the repo
+- No harness memory files (e.g., `~/.claude/projects/*/memory/`)
+- No notes, scratchpads, or state files outside the three tiers above
+
+If a rule or convention is worth preserving, it goes in `CLAUDE.md` (global) or `.claude/rules/*.md` (domain-scoped). If it is not worth encoding in one of those two places, it is not worth preserving at all.
+
 ## Commands
 
 ```bash
@@ -84,7 +100,7 @@ Located at `test/fixtures/`. The `test-4x4.png` (4×4 pixel, 4 sectors) is gener
 
 ### Example app assets
 
-`example/public/example-map.png` and `example/public/sectors.json` are the demo map assets. They are generated once by `node example/generate-map.js` (uses `sharp`, hoisted from root devDeps) and committed. Re-run the script only if the sector layout needs to change. The map is a 320×240 RGB bitmap with 8 adjacent sectors (no void pixels) — representative of real Paradox-style province bitmaps where sector colors meet at hard pixel edges.
+The example app's map bitmap and sector definition are committed static assets. Do not generate or replace them programmatically.
 
 ### Post-task checklist
 

@@ -143,7 +143,7 @@ Built `example/` as a permanent fixture of the repo: a vanilla TypeScript Vite a
 
 Workspace setup: root `package.json` converted to an npm workspace (`"workspaces": ["example"]`). Added `typecheck:example` and `build:example` root scripts. Example's `vite.config.ts` aliases `map-engine → ../src/index.ts` so it runs against library source with HMR — no pre-build required.
 
-Example asset generation: `example/generate-map.js` (uses `sharp`, hoisted from root devDeps) produces a 320×240 RGB bitmap with 8 adjacent sectors and `sectors.json` with rich `SectorData` fields (`population`, `capital`, `climate`). Assets committed to `example/public/`. Map has no void pixels or internal black borders — sectors tile the full canvas meeting at hard pixel edges, representative of real Paradox-style province bitmaps.
+Example assets: `example/public/map.png` and `sectors.json` are committed static files — a 320×240 RGB bitmap with 8 adjacent sectors and `sectors.json` with `SectorData` fields (`population`, `capital`, `climate`). Map has no void pixels or internal black borders — sectors tile the full canvas meeting at hard pixel edges, representative of real Paradox-style province bitmaps.
 
 Example UI: two-panel layout (canvas + sidebar). Demonstrates `sectorHover` (transient highlight), `sectorClick` (persistent selection with toggle deselect), `setSectorColor`/`resetSectorColor`, `getSectorKeys`/`getSector`, `registry.bboxes`/`.centroids`/`.pixelIndices`, `on`/`off`, `destroy`/reload, and `toHexKey`. Fixed layout thrash in hover and selected panels using fixed-height skeleton rows. Removed color picker (redundant with selection highlight, caused confusing three-way state).
 
