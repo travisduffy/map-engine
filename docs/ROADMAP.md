@@ -323,7 +323,11 @@ None. Pure `SectorRegistry` spatial data. No Three.js, no DOM.
 
 #### What Shipped
 
-Button concerns fully separated: **middle-click = pan**, **left-click = hover/select/drag**. Pan gated behind a 4 CSS px dead zone with pointer capture (fixes stuck-drag when releasing outside the canvas). Scroll-wheel zooms toward the cursor (world point under cursor stays fixed). `isPanning` getter on `MapRenderer` lets `MapEngine` suppress `sectorHover` noise during pan. Left-click drag independently tracked (`isLeftDragging`, `leftHasDragged` getters) — hover is suppressed while dragging and the synthesized `click` event after a drag is swallowed, leaving the hook in place for a future marquee-select feature. 148 tests total; 14 added for this work.
+Button concerns fully separated: **middle-click = canonical pan trigger**, **left-click = hover/select/drag**. Pan gated behind a 4 CSS px dead zone; `setPointerCapture` on middle-button prevents stuck-drag when releasing outside the canvas. Scroll-wheel zooms toward the cursor (world point under cursor stays fixed). `isPanning` getter on `MapRenderer` (returns true as soon as middle button is held, before the dead zone is crossed) lets `MapEngine` suppress `sectorHover` noise during pan.
+
+Left-click drag tracked via an independent state machine (`_leftPressed`, `_leftDragActive`, `_leftHasDragged`, `_leftDragOrigin`) — completely decoupled from middle-button pan state. No `setPointerCapture` for left button (would interfere with middle-button capture on Linux); outside-release handled via `(e.buttons & 1) === 0` in `_onPointerMove`. `isLeftDragging` suppresses `sectorHover` during a left drag; `leftHasDragged` (sticky until next `pointerdown`) swallows the synthesized `click` that the browser fires after `pointerup`. `isLeftDragging` is the future hook for marquee-select rendering.
+
+Known limitation: Linux trackpads with middle-button scroll emulation (e.g. ThinkPad X220 with `EmulateWheelButton`) buffer the middle press until release, making real-time pan impossible without OS-level reconfiguration. This is a user-land concern — library code is correct per spec. 148 tests total; 14 added for this work.
 
 #### Job Story
 

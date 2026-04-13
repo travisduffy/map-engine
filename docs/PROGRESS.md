@@ -88,6 +88,31 @@ _(No active tasks. Populate when the next development cycle begins.)_
 
 -->
 
+### 2026-04-13 — CA-3 doc cleanup & final lock-in
+
+**Tasks touched:** (out-of-cycle — documentation cleanup, no sprint active)
+**Outcome:** completed
+
+**What happened:**
+
+Wrap-up session for CA-3. No code changes. Three actions:
+
+1. **Fixed PROGRESS.md inaccuracy:** The CA-3 follow-up entry (below) incorrectly claimed "Pointer capture added for left button." The final code has no `setPointerCapture` for the left button — outside-release is handled via `(e.buttons & 1) === 0` in `_onPointerMove`. Corrected in place.
+
+2. **Locked in middle-click as canonical pan trigger.** The Linux trackpad limitation (middle-button scroll emulation on e.g. ThinkPad X220 buffers the button press until release, preventing real-time pan without OS-level config change) is confirmed as a user-land concern. No workaround belongs in library code.
+
+3. **Updated ROADMAP.md CA-3 "What Shipped" section** to accurately reflect final decisions: middle-click canonical, no pointer capture for left button, Linux trackpad limitation user-land.
+
+**Decisions made:**
+
+- Middle-click is the locked canonical pan trigger going forward.
+- The Linux trackpad emulation caveat stays documented in PROGRESS.md only (not the API docs or ROADMAP blurb) — it is an OS configuration detail, not a library bug.
+
+**Left off at:**
+All docs consistent with code. No active sprint.
+
+---
+
 ### 2026-04-13 — CA-3 follow-up: left-click drag suppression
 
 **Tasks touched:** (out-of-cycle — CA-3 follow-up, no sprint active)
@@ -111,7 +136,7 @@ Left-click-and-drag was triggering `sectorHover` during the drag and `sectorClic
 
 **`_onPointerMove` restructured:** removed the early `if (!this._panPressed) return` guard and replaced with two independent `if` blocks — one for middle-button pan, one for left-button drag tracking. Behaviour of existing pan path is identical.
 
-**Pointer capture** added for left button in `_onPointerDown` — prevents stuck `_leftDragActive` when user releases outside the canvas.
+**No `setPointerCapture` for left button** — would interfere with middle-button pointer capture on Linux. Outside-release instead detected via `(e.buttons & 1) === 0` check in `_onPointerMove`.
 
 **`MapEngine._handlePointerEvent`:**
 
