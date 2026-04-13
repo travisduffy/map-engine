@@ -335,17 +335,18 @@ describe('MapRenderer', () => {
     })
   })
 
-  describe('pointer-drag pan (Task 2.5)', () => {
+  describe('middle-button pan (CA-3)', () => {
     beforeEach(() => {
       renderer = new MapRenderer(canvas, registry)
     })
 
-    it('rightward drag decreases camera.position.x', () => {
+    it('middle-button drag rightward decreases camera.position.x', () => {
       const before = renderer.camera.position.x
       canvas.dispatchEvent(
         new PointerEvent('pointerdown', {
           clientX: 100,
           clientY: 100,
+          button: 1,
           bubbles: true,
         })
       )
@@ -359,12 +360,13 @@ describe('MapRenderer', () => {
       expect(renderer.camera.position.x).toBeLessThan(before)
     })
 
-    it('downward drag increases camera.position.y', () => {
+    it('middle-button drag downward increases camera.position.y', () => {
       const before = renderer.camera.position.y
       canvas.dispatchEvent(
         new PointerEvent('pointerdown', {
           clientX: 100,
           clientY: 100,
+          button: 1,
           bubbles: true,
         })
       )
@@ -378,7 +380,27 @@ describe('MapRenderer', () => {
       expect(renderer.camera.position.y).toBeGreaterThan(before)
     })
 
-    it('pointermove without pointerdown does not move camera', () => {
+    it('left-button pointerdown does not start pan', () => {
+      const before = renderer.camera.position.x
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 0, // left button — must not trigger pan
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 200,
+          clientY: 100,
+          bubbles: true,
+        })
+      )
+      expect(renderer.camera.position.x).toBe(before)
+    })
+
+    it('pointermove without any pointerdown does not move camera', () => {
       const before = renderer.camera.position.x
       canvas.dispatchEvent(
         new PointerEvent('pointermove', {
@@ -397,15 +419,99 @@ describe('MapRenderer', () => {
       expect(renderer.camera.position.x).toBe(before)
     })
 
-    it('pointerup stops dragging', () => {
+    it('middle-button pointerup stops pan', () => {
       canvas.dispatchEvent(
         new PointerEvent('pointerdown', {
           clientX: 100,
           clientY: 100,
+          button: 1,
           bubbles: true,
         })
       )
-      canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+      canvas.dispatchEvent(
+        new PointerEvent('pointerup', { button: 1, bubbles: true })
+      )
+      const after = renderer.camera.position.x
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 200,
+          clientY: 100,
+          bubbles: true,
+        })
+      )
+      expect(renderer.camera.position.x).toBe(after)
+    })
+
+    it('pan does not start before dead zone — camera stationary after 2 CSS px move', () => {
+      const before = renderer.camera.position.x
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 1,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 102,
+          clientY: 100,
+          buttons: 4, // middle button bitmask
+          bubbles: true,
+        })
+      )
+      expect(renderer.camera.position.x).toBe(before)
+    })
+
+    it('isPanning is true while middle button held', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 1,
+          bubbles: true,
+        })
+      )
+      expect(renderer.isPanning).toBe(true)
+    })
+
+    it('isPanning is false after middle-button pointerup', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 1,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointerup', { button: 1, bubbles: true })
+      )
+      expect(renderer.isPanning).toBe(false)
+    })
+
+    it('isPanning is false after left-button pointerdown (left does not trigger pan)', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 0, // left button — must not trigger pan
+          bubbles: true,
+        })
+      )
+      expect(renderer.isPanning).toBe(false)
+    })
+
+    it('pointercancel resets pan state — subsequent move does not pan', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 1,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true }))
       const after = renderer.camera.position.x
       canvas.dispatchEvent(
         new PointerEvent('pointermove', {
@@ -485,6 +591,231 @@ describe('MapRenderer', () => {
       )
       const maxX = registry.width / 2 + registry.width * 0.1
       expect(renderer.camera.position.x).toBeLessThanOrEqual(maxX)
+    })
+
+    it('wheel zooms toward cursor — camera offset applied when cursor is right of center', () => {
+      // Camera starts at (0,0). Zoom in with cursor right of canvas center.
+      // ndcX > 0 → camera.position.x must increase (world under cursor stays fixed).
+      const cursorX = canvas.clientWidth / 2 + 100 // right of center → ndcX > 0
+      const cursorY = canvas.clientHeight / 2
+      const before = renderer.camera.position.x
+      canvas.dispatchEvent(
+        new WheelEvent('wheel', {
+          deltaY: -100,
+          clientX: cursorX,
+          clientY: cursorY,
+          bubbles: true,
+        })
+      )
+      expect(renderer.camera.position.x).toBeGreaterThan(before)
+    })
+
+    it('wheel zooms toward cursor — no offset when cursor is exactly at canvas center', () => {
+      // ndcX === 0, ndcY === 0 → delta is zero → camera position unchanged
+      const cursorX = canvas.clientWidth / 2
+      const cursorY = canvas.clientHeight / 2
+      const before = renderer.camera.position.x
+      canvas.dispatchEvent(
+        new WheelEvent('wheel', {
+          deltaY: -100,
+          clientX: cursorX,
+          clientY: cursorY,
+          bubbles: true,
+        })
+      )
+      expect(renderer.camera.position.x).toBe(before)
+    })
+  })
+
+  describe('left-button drag tracking (CA-3)', () => {
+    beforeEach(() => {
+      renderer = new MapRenderer(canvas, registry)
+    })
+
+    it('isLeftDragging is false at construction', () => {
+      expect(renderer.isLeftDragging).toBe(false)
+    })
+
+    it('leftHasDragged is false at construction', () => {
+      expect(renderer.leftHasDragged).toBe(false)
+    })
+
+    it('isLeftDragging false after sub-dead-zone move (2px)', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 0,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 102,
+          clientY: 100,
+          buttons: 1,
+          bubbles: true,
+        })
+      )
+      expect(renderer.isLeftDragging).toBe(false)
+    })
+
+    it('isLeftDragging true after super-dead-zone move (10px)', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 0,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 110,
+          clientY: 100,
+          buttons: 1,
+          bubbles: true,
+        })
+      )
+      expect(renderer.isLeftDragging).toBe(true)
+    })
+
+    it('leftHasDragged true and sticky after super-dead-zone move', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 0,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 110,
+          clientY: 100,
+          buttons: 1,
+          bubbles: true,
+        })
+      )
+      expect(renderer.leftHasDragged).toBe(true)
+    })
+
+    it('leftHasDragged persists after pointerup (sticky — survives synthesized click)', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 0,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 110,
+          clientY: 100,
+          buttons: 1,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointerup', { button: 0, bubbles: true })
+      )
+      expect(renderer.leftHasDragged).toBe(true)
+    })
+
+    it('isLeftDragging is false after pointerup', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 0,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 110,
+          clientY: 100,
+          buttons: 1,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointerup', { button: 0, bubbles: true })
+      )
+      expect(renderer.isLeftDragging).toBe(false)
+    })
+
+    it('leftHasDragged resets to false on next left pointerdown', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 0,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 110,
+          clientY: 100,
+          buttons: 1,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointerup', { button: 0, bubbles: true })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 200,
+          clientY: 200,
+          button: 0,
+          bubbles: true,
+        })
+      )
+      expect(renderer.leftHasDragged).toBe(false)
+    })
+
+    it('pointercancel resets left drag state — subsequent move does not set isLeftDragging', () => {
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 0,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true }))
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 200,
+          clientY: 100,
+          bubbles: true,
+        })
+      )
+      expect(renderer.isLeftDragging).toBe(false)
+    })
+
+    it('left-button drag does not affect camera position (no pan)', () => {
+      const before = renderer.camera.position.x
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 0,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 200,
+          clientY: 100,
+          buttons: 1,
+          bubbles: true,
+        })
+      )
+      expect(renderer.camera.position.x).toBe(before)
     })
   })
 

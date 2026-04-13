@@ -318,8 +318,12 @@ None. Pure `SectorRegistry` spatial data. No Three.js, no DOM.
 
 ### CA-3: Input Pipeline Hardening & Game Feel
 
-**Horizon:** Immediate (ongoing maintenance track)
+**Horizon:** Immediate (ongoing maintenance track) — **Shipped 2026-04-13**
 **Module ownership:** `MapEngine` + `MapRenderer` — input ownership is the core issue.
+
+#### What Shipped
+
+Button concerns fully separated: **middle-click = pan**, **left-click = hover/select/drag**. Pan gated behind a 4 CSS px dead zone with pointer capture (fixes stuck-drag when releasing outside the canvas). Scroll-wheel zooms toward the cursor (world point under cursor stays fixed). `isPanning` getter on `MapRenderer` lets `MapEngine` suppress `sectorHover` noise during pan. Left-click drag independently tracked (`isLeftDragging`, `leftHasDragged` getters) — hover is suppressed while dragging and the synthesized `click` event after a drag is swallowed, leaving the hook in place for a future marquee-select feature. 148 tests total; 14 added for this work.
 
 #### Job Story
 

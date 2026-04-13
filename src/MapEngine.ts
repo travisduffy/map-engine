@@ -103,11 +103,15 @@ export class MapEngine {
     const result: PickResult = { hexKey, sectorData, pixelX, pixelY }
 
     if (!isClick) {
+      // Suppress hover during middle-button pan OR left-button drag.
+      if (this._renderer!.isPanning || this._renderer!.isLeftDragging) return
       if (hexKey !== this._lastHexKey) {
         this._lastHexKey = hexKey
         this._emit('sectorHover', result)
       }
     } else {
+      // Suppress synthesized click that follows a left-button drag.
+      if (this._renderer!.leftHasDragged) return
       this._emit('sectorClick', result)
     }
   }

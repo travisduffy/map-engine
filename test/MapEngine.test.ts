@@ -472,4 +472,193 @@ describe('MapEngine — picking (sectorHover and sectorClick)', () => {
     firePointer(canvas, 'pointermove', 250, 150)
     expect(handler).not.toHaveBeenCalled()
   })
+
+  it('pointermove during middle-button pan does not emit sectorHover', () => {
+    const handler = vi.fn()
+    engine.on('sectorHover', handler)
+    const rect = canvas.getBoundingClientRect()
+    // Hold right button (isPanning = true)
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        clientX: rect.left + 250,
+        clientY: rect.top + 150,
+        button: 1,
+        bubbles: true,
+      })
+    )
+    // Move over a valid sector — hover should be suppressed
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', {
+        clientX: rect.left + 250,
+        clientY: rect.top + 150,
+        buttons: 1, // left button held
+        bubbles: true,
+      })
+    )
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('pointermove during left-button drag does not emit sectorHover', () => {
+    const handler = vi.fn()
+    engine.on('sectorHover', handler)
+    const rect = canvas.getBoundingClientRect()
+    // Left pointerdown then move past dead zone (isLeftDragging = true)
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        clientX: rect.left + 200,
+        clientY: rect.top + 150,
+        button: 0,
+        bubbles: true,
+      })
+    )
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', {
+        clientX: rect.left + 250,
+        clientY: rect.top + 150,
+        buttons: 1, // left button held
+        bubbles: true, // 50px > dead zone
+      })
+    )
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('click after left-button drag (leftHasDragged=true) does not emit sectorClick', () => {
+    const handler = vi.fn()
+    engine.on('sectorClick', handler)
+    const rect = canvas.getBoundingClientRect()
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        clientX: rect.left + 200,
+        clientY: rect.top + 150,
+        button: 0,
+        bubbles: true,
+      })
+    )
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', {
+        clientX: rect.left + 250,
+        clientY: rect.top + 150,
+        buttons: 1, // left button held
+        bubbles: true, // 50px > dead zone
+      })
+    )
+    canvas.dispatchEvent(
+      new PointerEvent('pointerup', { button: 0, bubbles: true })
+    )
+    canvas.dispatchEvent(
+      new MouseEvent('click', {
+        clientX: rect.left + 250,
+        clientY: rect.top + 150,
+        bubbles: true,
+      })
+    )
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('click after sub-dead-zone left move (leftHasDragged=false) emits sectorClick', () => {
+    const handler = vi.fn()
+    engine.on('sectorClick', handler)
+    const rect = canvas.getBoundingClientRect()
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        clientX: rect.left + 250,
+        clientY: rect.top + 150,
+        button: 0,
+        bubbles: true,
+      })
+    )
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', {
+        clientX: rect.left + 252,
+        clientY: rect.top + 150,
+        buttons: 1, // left button held
+        bubbles: true, // 2px < dead zone
+      })
+    )
+    canvas.dispatchEvent(
+      new PointerEvent('pointerup', { button: 0, bubbles: true })
+    )
+    canvas.dispatchEvent(
+      new MouseEvent('click', {
+        clientX: rect.left + 252,
+        clientY: rect.top + 150,
+        bubbles: true,
+      })
+    )
+    expect(handler).toHaveBeenCalledOnce()
+  })
+
+  it('sectorHover resumes normally after left-drag released', () => {
+    const handler = vi.fn()
+    engine.on('sectorHover', handler)
+    const rect = canvas.getBoundingClientRect()
+    // Drag and release
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        clientX: rect.left + 200,
+        clientY: rect.top + 150,
+        button: 0,
+        bubbles: true,
+      })
+    )
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', {
+        clientX: rect.left + 250,
+        clientY: rect.top + 150,
+        buttons: 1, // left button held
+        bubbles: true,
+      })
+    )
+    canvas.dispatchEvent(
+      new PointerEvent('pointerup', { button: 0, bubbles: true })
+    )
+    // Next left pointerdown resets leftHasDragged; hover should now work
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        clientX: rect.left + 250,
+        clientY: rect.top + 150,
+        button: 0,
+        bubbles: true,
+      })
+    )
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', {
+        clientX: rect.left + 250,
+        clientY: rect.top + 150,
+        buttons: 1, // left button held
+        bubbles: true,
+      })
+    )
+    expect(handler).toHaveBeenCalledOnce()
+    expect(handler.mock.calls[0][0].hexKey).toBe('ff0000')
+  })
+
+  it('pointermove after right-button release emits sectorHover normally', () => {
+    const handler = vi.fn()
+    engine.on('sectorHover', handler)
+    const rect = canvas.getBoundingClientRect()
+    // Right-button press then release
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        clientX: rect.left + 250,
+        clientY: rect.top + 150,
+        button: 1,
+        bubbles: true,
+      })
+    )
+    canvas.dispatchEvent(
+      new PointerEvent('pointerup', { button: 1, bubbles: true })
+    )
+    // Now hover should work again
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', {
+        clientX: rect.left + 250,
+        clientY: rect.top + 150,
+        buttons: 1, // left button held
+        bubbles: true,
+      })
+    )
+    expect(handler).toHaveBeenCalledOnce()
+    expect(handler.mock.calls[0][0].hexKey).toBe('ff0000')
+  })
 })

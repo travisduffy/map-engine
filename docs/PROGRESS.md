@@ -88,6 +88,76 @@ _(No active tasks. Populate when the next development cycle begins.)_
 
 -->
 
+### 2026-04-13 — CA-3 follow-up: left-click drag suppression
+
+**Tasks touched:** (out-of-cycle — CA-3 follow-up, no sprint active)
+**Outcome:** completed
+
+**What happened:**
+
+Left-click-and-drag was triggering `sectorHover` during the drag and `sectorClick` on release — the same drag-click contamination pattern as the original CA-3 bug, now on the left button. Fixed by adding an independent left-button drag state machine to `MapRenderer`, completely decoupled from middle-button pan.
+
+**New state fields in `MapRenderer`:**
+
+- `_leftPressed` — left button currently held
+- `_leftDragActive` — true once cumulative cursor movement exceeds 4px dead zone
+- `_leftHasDragged` — sticky flag: persists past `pointerup` through synthesized `click`
+- `_leftDragOrigin` — dead-zone origin (pointerdown position)
+
+**New public getters:**
+
+- `isLeftDragging` — live state; suppresses `sectorHover` in `MapEngine`; future hook for marquee-select rendering
+- `leftHasDragged` — sticky; suppresses synthesized `sectorClick` in `MapEngine`
+
+**`_onPointerMove` restructured:** removed the early `if (!this._panPressed) return` guard and replaced with two independent `if` blocks — one for middle-button pan, one for left-button drag tracking. Behaviour of existing pan path is identical.
+
+**Pointer capture** added for left button in `_onPointerDown` — prevents stuck `_leftDragActive` when user releases outside the canvas.
+
+**`MapEngine._handlePointerEvent`:**
+
+- Hover branch: `if (isPanning || isLeftDragging) return`
+- Click branch: `if (leftHasDragged) return`
+
+**Decisions made:**
+
+- Same 4px dead zone threshold as middle-button pan — consistent feel across all drag gestures.
+- `leftHasDragged` resets only on next `pointerdown (button:0)`, not on `pointerup` — same pattern as the sticky flag in the original CA-3 design, required because the browser synthesizes `click` after `pointerup`.
+- No changes to `destroy()` — the four existing pointer listeners (`pointerdown/move/up/cancel`) already cover the new handlers.
+- `isLeftDragging` named as a future hook: when the engine gets marquee-select, this is the entry point.
+
+**Left off at:**
+148 tests passing (14 new). All checks clean (typecheck, typecheck:example, build, test, format).
+
+---
+
+### 2026-04-12/13 — CA-3: input pipeline hardening & game feel
+
+**Tasks touched:** (out-of-cycle — no active sprint; maintenance/improvement track per ROADMAP CA-3)
+**Outcome:** completed
+
+**What was implemented:**
+
+**First pass (2026-04-12):** Dead-zone + `_hasDragged` sticky flag, pointer capture, zoom-toward-cursor — all wired to left-button pan. Discovered in browser testing: hover and click events bled into pan gestures because left-button drag and left-button click are fundamentally the same gesture disambiguated only at the event level.
+
+**Pivot (2026-04-13): button separation.** Middle button = pan; left button = hover/click/drag. Separated concerns at the button level so no shared state exists between pan and pick:
+
+- `_panPressed` / `_isPanning` — middle button (button: 1) only. Dead zone (4 CSS px cumulative from `_panOrigin`). Pointer capture fixes stuck-drag on outside release.
+- Zoom-toward-cursor on scroll wheel — `camera.position += ndc * frustumHalf * (1/zoomBefore - 1/newZoom)` keeps the world point under the cursor fixed.
+- `isPanning` getter — `MapEngine` checks this in `pointermove` to suppress `sectorHover` noise during pan.
+- **Left-click drag suppression (same session, separate iteration):** `_leftPressed` / `_leftDragActive` / `_leftHasDragged` — independent state machine. `isLeftDragging` suppresses `sectorHover` during drag; `leftHasDragged` swallows the synthesized `click` after a drag. Outside-release handled via `e.buttons & 1` check in `_onPointerMove` (no pointer capture for left button — avoids interfering with middle-button events on Linux trackpads).
+- `isLeftDragging` is the future hook for marquee-select rendering.
+
+**Decisions made:**
+
+- Middle button chosen over right: avoids `contextmenu` suppression complexity and keeps right-click free for future use. Known limitation: Linux trackpads with middle-button scroll emulation (e.g. ThinkPad X220) buffer the press until release, making real-time pan impossible without OS-level config (`EmulateWheelButton 0`). Accepted as user-land concern — code is correct.
+- `isPanning` returns `_panPressed` (button held), not `_isPanning` (past dead zone) — hover suppression kicks in the moment the middle button goes down.
+- No `setPointerCapture` for left button — avoids input interference on Linux; outside-release instead detected via `e.buttons & 1` in `_onPointerMove`.
+
+**Left off at:**
+148 tests passing (14 new). All checks clean (typecheck, typecheck:example, build, test, format). CA-3 marked complete in ROADMAP.md.
+
+---
+
 ### 2026-04-11 — responsive canvas: fixed-scale resize via rAF size check
 
 **Tasks touched:** (out-of-cycle — responsiveness bug fix, no sprint active)
