@@ -291,7 +291,7 @@ type SectorData = {
 engine.registry.borderEdges // BorderEdge[]
 ```
 
-> **@experimental** — shape may change in v2.
+> **@experimental** — shape may change in v0.1.0.
 
 Array of pixel-boundary edges between adjacent sectors. Each `BorderEdge` has:
 
@@ -415,7 +415,7 @@ worker.onmessage = ({ data }) => {
 }
 ```
 
-> **Note:** `MapRenderer` and `MapEngine` are main-thread only (they require `HTMLCanvasElement` and `requestAnimationFrame`). Worker wiring is not built into the v1 `MapEngine.loadMap()` call — this is a manual integration pattern for advanced use cases.
+> **Note:** `MapRenderer` and `MapEngine` are main-thread only (they require `HTMLCanvasElement` and `requestAnimationFrame`). Worker wiring is not built into the v0.0.1 `MapEngine.loadMap()` call — this is a manual integration pattern for advanced use cases.
 
 ## UV coordinate system note
 
@@ -435,37 +435,37 @@ Omitting the `(1 - uv.y)` inversion causes the top and bottom halves of the map 
 
 ## Known limitations
 
-These are documented constraints in v1. See the Upgrade paths section for the planned v2 mitigations.
+These are documented constraints in v0.0.1. See the Upgrade paths section for the planned v0.1.0 mitigations.
 
 **Memory usage:**  
 Three full-resolution pixel buffer copies are held in memory simultaneously: `sourceBuffer` (original bitmap RGBA), `displayImageData` (mutable overlay copy), and `pixelIndices` flat arrays per sector (`Uint32Array`), plus the GPU texture copy and `Map`/object overhead. For an 8192×4096 bitmap (~134 MB per buffer), realistic total RAM usage is **400–500 MB**. Plan capacity accordingly.
 
 **Full texture re-upload on every `setSectorColor` call:**  
-`setSectorColor` sets `texture.needsUpdate = true`, which triggers a full `texImage2D` re-upload of the entire texture on the next render frame — not a partial `texSubImage2D` update. For frequent color changes across many sectors this is expensive. The v2 shader-based overlay eliminates this cost entirely.
+`setSectorColor` sets `texture.needsUpdate = true`, which triggers a full `texImage2D` re-upload of the entire texture on the next render frame — not a partial `texSubImage2D` update. For frequent color changes across many sectors this is expensive. The v0.1.0 shader-based overlay eliminates this cost entirely.
 
 **`gl.MAX_TEXTURE_SIZE` hardware cap:**  
-WebGL textures cannot exceed the device's `gl.MAX_TEXTURE_SIZE` limit — commonly 4096 px on mobile GPUs and 8192 px on desktop. A bitmap exceeding this limit throws a fatal `INVALID_VALUE` WebGL error. The engine does not query or check this limit in v1. If targeting mobile, keep bitmaps within 4096×4096.
+WebGL textures cannot exceed the device's `gl.MAX_TEXTURE_SIZE` limit — commonly 4096 px on mobile GPUs and 8192 px on desktop. A bitmap exceeding this limit throws a fatal `INVALID_VALUE` WebGL error. The engine does not query or check this limit in v0.0.1. If targeting mobile, keep bitmaps within 4096×4096.
 
 **Main-thread scan pass:**  
 `SectorRegistry` performs a synchronous O(W×H) scan on construction. For an 8192×4096 bitmap, this blocks the main thread for 200–500 ms. Use the Web Worker opt-in pattern above to move this work off the main thread.
 
 **Continuous render loop:**  
-The engine runs `requestAnimationFrame` continuously. Render-on-demand (only re-render when the scene is dirty) is deferred to v2.
+The engine runs `requestAnimationFrame` continuously. Render-on-demand (only re-render when the scene is dirty) is deferred to v0.1.0.
 
 **`sectorHover` fires during active pan drag:**  
-Pointer events during a drag pan still pass through the picking pipeline and may emit `sectorHover`. Suppression during drag is deferred to v2.
+Pointer events during a drag pan still pass through the picking pipeline and may emit `sectorHover`. Suppression during drag is deferred to v0.1.0.
 
 **Single map instance assumption:**  
-Multiple simultaneous `MapEngine` instances sharing a canvas, or managing multiple canvases independently, are not supported in v1.
+Multiple simultaneous `MapEngine` instances sharing a canvas, or managing multiple canvases independently, are not supported in v0.0.1.
 
-## What v1 does not include
+## What v0.0.1 does not include
 
-The following features are explicitly out of scope for v1:
+The following features are explicitly out of scope for v0.0.1:
 
 - Adjacency graph (which sectors border which)
 - Area / region hierarchy (grouping sectors into provinces, countries, etc.)
 - River layer or heightmap rendering
-- Shader-based political overlay (v2 upgrade path for `setSectorColor`)
+- Shader-based political overlay (v0.1.0 upgrade path for `setSectorColor`)
 - CSV definition format — JSON only
 - Built-in UI controls, tooltips, or legend components
 - SSR / Node.js support
@@ -478,9 +478,9 @@ The following features are explicitly out of scope for v1:
 - `gl.MAX_TEXTURE_SIZE` querying or texture tiling
 - Automatic Web Worker wiring in `loadMap()`
 
-## Upgrade paths (v2)
+## Upgrade paths (v0.1.0)
 
-| Limitation                                       | v2 approach                                                                                                 |
+| Limitation                                       | v0.1.0 approach                                                                                             |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
 | Full `texImage2D` re-upload per `setSectorColor` | Shader-based sector color overlay using a palette texture — eliminates CPU pixel writes entirely            |
 | `texImage2D` → partial update                    | `texSubImage2D` dirty-rect upload                                                                           |

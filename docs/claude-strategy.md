@@ -50,7 +50,7 @@ Completed development cycles are archived under `docs/archive/` using [Semantic 
 ```
 docs/
   archive/
-    v1.0.0/
+    v0.0.1/
       PRD.md          # snapshot of the spec at ship
       PROGRESS.md     # full session log and task history
       epics/          # all epic files for that version

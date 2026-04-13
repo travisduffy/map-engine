@@ -266,7 +266,7 @@ export class MapRenderer {
     }
     canvas.addEventListener('wheel', this._onWheel, { passive: false })
 
-    // Continuous render loop (v1 decision — render-on-demand deferred to v2).
+    // Continuous render loop (v0.0.1 decision — render-on-demand deferred to v0.1.0).
     // Canvas size is checked at the top of every frame (webgl2fundamentals pattern):
     // if the CSS size changed, resize the draw buffer and update the camera frustum
     // proportionally before rendering — all within the same rAF callback so the

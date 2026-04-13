@@ -595,7 +595,7 @@ The perimeter rendering pass runs on top of the existing `PlaneGeometry` texture
 A `THREE.LineSegments` geometry is constructed from the outer perimeter edges of each
 group and rendered in the same scene. Alternatively, a post-process shader (screen-
 space edge detection on the group ID) avoids CPU perimeter walking but is harder to
-style precisely — the line geometry approach is preferred for v1 of this feature.
+style precisely — the line geometry approach is preferred for v0.0.1 of this feature.
 
 **Critical dependency on `borderEdges`:** The outer perimeter of a group is the subset
 of `borderEdges` where one side is a member sector and the other is not. Whether
@@ -623,7 +623,7 @@ rendering internals.
 
 #### Problem Statement
 
-The v1 color overlay strategy (CPU iteration over `pixelIndices`, dirty-rect
+The v0.0.1 color overlay strategy (CPU iteration over `pixelIndices`, dirty-rect
 `putImageData`, `texture.needsUpdate = true` triggering full `texImage2D` re-upload)
 is O(pixels) per sector mutation and O(total pixels) for a full map-mode swap. For
 maps with millions of pixels and thousands of sectors, a full mode swap causes a

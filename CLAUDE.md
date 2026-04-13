@@ -54,7 +54,7 @@ The example is a **permanent fixture** of the repo, not a throwaway demo. It ser
 
 This is a **TypeScript ESM library** (not an app) that renders Paradox-style grand strategy maps in the browser using Three.js. The entry point is `src/index.ts`; `src/main.ts` is Vite boilerplate only — the real development surface is `example/`.
 
-### The four modules (v1 — implemented)
+### The four modules (v0.0.1 — implemented)
 
 | Module               | Role                                                                                                                                                                                        |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -74,9 +74,9 @@ This is a **TypeScript ESM library** (not an app) that renders Paradox-style gra
 
 Every pixel's RGB value encodes a sector identity. The hex key (`"ff0000"` lowercase, no `#`) is the universal identifier connecting bitmap pixels to JSON definition entries. `toHexKey(r, g, b)` is the single conversion utility used throughout. `#000000` is the conventional void/non-interactive color.
 
-### Color overlay strategy (v1)
+### Color overlay strategy (v0.0.1)
 
-`setSectorColor` patches only a sector's pixels in a persistent `displayImageData` (separate from `sourceBuffer`), flushes via dirty-rect `putImageData` using the sector's bbox, then sets `texture.needsUpdate = true`. This triggers a full `texImage2D` re-upload — accepted for v1; shader-based v2 path is documented in the PRD.
+`setSectorColor` patches only a sector's pixels in a persistent `displayImageData` (separate from `sourceBuffer`), flushes via dirty-rect `putImageData` using the sector's bbox, then sets `texture.needsUpdate = true`. This triggers a full `texImage2D` re-upload — accepted for v0.0.1; shader-based v0.1.0 path is documented in the PRD.
 
 ### Picking pipeline
 
@@ -133,14 +133,14 @@ sharp@^0.33.0           # fixture generation only
 - `MapRenderer` and `MapEngine` are **main-thread only**
 - JSON hex keys are **not** normalized — `"FF0000"` ≠ `"ff0000"`; consumer's responsibility
 - `createImageBitmap` called without options (safe because bitmap guarantees alpha=255)
-- Do not implement anything in the "v1 explicitly does not include" list (see `docs/PRD.md` §"What v1 Explicitly Does Not Include")
+- Do not implement anything in the "v0.0.1 explicitly does not include" list (see `docs/PRD.md` §"What v0.0.1 Explicitly Does Not Include")
 
 ## Documentation
 
 - `docs/PROGRESS.md` — **read this first at the start of every session**; tracks task completion status, session logs, and lessons learned. If the Task Registry is empty or the active version is `None`, do not begin implementation — wait for the user to start a new cycle.
 - `docs/PRD.md` — full implementation spec for the active version. If the Overview section is empty or marked `TODO`, do not infer requirements — stop and ask.
 - `docs/epics/` — epic files for the active version; each task has a full work spec and done-when criteria. Empty between development cycles.
-- `docs/archive/` — completed versions organized by SemVer tag (e.g., `v1.0.0/`). Treat as read-only historical reference; never modify archive contents.
+- `docs/archive/` — completed versions organized by SemVer tag (e.g., `v0.0.1/`). Treat as read-only historical reference; never modify archive contents.
 - `docs/claude-strategy.md` — three-tier docs strategy and Active vs. Archive directory conventions.
 
 > **Archiving is a human-triggered event.** NEVER move files into `docs/archive/` autonomously. Only execute an archive sequence when the user explicitly instructs you to do so in that session.

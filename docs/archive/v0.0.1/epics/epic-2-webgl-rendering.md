@@ -35,7 +35,7 @@ Stand up the Three.js renderer, scene graph, orthographic camera, plane mesh, an
   - Else: `frustumHalfW = registry.width / 2`; `frustumHalfH = frustumHalfW / canvasAspect`
   - `new THREE.OrthographicCamera(-frustumHalfW, frustumHalfW, frustumHalfH, -frustumHalfH, -1000, 1000)`; `camera.position.set(0, 0, 1)`; `camera.zoom = 1.0`; `camera.updateProjectionMatrix()`
   - Store `frustumHalfW` and `frustumHalfH` as instance fields — needed by pan scale conversion in Task 2.5
-- Start `requestAnimationFrame` loop calling `renderer.render(scene, camera)` each frame; store the return value as `_animFrameId: number` on the instance — `destroy()` cancels it via `cancelAnimationFrame(this._animFrameId)` (PRD §"Key Architectural Decisions" #9 — continuous loop is the explicit v1 decision; render-on-demand deferred to v2)
+- Start `requestAnimationFrame` loop calling `renderer.render(scene, camera)` each frame; store the return value as `_animFrameId: number` on the instance — `destroy()` cancels it via `cancelAnimationFrame(this._animFrameId)` (PRD §"Key Architectural Decisions" #9 — continuous loop is the explicit v0.0.1 decision; render-on-demand deferred to v0.1.0)
 - Expose `scene`, `camera`, `mesh`, and `renderer` (the `THREE.WebGLRenderer`) as readonly instance fields for test access and the `MapEngine` exposed internals (PRD §7 "Exposed internals")
 
 **Done when:** After construction with an 800×600 canvas, `canvas.width > 0` and `canvas.height > 0`; `threeRenderer.info.render.frame >= 1` after one rAF tick; `renderer.scene instanceof THREE.Scene === true`; `renderer.camera instanceof THREE.OrthographicCamera === true`; PlaneGeometry UV attribute at vertex index 0 has `u ≈ 0.0, v ≈ 1.0` confirming Three.js bottom-left UV origin convention (validates the Y-inversion assumption the picking formula depends on — PRD Phase 4 acceptance criteria); construction with a zero-dimensions canvas throws the specified error message.
@@ -73,7 +73,7 @@ Implement `setSectorColor` — the forward path of the color mutation subsystem.
   - Parse CSS color using `_colorParserCtx`: `_colorParserCtx.clearRect(0,0,1,1)`; `_colorParserCtx.fillStyle = color`; `_colorParserCtx.fillRect(0,0,1,1)`; read `_colorParserCtx.getImageData(0,0,1,1).data` → extract `[r, g, b]`; if `color` is invalid the browser silently uses the previous `fillStyle` — documented undefined-behavior, not an error to handle (PRD §3 "Implementation note — color parsing")
   - Retrieve `registry.pixelIndices.get(hexKey)`; for each flat index `i`, write `r, g, b, 255` into `displayImageData.data` at byte offset `i * 4` — mutate in place; never call `putImageData` per pixel (catastrophically slow) (PRD §3 "Implementation note — pixel writing")
   - After iterating all indices, flush with the dirty-rect overload of `putImageData` scoped to the sector's bounding box: `displayCtx.putImageData(displayImageData, 0, 0, bbox.minX, bbox.minY, bbox.maxX - bbox.minX + 1, bbox.maxY - bbox.minY + 1)` — reduces Canvas 2D write cost only; does not reduce WebGL upload cost (PRD §3 "Display canvas update strategy")
-  - Set `texture.needsUpdate = true` — instructs Three.js to call `texImage2D` (full VRAM re-upload, not `texSubImage2D`) on the next render frame; accepted for v1; must not be changed (PRD §3 "`texture.needsUpdate = true` — WebGL upload cost")
+  - Set `texture.needsUpdate = true` — instructs Three.js to call `texImage2D` (full VRAM re-upload, not `texSubImage2D`) on the next render frame; accepted for v0.0.1; must not be changed (PRD §3 "`texture.needsUpdate = true` — WebGL upload cost")
 
 **Done when:** After `setSectorColor('ff0000', '#0000ff')`: `displayCtx.getImageData(0,0,4,4)` at pixel (0,0) offset 0 returns `[0,0,255,255]`; at pixel (1,1) offset 20 returns `[0,0,255,255]`; at pixel (2,0) offset 8 returns `[0,255,0,255]` (green sector unchanged); `registry.sourceBuffer` bytes at pixel (0,0) are still `[255,0,0,255]` — source buffer not mutated.
 
@@ -122,7 +122,7 @@ Wire pointer-drag pan against the orthographic camera created in Task 2.1, with 
   camera.position.x -= (deltaScreenX * scaleX) / camera.zoom
   camera.position.y += (deltaScreenY * scaleY) / camera.zoom
   ```
-  Sign inversion on Y is correct: downward screen drag (positive `deltaScreenY`) → `camera.position.y` increases (camera moves up in world space → map follows cursor downward) (PRD §5 "Pan implementation" — this was a v1.7 BLOCKER fix)
+  Sign inversion on Y is correct: downward screen drag (positive `deltaScreenY`) → `camera.position.y` increases (camera moves up in world space → map follows cursor downward) (PRD §5 "Pan implementation" — this was an Iteration 7 BLOCKER fix)
 - Register `pointerup` listener: set `_isDragging = false`
 - Implement `clampPan()`: clamp `camera.position.x` to `[-(registry.width/2 + registry.width*0.1), +(registry.width/2 + registry.width*0.1)]`; same for Y with `registry.height` (PRD §5 "Bounds — Pan — bitmap + 10% margin"); call after every pan position update
 
@@ -156,7 +156,7 @@ Implement scroll-wheel zoom with zoom-factor math and clamping, implement `destr
 - Implement `destroy()` on `MapRenderer` (PRD §7 "`destroy()` cleanup contract"):
   - `cancelAnimationFrame(this._animFrameId)` — stops the render loop
   - `this._renderer.dispose()` — releases the WebGL context
-  - `geometry.dispose()`, `material.dispose()`, `texture.dispose()` — texture disposal is explicitly required (PRD §7 — "disposes geometry, material, **and texture** (`texture.dispose()`)"; added in v1.6 changelog)
+  - `geometry.dispose()`, `material.dispose()`, `texture.dispose()` — texture disposal is explicitly required (PRD §7 — "disposes geometry, material, **and texture** (`texture.dispose()`)"; added in Iteration 6)
   - Remove all event listeners owned by `MapRenderer` from the canvas: `pointerdown`, `pointermove`, `pointerup`, `wheel` — use the same handler references registered in Tasks 2.5 and 2.6 so `removeEventListener` matches correctly
 - Write browser-mode tests using the test canvas setup preamble (PRD §"Test Canvas Setup"):
   - `camera instanceof THREE.OrthographicCamera === true` after construction

@@ -38,7 +38,7 @@
 
 ## Current Status
 
-**Phase:** All epics complete. Project is v1-feature-complete.
+**Phase:** All epics complete. Project is v0.0.1-feature-complete.
 **Next task:** None — all 18 tasks done.
 **Blocking issues:** None.
 
@@ -115,13 +115,13 @@
 **Outcome:** completed
 
 **What happened:**
-Appended five new sections to `README.md`: (1) Web Worker opt-in with a code example showing `SectorBitmapParser` + `SectorRegistry` inside a worker and `postMessage` buffer transfer; (2) UV coordinate system note with the `pixelY = Math.floor((1 - uv.y) * height)` inversion formula; (3) Known limitations covering all four PRD-specified risks (memory ~400–500 MB for 8K bitmaps, full `texImage2D` re-upload per `setSectorColor`, `gl.MAX_TEXTURE_SIZE` mobile crash risk, main-thread O(W×H) scan blocking) plus canvas resize, continuous rAF, hover-during-drag, and single-instance constraints; (4) Out-of-scope for v1 — explicit enumerated list drawn from PRD §"What v1 Explicitly Does Not Include"; (5) Upgrade paths table mapping each limitation to its v2 mitigation. Also added a Bundle size section confirming 3.78 KB gzipped. All 124 tests pass; typecheck and build clean.
+Appended five new sections to `README.md`: (1) Web Worker opt-in with a code example showing `SectorBitmapParser` + `SectorRegistry` inside a worker and `postMessage` buffer transfer; (2) UV coordinate system note with the `pixelY = Math.floor((1 - uv.y) * height)` inversion formula; (3) Known limitations covering all four PRD-specified risks (memory ~400–500 MB for 8K bitmaps, full `texImage2D` re-upload per `setSectorColor`, `gl.MAX_TEXTURE_SIZE` mobile crash risk, main-thread O(W×H) scan blocking) plus canvas resize, continuous rAF, hover-during-drag, and single-instance constraints; (4) Out-of-scope for v0.0.1 — explicit enumerated list drawn from PRD §"What v0.0.1 Explicitly Does Not Include"; (5) Upgrade paths table mapping each limitation to its v2 mitigation. Also added a Bundle size section confirming 3.78 KB gzipped. All 124 tests pass; typecheck and build clean.
 
 **Decisions made:**
 No deviations from spec. Bundle size (3.78 KB) is well under the 15 KB target.
 
 **Left off at:**
-All 18 tasks complete. v1 feature-complete.
+All 18 tasks complete. v0.0.1 feature-complete.
 
 ---
 

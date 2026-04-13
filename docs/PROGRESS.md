@@ -40,7 +40,7 @@
 
 ## Current Status
 
-**Phase:** IDLE — v1.0.0 shipped, awaiting next development cycle
+**Phase:** IDLE — v0.0.1 shipped, awaiting next development cycle
 **Active version:** None
 **Next task:** None — Task Registry is empty; populate `docs/PRD.md` and `docs/epics/` to begin the next cycle
 **Blocking issues:** None
@@ -87,6 +87,22 @@ _(No active tasks. Populate when the next development cycle begins.)_
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-13 — comprehensive versioning reset to v0.0.1
+
+**Tasks touched:** (out-of-cycle — versioning reset, no sprint active)
+**Outcome:** completed
+
+**What happened:**
+
+Executed TASK.md: renamed `docs/archive/v1.0.0/` → `docs/archive/v0.0.1/` and applied the following semantic mapping throughout all docs and source comments: `v1`/`v1.0.0` → `v0.0.1`, `v2`/`v2.0` (roadmap/narrative) → `v0.1.0`. Internal PRD review iteration cross-references (`v1.5`, `v1.6`, ..., `v1.9`, `v2.0` changelog/review cycle labels) remapped to Iteration nomenclature (`Iteration 5`, ..., `Iteration 9`, `Final Release Candidate`). RESOLVED DECISIONS table ID column updated (e.g. `(v1.5)` → `(Iteration 5)`). Exception B enumeration sentence updated. No code logic changes.
+
+**Files touched:** `CLAUDE.md`, `README.md`, `docs/PROGRESS.md`, `docs/ROADMAP.md`, `docs/claude-strategy.md`, `src/types.ts`, `src/MapRenderer.ts`, `docs/archive/v0.0.1/PROGRESS.md`, `docs/archive/v0.0.1/epics/epic-1,2,3.md`, `docs/archive/v0.0.1/PRD.md` (+ directory rename).
+
+**Left off at:**
+All docs consistent with new versioning. No active sprint.
+
+---
 
 ### 2026-04-13 — CA-3 doc cleanup & final lock-in
 

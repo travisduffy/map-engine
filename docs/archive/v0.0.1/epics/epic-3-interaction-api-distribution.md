@@ -25,8 +25,8 @@ Implement the zero-argument constructor and the typed event subscription API. Th
 
 - Implement `MapEngine` with a **zero-argument constructor** (PRD §7 "Constructor" — canvas is provided via `loadMap()`, not the constructor):
   - Initialize lifecycle flags: `_loaded: boolean = false`, `_destroyed: boolean = false`, `_loading: boolean = false`
-  - Initialize hover tracking: `_lastHexKey: string | null = null` (tracks the hex key from the most recent `sectorHover` emission for change-detection; PRD Phase 5 scope — "declared as internal state in Phase 5 scope" per v1.7 changelog)
-  - Create `this._parser = new SectorBitmapParser()` — instantiated once, retained for the lifetime of the instance, not nulled by `destroy()` (PRD §7 — "`_parser` is not nulled by `destroy()` — it has no state to clean up"; per v1.8 changelog)
+  - Initialize hover tracking: `_lastHexKey: string | null = null` (tracks the hex key from the most recent `sectorHover` emission for change-detection; PRD Phase 5 scope — "declared as internal state in Phase 5 scope" per Iteration 7)
+  - Create `this._parser = new SectorBitmapParser()` — instantiated once, retained for the lifetime of the instance, not nulled by `destroy()` (PRD §7 — "`_parser` is not nulled by `destroy()` — it has no state to clean up"; per Iteration 8)
   - Initialize event handler map: `new Map<string, Set<Function>>()`
 - Implement `on()` with the full overloaded TypeScript signatures from PRD §7:
 
@@ -79,7 +79,7 @@ Wire the full loading sequence with concurrent asset fetching, all guard checks,
   4. Call `.clear()` on the internal event handler map
   5. Set `_registry = null`, `_renderer = null`, `_canvas = null`, `_loading = false`
   6. **If `_loaded === true`**: set `_destroyed = true` — engine is permanently unusable; all subsequent method calls throw `"MapEngine: destroyed"`
-  7. **If `_loaded === false`** (partial-failure recovery path): do **not** set `_destroyed = true`; engine returns to pre-load state; `loadMap()` may be retried (PRD §7 "`destroy()` cleanup contract" steps 6–7 — this is the BLOCKER fix from v1.6 changelog)
+  7. **If `_loaded === false`** (partial-failure recovery path): do **not** set `_destroyed = true`; engine returns to pre-load state; `loadMap()` may be retried (PRD §7 "`destroy()` cleanup contract" steps 6–7 — this is the BLOCKER fix from Iteration 6)
 - Expose `renderer` and `registry` as getters that throw `"MapEngine: not loaded — call loadMap() first"` before load and `"MapEngine: destroyed"` after destroy on a fully-loaded engine (PRD §7 "Exposed internals")
 - Implement `getSector`, `setSectorColor`, `resetSectorColor` as pass-throughs to `_registry`/`_renderer` with pre-load guard (`"MapEngine: not loaded"`) and post-destroy guard (`"MapEngine: destroyed"`)
 
@@ -148,7 +148,7 @@ Complete the picking algorithm with the two-step `getSectorAt`→`getSector` loo
   - `click` at (250, 150) → `sectorClick` with `hexKey === 'ff0000'`; `result.pixelX` in `[0,1]`, `result.pixelY` in `[0,1]`
   - `pointermove` at (250, 450) (blue quadrant center — bottom-left) → `sectorHover` with `hexKey === '0000ff'`; this test is specifically required to validate Y-axis inversion correctness: if the `(1 - uv.y)` inversion is missing, red and blue quadrants swap and this assertion fails (PRD §4 "UV Mapping — coordinate system inversion")
   - `click` at (50, 300) (off-plane) → no `sectorClick` emission
-  - Mismatch fixture: load with `test-4x4-mismatch.json`; `pointermove` at (550, 450) (yellow quadrant — `"ffff00"` has no JSON entry) → `sectorHover` emits `null` because `getSector("ffff00") === undefined` (PRD Phase 5 — "mismatch fixture picking test"; per v1.8 changelog Issue 12)
+  - Mismatch fixture: load with `test-4x4-mismatch.json`; `pointermove` at (550, 450) (yellow quadrant — `"ffff00"` has no JSON entry) → `sectorHover` emits `null` because `getSector("ffff00") === undefined` (PRD Phase 5 — "mismatch fixture picking test"; per Iteration 8 Issue 12)
   - After `engine.destroy()`: `pointermove` on canvas does not invoke `sectorHover` callback
 
 **Done when:** All Phase 5 picking acceptance criteria pass; change-detection prevents duplicate hover events; mismatch fixture correctly emits `null` for bitmap-only colors; destroy fully removes listeners.
@@ -187,24 +187,24 @@ Write the consumer-facing documentation covering everything needed to integrate 
 
 ### Task 3.6 — Known Limitations, Web Worker Opt-In, Out-of-Scope List, and Bundle Size Verification
 
-**PRD Reference:** Phase 6 scope continued (§"Phase 6" known limitations, upgrade paths, Web Worker opt-in, out-of-scope); §"Bundle Size Targets"; §"What v1 Explicitly Does Not Include"; PRD "Known Risks" items 2, 3, 9; Phase 6 acceptance criteria items 11–15
+**PRD Reference:** Phase 6 scope continued (§"Phase 6" known limitations, upgrade paths, Web Worker opt-in, out-of-scope); §"Bundle Size Targets"; §"What v0.0.1 Explicitly Does Not Include"; PRD "Known Risks" items 2, 3, 9; Phase 6 acceptance criteria items 11–15
 
-Complete the documentation with all operational risks and constraints, document the Web Worker opt-in path, enumerate v1 out-of-scope items, and verify the final gzipped bundle meets the 15 KB target.
+Complete the documentation with all operational risks and constraints, document the Web Worker opt-in path, enumerate v0.0.1 out-of-scope items, and verify the final gzipped bundle meets the 15 KB target.
 
 **Work:**
 
 - **Known limitations section** — document all of the following (PRD Phase 6 scope §"Known limitations"; PRD "Known Risks"):
-  - Memory: three buffer copies in steady state (sourceBuffer ~134 MB + displayImageData ~134 MB + pixelIndices Uint32Arrays ~134 MB + GPU copy + Map/object overhead) — realistic total 400–500 MB for an 8192×4096 map (PRD v2.0 changelog Item 6)
-  - `setSectorColor` triggers full `texImage2D` re-upload (not `texSubImage2D` partial update) on every call regardless of dirty-rect size; v2 shader-based upgrade path eliminates this (PRD §3 "`texture.needsUpdate = true` — WebGL upload cost"; v2.0 changelog Item 2)
-  - `gl.MAX_TEXTURE_SIZE` hardware cap — commonly 4096 on mobile; bitmaps exceeding the device limit throw a fatal `INVALID_VALUE` WebGL error; engine does not query this limit in v1 (PRD v2.0 changelog Item 3)
-  - O(W×H) synchronous scan pass may block the main thread 200–500 ms for an 8192×4096 bitmap; Web Worker offloading is the documented v2 path (PRD v2.0 changelog Item 9)
-  - Canvas resize after construction not handled in v1
-  - Continuous `requestAnimationFrame` render loop — render-on-demand deferred to v2
-  - `sectorHover` fires during active pan drag — suppression deferred to v2
+  - Memory: three buffer copies in steady state (sourceBuffer ~134 MB + displayImageData ~134 MB + pixelIndices Uint32Arrays ~134 MB + GPU copy + Map/object overhead) — realistic total 400–500 MB for an 8192×4096 map (PRD Changelog: Final Release Candidate Item 6)
+  - `setSectorColor` triggers full `texImage2D` re-upload (not `texSubImage2D` partial update) on every call regardless of dirty-rect size; v0.1.0 shader-based upgrade path eliminates this (PRD §3 "`texture.needsUpdate = true` — WebGL upload cost"; Changelog: Final Release Candidate Item 2)
+  - `gl.MAX_TEXTURE_SIZE` hardware cap — commonly 4096 on mobile; bitmaps exceeding the device limit throw a fatal `INVALID_VALUE` WebGL error; engine does not query this limit in v0.0.1 (PRD Changelog: Final Release Candidate Item 3)
+  - O(W×H) synchronous scan pass may block the main thread 200–500 ms for an 8192×4096 bitmap; Web Worker offloading is the documented v0.1.0 path (PRD Changelog: Final Release Candidate Item 9)
+  - Canvas resize after construction not handled in v0.0.1
+  - Continuous `requestAnimationFrame` render loop — render-on-demand deferred to v0.1.0
+  - `sectorHover` fires during active pan drag — suppression deferred to v0.1.0
   - Single map instance assumption
-- **Web Worker opt-in**: document how to use `SectorBitmapParser` and `SectorRegistry` inside a Worker — both modules have zero DOM global references by design; include a minimal code example showing `new Worker(...)`, `parse()` inside the worker, and `postMessage` of the buffer back to the main thread (PRD Phase 6 scope §"Web Worker opt-in"; §"Runtime Environment" — Worker integration is deferred to v2 but the modules are Worker-compatible by design)
+- **Web Worker opt-in**: document how to use `SectorBitmapParser` and `SectorRegistry` inside a Worker — both modules have zero DOM global references by design; include a minimal code example showing `new Worker(...)`, `parse()` inside the worker, and `postMessage` of the buffer back to the main thread (PRD Phase 6 scope §"Web Worker opt-in"; §"Runtime Environment" — Worker integration is deferred to v0.1.0 but the modules are Worker-compatible by design)
 - **UV Y-axis inversion note**: document the `pixelY = Math.floor((1 - uv.y) * height)` formula for consumers building their own overlay systems on top of the engine (PRD Phase 6 scope §"UV coordinate inversion note")
-- **Out-of-scope for v1**: explicit list drawn from PRD §"What v1 Explicitly Does Not Include" — adjacency graph, area/region hierarchy, river/heightmap rendering, shader political overlay, CSV parsing, UI controls/tooltips, SSR/Node.js, multiple simultaneous instances, touch events, canvas resize handling, render-on-demand, UMD/CJS bundles, React/framework dependency, pre-fetched `ArrayBuffer`/`ImageBitmap` inputs, `gl.MAX_TEXTURE_SIZE` querying, Web Worker wiring
+- **Out-of-scope for v0.0.1**: explicit list drawn from PRD §"What v0.0.1 Explicitly Does Not Include" — adjacency graph, area/region hierarchy, river/heightmap rendering, shader political overlay, CSV parsing, UI controls/tooltips, SSR/Node.js, multiple simultaneous instances, touch events, canvas resize handling, render-on-demand, UMD/CJS bundles, React/framework dependency, pre-fetched `ArrayBuffer`/`ImageBitmap` inputs, `gl.MAX_TEXTURE_SIZE` querying, Web Worker wiring
 - **Upgrade path notes**: adjacency graph, river layer, heightmap, shader overlay (eliminates `texImage2D` cost), render-on-demand, hover suppression during drag, Web Worker scan pass offloading, `texSubImage2D` partial texture updates, `gl.MAX_TEXTURE_SIZE` query + texture tiling — each with a brief rationale for deferral
 - **Bundle size verification**: run `npm run size` after a clean `vite build`; confirm `dist/index.js` gzipped is `< 15 KB` excluding Three.js; if size far exceeds target, first check `rollupOptions.external: ['three']` in `vite.config.ts` — omitting it bundles ~600 KB of Three.js and silently fails the check (PRD §"Bundle Size Targets")
 
