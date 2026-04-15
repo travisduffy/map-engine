@@ -18,6 +18,16 @@ Inspired by the Clausewitz/Jomini engine pipeline (EU4, HOI4, CK3): a 24-bit RGB
 - Required browser APIs: `OffscreenCanvas`, `createImageBitmap`, Fetch, `HTMLCanvasElement`, `requestAnimationFrame`
 - Peer dependency: `three@^0.160.0`
 
+## Stability
+
+| Tier             | Exports                                                                                    | Contract                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| **Primary**      | `MapEngine`, `MapConfig`, `PickResult`, `SectorData`, `SectorBBox`, `SectorDefinitionFile` | Stable. Removals and signature changes are breaking.                                        |
+| **Advanced**     | `SectorRegistry`, `SectorBitmapParser`, `toHexKey`                                         | Stable.                                                                                     |
+| **Experimental** | Exports marked `@experimental` (currently: `BorderEdge`, `borderEdges`)                    | No stability guarantee. May change or be removed in any release without deprecation notice. |
+
+The project is in early development (`v0.0.y`). All releases increment the patch version only.
+
 ## Installation
 
 ```bash
@@ -291,7 +301,7 @@ type SectorData = {
 engine.registry.borderEdges // BorderEdge[]
 ```
 
-> **@experimental** — shape may change in v0.1.0.
+> **@experimental** — shape may change in a future version.
 
 Array of pixel-boundary edges between adjacent sectors. Each `BorderEdge` has:
 
@@ -314,10 +324,10 @@ The engine does not consume `borderEdges` internally — it is provided for cons
 
 ### Camera controls
 
-| Interaction  | Behavior          |
-| ------------ | ----------------- |
-| Pointer drag | Pan               |
-| Scroll wheel | Zoom (0.5× – 20×) |
+| Interaction       | Behavior          |
+| ----------------- | ----------------- |
+| Middle-click drag | Pan               |
+| Scroll wheel      | Zoom (0.5× – 20×) |
 
 Initial view fits the entire bitmap ("contain" strategy, preserving aspect ratio). Pan is bounded to the bitmap extents + 10% margin. When the canvas CSS size changes (e.g. browser resize), the engine updates the draw buffer and camera frustum in the same rAF frame — the map stays at the same pixel scale and the viewport boundary grows or shrinks around it.
 
@@ -415,7 +425,7 @@ worker.onmessage = ({ data }) => {
 }
 ```
 
-> **Note:** `MapRenderer` and `MapEngine` are main-thread only (they require `HTMLCanvasElement` and `requestAnimationFrame`). Worker wiring is not built into the v0.0.1 `MapEngine.loadMap()` call — this is a manual integration pattern for advanced use cases.
+> **Note:** `MapRenderer` and `MapEngine` are main-thread only (they require `HTMLCanvasElement` and `requestAnimationFrame`). Worker wiring is not built into `MapEngine.loadMap()` — this is a manual integration pattern for advanced use cases.
 
 ## UV coordinate system note
 
@@ -435,13 +445,13 @@ Omitting the `(1 - uv.y)` inversion causes the top and bottom halves of the map 
 
 ## Known limitations
 
-These are documented constraints in v0.0.1. See the Upgrade paths section for the planned v0.1.0 mitigations.
+These are documented constraints in the current version. See the Future work section below for planned mitigations.
 
 **Memory usage:**  
 Three full-resolution pixel buffer copies are held in memory simultaneously: `sourceBuffer` (original bitmap RGBA), `displayImageData` (mutable overlay copy), and `pixelIndices` flat arrays per sector (`Uint32Array`), plus the GPU texture copy and `Map`/object overhead. For an 8192×4096 bitmap (~134 MB per buffer), realistic total RAM usage is **400–500 MB**. Plan capacity accordingly.
 
 **Full texture re-upload on every `setSectorColor` call:**  
-`setSectorColor` sets `texture.needsUpdate = true`, which triggers a full `texImage2D` re-upload of the entire texture on the next render frame — not a partial `texSubImage2D` update. For frequent color changes across many sectors this is expensive. The v0.1.0 shader-based overlay eliminates this cost entirely.
+`setSectorColor` sets `texture.needsUpdate = true`, which triggers a full `texImage2D` re-upload of the entire texture on the next render frame — not a partial `texSubImage2D` update. For frequent color changes across many sectors this is expensive. A future GPU palette approach (see ROADMAP CA-7) would eliminate this cost entirely.
 
 **`gl.MAX_TEXTURE_SIZE` hardware cap:**  
 WebGL textures cannot exceed the device's `gl.MAX_TEXTURE_SIZE` limit — commonly 4096 px on mobile GPUs and 8192 px on desktop. A bitmap exceeding this limit throws a fatal `INVALID_VALUE` WebGL error. The engine does not query or check this limit in v0.0.1. If targeting mobile, keep bitmaps within 4096×4096.
@@ -450,10 +460,7 @@ WebGL textures cannot exceed the device's `gl.MAX_TEXTURE_SIZE` limit — common
 `SectorRegistry` performs a synchronous O(W×H) scan on construction. For an 8192×4096 bitmap, this blocks the main thread for 200–500 ms. Use the Web Worker opt-in pattern above to move this work off the main thread.
 
 **Continuous render loop:**  
-The engine runs `requestAnimationFrame` continuously. Render-on-demand (only re-render when the scene is dirty) is deferred to v0.1.0.
-
-**`sectorHover` fires during active pan drag:**  
-Pointer events during a drag pan still pass through the picking pipeline and may emit `sectorHover`. Suppression during drag is deferred to v0.1.0.
+The engine runs `requestAnimationFrame` continuously. Render-on-demand (only re-render when the scene is dirty) is future work.
 
 **Single map instance assumption:**  
 Multiple simultaneous `MapEngine` instances sharing a canvas, or managing multiple canvases independently, are not supported in v0.0.1.
@@ -465,7 +472,7 @@ The following features are explicitly out of scope for v0.0.1:
 - Adjacency graph (which sectors border which)
 - Area / region hierarchy (grouping sectors into provinces, countries, etc.)
 - River layer or heightmap rendering
-- Shader-based political overlay (v0.1.0 upgrade path for `setSectorColor`)
+- Shader-based political overlay (see ROADMAP CA-7)
 - CSV definition format — JSON only
 - Built-in UI controls, tooltips, or legend components
 - SSR / Node.js support
@@ -478,9 +485,9 @@ The following features are explicitly out of scope for v0.0.1:
 - `gl.MAX_TEXTURE_SIZE` querying or texture tiling
 - Automatic Web Worker wiring in `loadMap()`
 
-## Upgrade paths (v0.1.0)
+## Future work
 
-| Limitation                                       | v0.1.0 approach                                                                                             |
+| Limitation                                       | Planned approach                                                                                            |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
 | Full `texImage2D` re-upload per `setSectorColor` | Shader-based sector color overlay using a palette texture — eliminates CPU pixel writes entirely            |
 | `texImage2D` → partial update                    | `texSubImage2D` dirty-rect upload                                                                           |
@@ -489,7 +496,6 @@ The following features are explicitly out of scope for v0.0.1:
 | `gl.MAX_TEXTURE_SIZE` crash                      | Query limit at init; tile oversized bitmaps into multiple textures                                          |
 | No adjacency graph                               | Post-scan edge-list → adjacency `Map<hexKey, hexKey[]>`                                                     |
 | Continuous rAF loop                              | Render-on-demand — only call `renderer.render()` when the scene is dirty                                    |
-| Hover during drag                                | Track drag state in `MapEngine`; suppress `sectorHover` emissions while `_isDragging` is true               |
 | River / heightmap layers                         | Additional `PlaneGeometry` layers with separate textures composited over the base map                       |
 
 ## Bundle size

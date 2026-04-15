@@ -76,7 +76,7 @@ Every pixel's RGB value encodes a sector identity. The hex key (`"ff0000"` lower
 
 ### Color overlay strategy (v0.0.1)
 
-`setSectorColor` patches only a sector's pixels in a persistent `displayImageData` (separate from `sourceBuffer`), flushes via dirty-rect `putImageData` using the sector's bbox, then sets `texture.needsUpdate = true`. This triggers a full `texImage2D` re-upload — accepted for v0.0.1; shader-based v0.1.0 path is documented in the PRD.
+`setSectorColor` patches only a sector's pixels in a persistent `displayImageData` (separate from `sourceBuffer`), flushes via dirty-rect `putImageData` using the sector's bbox, then sets `texture.needsUpdate = true`. This triggers a full `texImage2D` re-upload — accepted for the current version; the GPU palette approach is documented in the ROADMAP (CA-7).
 
 ### Picking pipeline
 
@@ -144,6 +144,26 @@ sharp@^0.33.0           # fixture generation only
 - `docs/claude-strategy.md` — three-tier docs strategy and Active vs. Archive directory conventions.
 
 > **Archiving is a human-triggered event.** NEVER move files into `docs/archive/` autonomously. Only execute an archive sequence when the user explicitly instructs you to do so in that session.
+
+## Versioning Policy
+
+### Era: v0.0.y — Patch-Only Development
+
+The project is in early development. **All releases increment the PATCH version only.**
+This applies regardless of change type — bugfixes, new features, and breaking changes
+all bump `v0.0.y` while this era is active.
+
+**Rules for AI agents (non-negotiable):**
+
+1. **Never modify `package.json` version autonomously.** Version increments are
+   BDFL-only decisions, announced explicitly in the session that releases.
+2. **Never write specific future version targets** in code, comments, documentation,
+   or PRD/epic files. Use "a future version", "a future release", or "see ROADMAP"
+   instead of `v0.1.0`, `v1.0.0`, etc. Specific targets create false timeline pressure.
+3. **Never plan a sprint around a named future version.** Sprint PRDs target
+   "the next patch release." The BDFL names the version number at release time.
+4. **The jump from v0.0.y to v0.1.0 is a BDFL-only decision.** Do not assume,
+   suggest, or plan for it.
 
 ## Session Workflow
 

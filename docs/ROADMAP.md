@@ -266,7 +266,7 @@ segment) that `adjacency` does not expose. The deprecation path:
    capability will need exact edge coordinates. At that point, `borderEdges` is either
    superseded by a more structured perimeter structure, or retained as the backing
    data for CA-6's rendering pass. Decision deferred to CA-6 planning.
-3. **Remove in a future major version** once CA-6 has determined whether it needs the
+3. **Remove in a future release** once CA-6 has determined whether it needs the
    raw edge data in a different form.
 
 #### Proposed API Contract — Phase 2 (Pathfinding, `SpatialGraph` module)

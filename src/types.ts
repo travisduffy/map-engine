@@ -13,7 +13,7 @@ export interface MapConfig {
 
 /**
  * A pixel-boundary edge between two adjacent sectors.
- * @experimental — shape may change in v0.1.0
+ * @experimental — shape may change in a future version
  */
 export interface BorderEdge {
   x: number
