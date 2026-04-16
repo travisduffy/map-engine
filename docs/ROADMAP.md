@@ -59,8 +59,9 @@ Dependency order, read top-to-bottom. An arrow means "requires."
 ```
 CA-3: Input Pipeline Hardening        (no deps — structural refactor)
 
-CA-1: The Tick                        (no deps — foundational)
-  └── CA-7: GPU Map Modes             (Tick must ship first for frame-coherent palette swaps)
+CA-1: The Frame Hook                  (no deps — foundational)
+  ├── CA-7: GPU Map Modes             (Frame Hook must ship first for frame-coherent palette swaps)
+  └── CA-9: Game Clock                (Frame Hook is the time source; onFrame drives the accumulator)
 
 CA-2: Adjacency Graph                 (no deps — pure SectorRegistry addition)
   └── CA-4: Pathfinding Primitives    (Adjacency must ship first)
@@ -75,7 +76,7 @@ CA-2: Adjacency Graph                 (no deps — pure SectorRegistry addition)
 
 ---
 
-### CA-1: The Tick (Synchronization Hook)
+### CA-1: The Frame Hook (Pre-Render Callback)
 
 **Horizon:** Immediate
 **Module ownership:** `MapEngine` (hook surface) + `MapRenderer` (hook execution point)
@@ -104,28 +105,28 @@ arbitrary points in their game loop gets correct results eventually, but:
 
 ```typescript
 // Callback type — dt is elapsed seconds since the previous frame (float, e.g. 0.01667)
-type TickCallback = (dt: number) => void
+type FrameCallback = (dt: number) => void
 
 // On MapEngine:
-onTick(callback: TickCallback): void
-offTick(callback: TickCallback): void
+onFrame(callback: FrameCallback): void
+offFrame(callback: FrameCallback): void
 ```
 
 **Behavior contract:**
 
-- All registered `TickCallback`s fire synchronously at the **top of every rAF frame**,
+- All registered `FrameCallback`s fire synchronously at the **top of every rAF frame**,
   before `renderer.render(this.scene, this.camera)`.
 - `dt` is elapsed wall-clock seconds since the previous frame. On the first frame,
   `dt === 0`.
 - Callbacks fire in registration order.
-- `setSectorColor` / `resetSectorColor` calls made from within a tick callback are
+- `setSectorColor` / `resetSectorColor` calls made from within a frame callback are
   **batched**: pixel writes to `displayImageData.data` happen immediately as called, but
-  the `putImageData` flush and `texture.needsUpdate = true` are deferred until all tick
+  the `putImageData` flush and `texture.needsUpdate = true` are deferred until all frame
   callbacks have returned. A single consolidated dirty-rect flush is then performed
   before `renderer.render()`. This is the frame-coherent synchronization path.
-- `setSectorColor` / `resetSectorColor` called _outside_ a tick callback (imperative
+- `setSectorColor` / `resetSectorColor` called _outside_ a frame callback (imperative
   path) continue to flush immediately — semantics unchanged for existing usage.
-- The `onTick` / `offTick` methods respect the destroyed-guard pattern already used
+- The `onFrame` / `offFrame` methods respect the destroyed-guard pattern already used
   by `on` / `off`.
 
 #### Architectural Implications
@@ -138,8 +139,8 @@ offTick(callback: TickCallback): void
    before the renderer's first frame fires. This avoids exposing `MapRenderer`'s
    render internals and keeps `MapEngine` as the sole coordinator.
 
-2. **Dirty-rect batching during tick:** The `_inTick` flag lives on `MapEngine` (set
-   `true` before firing tick callbacks, `false` after). The deferred-flush state lives
+2. **Dirty-rect batching during frame:** The `_inTick` flag lives on `MapEngine` (set
+   `true` before firing frame callbacks, `false` after). The deferred-flush state lives
    on `MapRenderer` as `_pendingDirtyRect: SectorBBox | null` (null = nothing pending).
 
    The coordination works as follows: `MapEngine.setSectorColor` is the interception
@@ -148,21 +149,21 @@ offTick(callback: TickCallback): void
    `MapRenderer._patchSectorPixels(hexKey, r, g, b)` method that writes the pixel data
    to `displayImageData.data` and unions the sector's bbox into `_pendingDirtyRect`
    (initialize if null; expand if already set), but does NOT call `putImageData` or
-   set `texture.needsUpdate`. After all tick callbacks return, the `_preRenderHook`
+   set `texture.needsUpdate`. After all frame callbacks return, the `_preRenderHook`
    closure calls `MapRenderer._flushPendingDirty()`, which performs a single
    `putImageData` over the accumulated dirty rect and sets `texture.needsUpdate = true`.
-   Outside the tick, `MapEngine.setSectorColor` calls `MapRenderer.setSectorColor`
+   Outside the frame callback, `MapEngine.setSectorColor` calls `MapRenderer.setSectorColor`
    as before — immediate flush, no change.
 
 3. **`_lastFrameTime` field:** `MapRenderer` needs to track the previous rAF timestamp
    (a `DOMHighResTimeStamp`) to compute `dt`. One additional `number` field, initialized
    to `0` and updated each frame after the hook fires.
 
-4. **`MapEngine._tickCallbacks: TickCallback[]`:** A flat ordered array, not a `Set`.
-   Tick callbacks **must** fire in registration order — this is a correctness
+4. **`MapEngine._frameCallbacks: FrameCallback[]`:** A flat ordered array, not a `Set`.
+   Frame callbacks **must** fire in registration order — this is a correctness
    requirement, not a style preference. The existing event system (`_handlers`) uses
-   `Set<Function>`, which is unordered; routing tick through `on('tick', cb)` would
-   silently lose ordering guarantees. `offTick` splices by reference equality.
+   `Set<Function>`, which is unordered; routing the frame hook through `on('frame', cb)` would
+   silently lose ordering guarantees. `offFrame` splices by reference equality.
 
 #### Prerequisites
 
@@ -175,7 +176,7 @@ None. This is a foundational primitive.
   their simulation requires it.
 - Render-on-demand (stopping the rAF loop when nothing has changed) is a future
   optimization — deliberately deferred. The rAF loop remains always-running.
-- The tick is not a message queue. It fires even when the consumer has nothing to push.
+- The frame hook is not a message queue. It fires even when the consumer has nothing to push.
 
 ---
 
@@ -420,7 +421,7 @@ When a new input bug is identified:
 
 #### Prerequisites
 
-None structurally. Benefits from CA-1 (Tick) being in place for frame-coherent
+None structurally. Benefits from CA-1 (Frame Hook) being in place for frame-coherent
 input processing, but CA-3 fixes are unblocked.
 
 #### Explicit Out-of-Scope
@@ -650,9 +651,9 @@ This is a **planned breaking change** to `MapRenderer`'s rendering internals:
   entries, not CPU pixel buffers), but their **method signatures are preserved** — this
   is required by P-6. The implementation changes; the contract does not.
 
-**CA-1 (The Tick) is a prerequisite** — frame-coherent palette batching (all mode
-changes committed in a single tick before the render) is essential for correctness.
-Without the Tick, palette writes from multiple `setSectorColor` calls could result
+**CA-1 (The Frame Hook) is a prerequisite** — frame-coherent palette batching (all mode
+changes committed in a single frame before the render) is essential for correctness.
+Without the Frame Hook, palette writes from multiple `setSectorColor` calls could result
 in partially-updated frames being rendered.
 
 This capability requires a dedicated migration plan when it is promoted to the
@@ -661,7 +662,7 @@ to the CPU dirty-rect path.
 
 #### Prerequisites
 
-**CA-1 (The Tick) must ship first.**
+**CA-1 (The Frame Hook) must ship first.**
 
 ---
 
@@ -719,11 +720,110 @@ can be computed from `pixelIndices` with no other prerequisites.
 
 ---
 
+### CA-9: Game Clock (Temporal Primitive)
+
+**Horizon:** Near Future
+**Module ownership:** New `GameClock` class (standalone export, main-thread).
+
+#### Job Story
+
+> When I'm building a grand strategy game, I need a game clock that advances at a
+> configurable real-time rate, can be paused and resumed, and fires a callback on
+> each discrete unit of game time — a day, an hour, a turn — so I can run my
+> simulation logic at a consistent cadence that is decoupled from the render frame rate.
+
+#### Problem Statement
+
+In Paradox-style grand strategy games (EU4, CK3, HOI4, Stellaris), time is not
+continuous — it advances in discrete units (days, hours) at a configurable rate.
+"Speed 1" might mean one game-day per second; "Speed 5" might mean thirty per second.
+The game can be paused entirely. All simulation logic — province income, army
+movement, event firing — runs on each clock tick. This cadence is independent of
+the render frame rate.
+
+`onFrame` provides a per-render-frame hook, but it is the wrong primitive for game
+logic: at 60fps, attaching simulation to every frame creates 60 logic evaluations
+per second at all speed settings, couples performance to monitor refresh rate, and
+muddies the semantic distinction between "visual update" and "simulation step."
+Consumer code that implements the clock pattern themselves must either:
+
+1. Write a manual accumulator inside `onFrame` (boilerplate every GSG needs), or
+2. Use `setInterval` (decoupled from the engine, no `onFrame` integration, drift-prone).
+
+A `GameClock` primitive in the engine provides the correct abstraction: a
+fixed-interval, speed-configurable, pausable clock that is driven by `onFrame` so its
+ticks stay coherent with the render pipeline.
+
+#### Proposed API Contract (MVP)
+
+```typescript
+// New export — main-thread only (wires into onFrame internally)
+type ClockTickCallback = (elapsed: number) => void
+
+class GameClock {
+  constructor(engine: MapEngine, options?: { ticksPerSecond?: number })
+  // Default: 1 tick/second (speed 1x). ticksPerSecond is the base rate at speed 1.
+
+  setSpeed(multiplier: number): void // 0 = paused, 0.5 = half, 1 = normal, 5 = fast
+  pause(): void // sugar for setSpeed(0)
+  resume(): void // restores last non-zero speed
+
+  onTick(callback: ClockTickCallback): void // fires once per discrete clock tick
+  offTick(callback: ClockTickCallback): void
+
+  readonly paused: boolean
+  readonly speed: number // current multiplier
+  readonly elapsed: number // total ticks fired since construction
+
+  destroy(): void // unregisters from engine's onFrame
+}
+```
+
+**Behavior contract:**
+
+- `GameClock` registers one callback with `engine.onFrame(...)` internally. It owns
+  its own accumulator. `dt` from the frame hook is the sole time source.
+- Each frame, `accumulator += dt * speed`. When `accumulator >= (1 / ticksPerSecond)`,
+  one (or more, for large dt spikes) `onTick` callbacks fire and the accumulator is
+  decremented. This is the standard fixed-step accumulator — no drift, no missed ticks.
+- Multiple ticks can fire in a single frame if `dt` is large (e.g., tab was backgrounded).
+  Maximum ticks per frame should be capped (e.g., 10) to prevent spiral-of-death on lag
+  spikes. Cap value is an implementation detail, not a public parameter in the MVP.
+- `ClockTickCallback` receives `elapsed` — the total count of ticks fired so far
+  (monotonically increasing integer). The consumer derives "current game date" from
+  `elapsed` using their own calendar logic. The engine does not own a calendar.
+- `destroy()` must be called when the consumer no longer needs the clock; it
+  unregisters the internal `onFrame` listener to stop the accumulator.
+
+#### Architectural Implications
+
+- `GameClock` is a **standalone export** — not wired into `MapEngine` by default.
+  Consumer instantiates it explicitly. This respects P-4 (the engine never owns game
+  state) and P-8 (composable, not invasive).
+- `GameClock` is **main-thread only**: it wires into `onFrame`, which is main-thread.
+  It does not need to be Worker-safe.
+- The `ClockTickCallback` name intentionally uses "tick" — inside the `GameClock`
+  context, a "tick" is the canonical GSG term for a discrete unit of game time. This is
+  semantically distinct from `FrameCallback` (render-frame hook on `MapEngine`).
+
+#### Prerequisites
+
+**CA-1 (The Frame Hook) must ship first.** `GameClock` is built on top of `onFrame`.
+
+#### Explicit Out-of-Scope (MVP)
+
+- Calendar / date system — elapsed tick count is the primitive; date math is user-land.
+- Multiple simultaneous clocks at different rates — one `GameClock` per engine for MVP.
+- Networked synchronization or deterministic replay — deferred.
+- Fixed-timestep physics accumulator concerns — this is a game logic clock, not physics.
+
+---
+
 ## Risk Register
 
 | ID      | Risk                                                                                            | Severity | Likelihood            | Mitigation                                                                                                                                                                                                                                                                                                                            |
 | ------- | ----------------------------------------------------------------------------------------------- | -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **R-1** | `setSectorColor` called both inside and outside tick callbacks creates double-flush             | Medium   | High                  | Batch dirty rects within tick via `_inTick` flag; document tick as canonical path.                                                                                                                                                                                                                                                    |
+| **R-1** | `setSectorColor` called both inside and outside frame callbacks creates double-flush            | Medium   | High                  | Batch dirty rects within frame via `_inTick` flag; document `onFrame` as canonical path.                                                                                                                                                                                                                                              |
 | **R-2** | `borderEdges` has external consumers when deprecation lands                                     | Low      | Low                   | Already marked `@experimental`. Deprecation notice added in CA-2; removal in a future major. CA-6 determines final fate.                                                                                                                                                                                                              |
 | **R-3** | Input pipeline split (MapRenderer + MapEngine) accrues bug debt faster than fixes are scheduled | Medium   | Medium                | CA-3 establishes the unified dispatch target architecture. All fixes must trend toward consolidation, not deepen the split.                                                                                                                                                                                                           |
 | **R-4** | GPU map modes (CA-7) require a planned breaking change to rendering internals                   | High     | Certain (intentional) | No new code should deepen coupling to the CPU dirty-rect path. Deprecation plan written when CA-7 is promoted to Immediate.                                                                                                                                                                                                           |
