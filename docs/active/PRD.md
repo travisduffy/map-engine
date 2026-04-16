@@ -9,7 +9,7 @@
 > **DRAFT NOTICE:** This PRD is a working draft. Sections marked `<!-- TODO -->` are
 > incomplete and must be resolved before implementation begins. Do not treat this document
 > as an implementation authority until the Status above reads "Active." If you are an AI
-> agent reading this: stop and inform the user that the PRD is not yet finalized.
+> agent reading this: stop and inform the user that the PRD is not yet finalized — **unless the user has explicitly directed you to proceed with implementation or review against this DRAFT document**, in which case treat it as an implementation authority. The DRAFT status indicates human review is in progress, not that the document is incomplete or unfit for implementation.
 
 ---
 
@@ -21,7 +21,7 @@ v0.0.2 extends the v0.0.1 engine with three orthogonal primitives:
 
 1. **The Frame Hook (CA-1):** A synchronization hook that fires at the top of every render frame, giving consumers a guaranteed pre-render callback boundary. Enables frame-coherent batching of `setSectorColor` calls and eliminates redundant dirty-rect flushes.
 
-2. **The Game Clock (CA-9):** A standalone, speed-configurable, pausable clock that advances in discrete units of game time (ticks). Driven internally by the Frame Hook accumulator pattern. Fires `onTick` callbacks at a consistent rate independent of render frame rate — the correct primitive for grand strategy simulation logic.
+2. **The Game Clock (CA-9):** A standalone, speed-configurable, pausable clock that advances in discrete units of game time (ticks). Driven internally by the Frame Hook accumulator pattern. Fires `onTick` callbacks at a consistent rate independent of render frame rate.
 
 3. **The Adjacency Graph (CA-2):** A queryable, bidirectional, deduplicated neighbor map (`SectorRegistry.adjacency`) built during the existing O(W×H) constructor scan. Closes the gap between raw `borderEdges` data and a usable topology API for consumer game logic.
 
@@ -181,7 +181,7 @@ offFrame(callback: FrameCallback): void
 **Callback firing semantics:**
 
 - All registered `FrameCallback`s fire **synchronously**, in registration order, at the **top of every rAF frame** — before `renderer.render(this.scene, this.camera)`.
-- `dt` is elapsed wall-clock seconds since the previous frame. Computed as `(now - renderer._lastFrameTime) / 1000`. On the very first frame after `loadMap`, `dt === 0` because `_lastFrameTime` initializes to `0`. Subsequent frames receive actual elapsed time regardless of when their `onFrame` registration occurred.
+- `dt` is elapsed wall-clock seconds since the previous frame. Computed as `(now - renderer._lastFrameTime) / 1000`. On the very first frame after `loadMap`, `dt === 0` because `_lastFrameTime` initializes to `-1` (sentinel), and the hook returns `0` when the sentinel is detected. Subsequent frames receive actual elapsed time regardless of when their `onFrame` registration occurred.
 - The frame hook fires every frame regardless of whether any callbacks are registered (the pre-render hook is always wired once `loadMap` completes).
 
 **Snapshot and concurrent-mutation semantics:**
@@ -195,14 +195,14 @@ offFrame(callback: FrameCallback): void
 
 **New field:** `_preRenderHook: (() => void) | null`
 
-- Initialized to `null` in the constructor.
+- Set to the value passed via the constructor's `_preRenderHook` parameter. Set back to `null` in `MapRenderer.destroy()`.
 - Called as the **first statement** in the rAF callback, before any other per-frame work (camera updates, resize checks). The `performance.now()` timestamp is captured inside the hook closure itself — the rAF callback simply calls `_preRenderHook()` with no preceding work.
-- Wired by `MapEngine.loadMap()` immediately after `new MapRenderer(...)` — before the renderer's first frame fires. This is safe because `MapRenderer`'s constructor schedules the rAF loop via `requestAnimationFrame` but does not invoke it synchronously; the first rAF callback fires on the next event-loop turn at earliest, after `loadMap()` has assigned `_preRenderHook`. **Do not alter `MapRenderer`'s constructor to fire the first frame synchronously**, as this would break the wiring guarantee.
-- Set back to `null` in `MapRenderer.destroy()`.
+- **Sync wiring requirement (B-1):** `MapRenderer`'s constructor accepts `_preRenderHook` as a required parameter. `MapEngine.loadMap()` passes the hook closure directly at construction time — no `await` may appear before the `new MapRenderer(...)` call. Do not use post-construction assignment. This eliminates any possibility of a race between hook installation and the first rAF frame. **Do not alter `MapRenderer`'s constructor to invoke the first rAF frame synchronously**, as this would break the wiring guarantee.
+- **Variable capture pattern:** The hook closure captures the `renderer` local variable by reference. Declare `renderer` with `let` before constructing the closure, then assign `renderer = new MapRenderer(..., hook)`. The closure is valid because `renderer` is assigned synchronously before any rAF frame fires. The §1.4 pseudocode's `renderer` references use this captured local — not `this._renderer`. Using `const` for `renderer` will fail because the variable must be read before its `const` initializer completes; use `let`.
 
 **New field:** `_lastFrameTime: number`
 
-- Lives on `MapRenderer`. Initialized to `0`.
+- Lives on `MapRenderer`. Initialized to `-1` (sentinel — never a valid `performance.now()` timestamp).
 - Written by the pre-render hook closure in `MapEngine.loadMap()` via `renderer._lastFrameTime = now`.
 - Updated each frame after the pre-render hook fires and before `renderer.render()`.
 
@@ -214,12 +214,24 @@ offFrame(callback: FrameCallback): void
 
 **New internal method:** `_patchSectorPixels(hexKey: string, r: number, g: number, b: number): void`
 
-- Writes `r`, `g`, `b` values directly into `displayImageData.data` for every flat pixel index in `pixelIndices.get(hexKey)`.
+- `pixelIndices.get(hexKey)` contains **flat pixel indices** (not byte offsets): each entry is `y * width + x`. Convert to a byte offset before accessing `displayImageData.data`: `const byteOffset = pixelIndex * 4`.
+- For each pixel index in `pixelIndices.get(hexKey)`, use **indexed iteration** for hot-path performance: `for (let i = 0; i < arr.length; i++)`. (`for...of` over a `Uint32Array` allocates an iterator per call — unacceptable in a per-frame hot path.)
+- Writes `r`, `g`, `b` values directly into `displayImageData.data[byteOffset]`, `[byteOffset+1]`, `[byteOffset+2]`. Alpha at `[byteOffset+3]` is **not written** — this matches v0.0.1 `MapRenderer.setSectorColor`'s write pattern exactly (verify by inspection before implementing).
 - Unions the sector's bbox into `_pendingDirtyRect`:
-  - If `_pendingDirtyRect` is null: set it to `{ ...bboxes.get(hexKey) }` (copy the sector's bbox).
+  - If `_pendingDirtyRect` is null: set it to `{ ...bboxes.get(hexKey) }` (copy the sector's bbox; `SectorBBox` is a flat object with four numeric fields — spread is safe).
   - If already set: expand with `Math.min`/`Math.max` on each of the four fields (`minX`, `minY`, `maxX`, `maxY`).
 - Does **not** call `putImageData`. Does **not** set `_texture.needsUpdate`. Pixel data is staged; flush is deferred.
 - If `hexKey` is not in `pixelIndices`, no-op.
+
+**New internal method:** `_patchSectorPixelsFromSource(hexKey: string): void`
+
+- The batched equivalent of `resetSectorColor` — encapsulates all source-buffer read logic in `MapRenderer` so `MapEngine` never reads `sourceBuffer` directly.
+- For each pixel index in `pixelIndices.get(hexKey)` (indexed iteration; same convention as `_patchSectorPixels`): let `byteOffset = pixelIndex * 4`; read `r = this._registry.sourceBuffer[byteOffset]`, `g = [byteOffset+1]`, `b = [byteOffset+2]` from the pristine source buffer; write those values to `displayImageData.data` at the same offsets. Alpha at `[byteOffset+3]` is not written.
+- Unions the sector's bbox into `_pendingDirtyRect` using the same min/max expansion logic as `_patchSectorPixels`.
+- Does not call `putImageData`. Does not set `_texture.needsUpdate`.
+- If `hexKey` is not in `pixelIndices`, no-op.
+
+**Access modifier note (updated):** `_preRenderHook`, `_lastFrameTime`, `_pendingDirtyRect`, `_patchSectorPixels`, `_patchSectorPixelsFromSource`, and `_flushPendingDirty` are declared **`public`** on `MapRenderer` with `@internal` JSDoc tags. `@internal` is a **documentation-only convention** in v0.0.2 — no build tooling strips `@internal` symbols from the published `.d.ts` files. Enforcement is by code review only. Do not configure TypeDoc, API Extractor, or any `.d.ts` post-processing step for this purpose.
 
 **New internal method:** `_flushPendingDirty(): void`
 
@@ -238,7 +250,7 @@ offFrame(callback: FrameCallback): void
   ```
   This matches the existing dirty-rect call pattern in v0.0.1 `MapRenderer.setSectorColor`.
 
-**Access modifier note:** `_preRenderHook`, `_lastFrameTime`, `_pendingDirtyRect`, `_patchSectorPixels`, and `_flushPendingDirty` are declared **`public`** on `MapRenderer` with `@internal` JSDoc tags. This allows `MapEngine` to access them directly without bracket-notation workarounds or `// @ts-ignore`. They are not part of the documented public library interface — by convention, symbols tagged `@internal` are excluded from the public API surface — but TypeScript's access modifier treats them as public. Do not mark them `private` or `protected`.
+All six `@internal` methods and fields allow `MapEngine` to access them directly without bracket-notation workarounds or `// @ts-ignore`. They are not part of the documented public library interface — by convention, symbols tagged `@internal` are excluded from the public API surface — but TypeScript's access modifier treats them as public. Do not mark them `private` or `protected`.
 
 #### 1.4 Batching Coordination (`MapEngine`)
 
@@ -250,11 +262,13 @@ offFrame(callback: FrameCallback): void
 
 **Shared color parsing utility:**
 
-Extract `parseColorToRgb(color: string): { r: number; g: number; b: number }` to `src/internal/color.ts`. This utility uses a **module-level singleton** 1×1 `OffscreenCanvas` and its 2D context — allocated once at module load, reused on every call. Allocating a new `OffscreenCanvas` per call is unacceptable in the hot path (a tick firing 100 `setSectorColor` calls would otherwise create 100 canvas allocations per frame).
+Extract `parseColorToRgb(color: string): { r: number; g: number; b: number }` to `src/internal/color.ts`. This utility uses a **module-scope singleton** 1×1 `OffscreenCanvas` and its 2D context — allocated once at module load, reused on every call. Allocating a new `OffscreenCanvas` per call is unacceptable in the hot path (a tick firing 100 `setSectorColor` calls would otherwise create 100 canvas allocations per frame).
 
 `src/internal/color.ts` must carry a top-of-file JSDoc: `/** @main-thread-only — uses OffscreenCanvas; do not import from SectorRegistry or SectorBitmapParser */`. AC 3.9's grep must additionally verify `SectorRegistry.ts` does not import `./internal/color` or any file that transitively does.
 
 **Silent fallback for invalid colors:** `parseColorToRgb` inherits v0.0.1's parsing behavior — invalid CSS strings silently produce `{ r: 0, g: 0, b: 0 }` (black) per the browser's `CanvasRenderingContext2D.fillStyle` fallback. No error is thrown. This is parity with v0.0.1; no behavioral change.
+
+**Test environment note:** `parseColorToRgb` uses a module-scope singleton `OffscreenCanvas`, which is available natively in `@vitest/browser` mode (Playwright). All tests are run in browser mode; `parseColorToRgb` does not need to be mocked or polyfilled. Running tests in Node without browser mode is not supported — do not add a Node fallback or polyfill.
 
 `MapEngine.setSectorColor` calls `parseColorToRgb(color)` once before the `_inTick` dispatch check. `MapRenderer.setSectorColor` is updated to call `parseColorToRgb` instead of its existing `_colorParserCanvas`/`_colorParserCtx` approach (see migration note in v0.0.1 Source Reference). The `MapRenderer.setSectorColor` public method signature **does not change** — it remains `(hexKey: string, color: string): void`; it now delegates color parsing to the shared utility.
 
@@ -270,13 +284,15 @@ else:
     call _renderer.setSectorColor(hexKey, color)           // immediate flush (unchanged)
 ```
 
+**Double-parse on the immediate path (accepted, v0.0.2):** When `_inTick === false`, `parseColorToRgb(color)` is called once in `MapEngine.setSectorColor` and again inside `MapRenderer.setSectorColor`. This double-parse is intentional and accepted for v0.0.2 — do not optimize it away by changing `MapRenderer.setSectorColor`'s signature. The `MapRenderer.setSectorColor` public method signature remains `(hexKey: string, color: string): void` unchanged.
+
 **`MapEngine.resetSectorColor` dispatch logic (updated):**
 
-- Same pattern: if `_inTick`, read the original `r, g, b` for each flat pixel index from `this._registry.sourceBuffer` (the pristine original pixel buffer — `sourceBuffer[offset]`, `sourceBuffer[offset+1]`, `sourceBuffer[offset+2]`) and stage via `_patchSectorPixels`; otherwise call `_renderer.resetSectorColor(hexKey)` immediately.
+- Same pattern: if `_inTick`, call `_renderer._patchSectorPixelsFromSource(hexKey)` — which reads the original pixel values from `_registry.sourceBuffer` internally and stages them into `_pendingDirtyRect`. If not in a tick, call `_renderer.resetSectorColor(hexKey)` immediately. `MapEngine` must never read `_registry.sourceBuffer` directly in its reset path; all source-buffer knowledge lives in `MapRenderer`.
 
 **Pre-render hook closure (wired in `loadMap`):**
 
-`_inTick` is a private field on `MapEngine`. `_lastFrameTime` is a private field on `MapRenderer`, written by the pre-render hook closure via `renderer._lastFrameTime = now`.
+`_inTick` is a private field on `MapEngine`. `_lastFrameTime` is an `@internal public` field on `MapRenderer` (initialized to `-1`), written by the pre-render hook closure via `renderer._lastFrameTime = now`.
 
 ```typescript
 // The function assigned to _preRenderHook must be an arrow function or explicitly bound.
@@ -286,7 +302,7 @@ else:
 renderer._preRenderHook = () => {
   const now = performance.now()
   const dt =
-    renderer._lastFrameTime === 0 ? 0 : (now - renderer._lastFrameTime) / 1000
+    renderer._lastFrameTime === -1 ? 0 : (now - renderer._lastFrameTime) / 1000
   renderer._lastFrameTime = now
 
   this._inTick = true
@@ -313,20 +329,25 @@ renderer._preRenderHook = () => {
 If `engine.destroy()` is called from within a frame callback (i.e., while `_inTick === true`):
 
 - The remaining callbacks in the current snapshot continue to fire (the snapshot iteration is not aborted mid-loop).
-- `engine.destroy()` executes **synchronously in its entirety** within the callback: (1) sets `renderer._pendingDirtyRect = null` (discards pending dirty state), (2) calls `renderer.destroy()` which cancels the rAF loop and disposes Three.js resources, (3) nulls `this._registry`, `this._renderer`, `this._canvas`, (4) sets `this._destroyed = true`. No steps are deferred.
+- `engine.destroy()` executes **synchronously in its entirety** within the callback: (0) clears `this._frameCallbacks = []` to release callback references first, (1) sets `renderer._pendingDirtyRect = null` (discards pending dirty state), (2) calls `renderer.destroy()` which cancels the rAF loop and disposes Three.js resources, (3) nulls `this._registry`, `this._renderer`, `this._canvas`, (4) sets `this._destroyed = true`. No steps are deferred.
 - The `finally` block still executes correctly because the pre-render hook closure holds `renderer` as a **local variable** — it does not go through `this._renderer`. `renderer._flushPendingDirty()` is called, finds `_pendingDirtyRect === null`, and returns immediately. The staged pixel writes from before the destroy are **discarded**.
 - Subsequent callbacks in the same snapshot that call `setSectorColor` or `resetSectorColor` after `engine.destroy()` hit the `_destroyed` guard, which **throws `'MapEngine: destroyed'`** (confirmed v0.0.1 behavior). This throw is caught by the per-callback `try/catch`, logged via `console.error`, and iteration continues.
 - `_frameCallbacks` is cleared (`this._frameCallbacks = []`) as part of `engine.destroy()` teardown, releasing references. In the destroy-during-tick path this happens synchronously within the `engine.destroy()` call — the snapshot taken before the loop is unaffected.
 - After the `finally` block completes, no further rAF frames run.
+- **`engine.destroy()` is idempotent.** A second call is a no-op: `_frameCallbacks` was already cleared; `_destroyed` is already `true`; no side effects occur.
+- **`_inTick` in `destroy()`:** `_inTick` is not explicitly reset in `destroy()`. It is only ever `true` inside the `try` block of the pre-render hook, which always resets it to `false` in `finally`. Since `destroy()` prevents any further rAF frames from firing, `_inTick` is already `false` whenever `destroy()` is called outside a frame callback. Do not add a redundant `this._inTick = false` in the destroy sequence.
+- **Consumer reference contract:** Consumers must not retain direct references to `MapEngine`'s internal `_renderer` or `_registry` objects across a `destroy()` call. `renderer.destroy()` disposes Three.js resources and the resulting state of the canvas, texture, and context is unspecified. Invoking methods on those objects afterward is undefined behavior.
 - Tests must cover this path (see AC 1.8).
 
 #### 1.5 Constraints
 
 - Callbacks are never re-ordered. `offFrame` splices in place; `onFrame` appends.
+- **Duplicate registrations:** `onFrame` does not deduplicate — registering the same callback twice via `onFrame(cb); onFrame(cb)` causes it to fire twice per frame. `offFrame` removes the **first** occurrence found by `===` reference equality (equivalent to `indexOf` + `splice(index, 1)`). To remove all occurrences, the consumer must call `offFrame` multiple times.
 - A callback may call `offFrame(itself)` during execution — the splice must not corrupt the in-progress iteration. Iterate over a snapshot (`[...this._frameCallbacks]`) when firing.
 - The frame hook is not a message queue. It fires on every frame, even with zero registered callbacks and zero pending dirty state.
 - `setSectorColor` / `resetSectorColor` called **outside** a frame callback continue to flush immediately — no behavioral change for existing consumers who do not use `onFrame`.
 - `engine.destroy()` clears `_frameCallbacks = []` as part of teardown, releasing references to user callbacks. In the destroy-during-tick path (§1.4), this clear happens synchronously inside `engine.destroy()` — the snapshot already captured before the loop is unaffected.
+- **`FrameCallback` functions must be synchronous.** Any async work — Promise chains, `queueMicrotask`, `setTimeout`, etc. — scheduled from within a callback executes _after_ the `finally` block completes, with `_inTick === false`. Such work will not be batched into the current frame's consolidated flush. This is intentional: `onFrame` is a synchronous frame boundary, not an async message queue.
 
 ---
 
@@ -337,8 +358,10 @@ If `engine.destroy()` is called from within a frame callback (i.e., while `_inTi
 ```typescript
 // In types.ts — new exports
 
-// Callback fired on each discrete clock tick. elapsed is the total number of
-// ticks fired since this GameClock was constructed (monotonically increasing integer).
+// Callback fired on each discrete clock tick. elapsed is the 1-indexed count of
+// ticks fired since this GameClock was constructed, including the current one.
+// The first tick's callback receives elapsed === 1. elapsed is a monotonically
+// increasing integer that never decreases.
 type ClockTickCallback = (elapsed: number) => void
 ```
 
@@ -375,7 +398,8 @@ class GameClock {
 - `ticksPerSecond` must be a **finite positive number**. Values `≤ 0`, non-finite (`Infinity`, `-Infinity`), or `NaN` throw a `TypeError` in the constructor with message `'GameClock: ticksPerSecond must be a finite positive number'`. Fractional values are permitted (e.g., `0.5` = one tick every 2 real seconds at speed 1×).
 - Registers one internal callback with `engine.onFrame(internalFrameCallback)` immediately on construction.
 - `speed` initializes to `1`. `elapsed` initializes to `0`. `paused` initializes to `false`.
-- If `engine` has already been destroyed at construction time, `GameClock` is inert — `onFrame` registration is a no-op, no callbacks will ever fire.
+- If `engine` has already been destroyed at construction time, `GameClock` is permanently inert — `onFrame` registration is a no-op, no tick callbacks will ever fire, and `paused`, `speed`, and `elapsed` return their initial values (`false`, `1`, `0`) indefinitely.
+- `engine` is not validated at construction time — TypeScript's type system provides the contract. Do not add a runtime `instanceof` check. If a non-`MapEngine` value is passed, behavior is undefined.
 
 #### 2.3 Accumulator Algorithm
 
@@ -423,6 +447,7 @@ internalFrameCallback = (dt: number) => {
 - `dt` comes from the `onFrame` callback; no additional time source. The clock is entirely derived from the render loop wall-clock.
 - Multiple ticks can fire in a single frame if `dt` is large (e.g., tab was backgrounded, or speed is very high).
 - **Each tick fired within a single frame takes its own snapshot of `_tickCallbacks`** (the `[...this._tickCallbacks]` spread inside the `while` loop). A callback that calls `offTick(itself)` during tick N will not fire for tick N+1 within the same frame.
+- **Frame-vs-tick snapshot distinction (B-5):** The per-tick snapshot model (snapshot re-taken inside the `while` loop on each iteration) means a `ClockTickCallback` that calls `onTick(newCb)` during tick N causes `newCb` to be appended to `_tickCallbacks` and **will fire on tick N+1 within the same frame** if accumulator capacity remains. This intentionally differs from the `FrameCallback` snapshot model, where callbacks added during iteration fire only on the _next frame_. The distinction is load-bearing: frame callbacks are a once-per-frame boundary; tick callbacks are event-driven within a frame and re-snapshot per tick.
 - If a `ClockTickCallback` throws, the exception is caught, logged via `console.error('[map-engine] ClockTickCallback threw:', err)`, and iteration continues with the next callback in the snapshot. The accumulator and `_elapsed` continue advancing normally.
 - `MAX_TICKS_PER_FRAME = 10` is a module-scope constant — not exported, not a constructor option in this version.
 - When `speed === 0`, the accumulator is frozen. Accumulated partial progress from before pausing is preserved and resumes when unpaused.
@@ -433,7 +458,7 @@ internalFrameCallback = (dt: number) => {
 
 - `setSpeed(n)`: clamps `n` to `[0, ∞)`. Negative values treated as `0`. Updates `_speed`. If `n > 0`, also updates `_lastSpeed = n`.
 - `pause()`: if already paused, no-op. Otherwise: `_lastSpeed = _speed`, `_speed = 0`.
-- `resume()`: if not paused, no-op. Otherwise: `_speed = _lastSpeed` (which is always `> 0` by invariant).
+- `resume()`: if not paused (`_speed > 0`), no-op — `speed` is unchanged. This includes a just-constructed clock that was never paused, which remains at `speed === 1`. Otherwise: `_speed = _lastSpeed` (which is always `> 0` by invariant).
 
 **`_lastSpeed` invariant:** `_lastSpeed` always holds the most recent strictly-positive speed. It is never set to `0`. **Proof:** `_lastSpeed` initializes to `1`. `setSpeed(n)` updates `_lastSpeed` only when `n > 0`. `pause()` updates `_lastSpeed = _speed` only when `_speed > 0` (the "already paused" guard returns early otherwise). No code path sets `_lastSpeed` to `0`. Therefore `_lastSpeed > 0` holds at all times — do not add a defensive guard against `_lastSpeed === 0`, it is dead code.
 
@@ -496,7 +521,7 @@ for (const hexKey of this._sectorMap.keys()) {
 
 Inside the scan, for each pixel at `(x, y)`:
 
-1. Derive `thisKey` from the buffer (`toHexKey(r, g, b)`). **`toHexKey` is an existing v0.0.1 utility in `src/utils.ts`**, already exported from `src/index.ts`. It produces 6-character lowercase hex strings without `#` prefix (e.g., `'ff00aa'`). Import it at the top of `SectorRegistry.ts` if not already imported; do not re-implement.
+1. Derive `thisKey` from the buffer (`toHexKey(r, g, b)`). **`toHexKey` is an existing v0.0.1 utility in `src/utils.ts`**, already exported from `src/index.ts`. It produces 6-character lowercase hex strings without `#` prefix (e.g., `'ff00aa'`). Import it at the top of `SectorRegistry.ts` if not already imported; do not re-implement. **Consistency invariant:** both `_sectorMap` population (in `SectorRegistry`'s constructor) and the adjacency pixel-scan derivation use this same `toHexKey` function, ensuring key casing and format match exactly. The implementing agent must verify this by inspection of v0.0.1's `SectorRegistry` constructor before writing any adjacency code — if `_sectorMap` is populated with keys from a different source (e.g., raw definition file strings), and those keys differ in casing from `toHexKey`'s output, adjacency `has()` lookups will silently fail.
 2. If `thisKey` is not in `_sectorMap`, skip adjacency logic for this pixel.
 3. Check right neighbor `(x+1, y)` if in bounds:
    - Derive `rightKey`. If v0.0.1's `borderEdges` logic already computes `rightKey` at this position, **reuse that variable** — do not re-decode RGB. If it does not, the adjacency logic introduces the derivation and `borderEdges` logic consumes it.
@@ -509,6 +534,8 @@ Inside the scan, for each pixel at `(x, y)`:
 This runs alongside the existing `borderEdges` production logic in the same scan block. No additional scan pass.
 
 Post-scan: `this.adjacency = adjacencyMutable as ReadonlyMap<string, ReadonlySet<string>>`. The explicit cast is required — TypeScript's invariant generic parameters mean `Map<string, Set<string>>` does not implicitly widen to `ReadonlyMap<string, ReadonlySet<string>>` (both the outer container and the inner `Set → ReadonlySet` require the cast).
+
+**Runtime mutability:** The `ReadonlyMap`/`ReadonlySet` types provide compile-time API guidance only — they do not enforce runtime immutability. The inner `Set<string>` objects remain mutable at runtime; the cast is intentional. Do not call `Object.freeze` on the map or its sets; the overhead is unnecessary.
 
 **P-5 compliance:** This is a single additional operation per pixel within the existing O(W×H) scan. No new scan pass is introduced.
 
@@ -565,23 +592,29 @@ No new data formats or file schemas. New type exports: `FrameCallback` (CA-1) an
 
 **`testUtils` is a deliverable of Epic 1.** Create `test/testUtils.ts` (following the v0.0.1 test directory convention) before writing any Epic 1 or Epic 2 tests. It must export `advanceFrame(renderer: MapRenderer, dtMillis: number): void` that:
 
-1. Advances a mocked `performance.now()` by `dtMillis` milliseconds (using `vi.useFakeTimers()` + `vi.setSystemTime()`, or a bespoke `performance.now` mock — either is acceptable as long as the hook closure reads the advanced value).
+1. Advances a mocked `performance.now()` by `dtMillis` milliseconds.
 2. Directly invokes the pre-render hook closure (i.e., `renderer['_preRenderHook']?.()`) bypassing real `requestAnimationFrame`.
+
+**Prescribed mocking approach (M-12):** Use `vi.useFakeTimers({ toFake: ['performance'] })` in `beforeEach` (not just `vi.useFakeTimers()` — the default in some Vitest versions does **not** fake `performance.now()`). Advance time via `vi.advanceTimersByTime(dtMillis)` before invoking the hook. The `afterEach` block must call `vi.useRealTimers()` to avoid cross-test contamination.
+
+Verify the `advanceFrame` helper itself with a sanity unit test before using it in Epic 1 or 2 ACs: `advanceFrame(renderer, 1000)` — after priming — must cause a registered frame callback to receive `dt === 1.0` (exact equality, since the mock controls `performance.now()` precisely). Do not proceed to write Epic 1 or 2 tests until this sanity test passes.
 
 Frame callbacks receive `dt = dtMillis / 1000` (seconds), consistent with the hook's `(now - _lastFrameTime) / 1000` computation. When AC examples say "drive `dt = 1.0s`", the test calls `advanceFrame(renderer, 1000)`.
 
 **Priming convention — required before any non-zero-dt measurement:**
 
-`_lastFrameTime` initializes to `0`. The hook checks `renderer._lastFrameTime === 0 ? 0 : (now - _lastFrameTime) / 1000` — so the **first** `advanceFrame` call always produces `dt === 0` regardless of `dtMillis`. To get a real `dt` on a subsequent call, call `advanceFrame(renderer, 1)` once first:
+`_lastFrameTime` initializes to `-1` (the first-frame sentinel — never a valid timestamp). The hook checks `renderer._lastFrameTime === -1 ? 0 : (now - _lastFrameTime) / 1000` — so the **first** `advanceFrame` call always produces `dt === 0` regardless of `dtMillis`. To get a real `dt` on a subsequent call, call `advanceFrame(renderer, 1)` once first:
 
 ```typescript
-advanceFrame(renderer, 1) // dt = 0 (first-frame sentinel); sets _lastFrameTime to 1ms
+advanceFrame(renderer, 1) // dt = 0 (first-frame sentinel); sets _lastFrameTime
 advanceFrame(renderer, 1000) // dt = 1.0s ✓
 ```
 
 Every Epic 2 test setup must include this priming call. Tests that only assert `dt === 0` on the first frame (AC 1.2 bullet 1) do not need priming. Where AC examples say "`advanceFrame(renderer, 1000)` fires 1 tick," they assume one prior priming call unless explicitly stated otherwise.
 
 **Private field access:** Tests access private fields via bracket notation (`renderer['_texture']`, `clock['_accumulator']`, etc.). TypeScript access modifiers are compile-time only; bracket notation bypasses them at runtime. This convention is established once here and used consistently — tests do not add test-only getters or `@internal` decorations for this purpose.
+
+**Epic 3 test harness:** Epic 3 tests construct `SectorRegistry` instances directly, bypassing `MapEngine.loadMap()`. Pass a raw `Uint8ClampedArray` pixel buffer and a definition object directly to the `SectorRegistry` constructor. See v0.0.1's existing `SectorRegistry` tests for the construction pattern. Test bitmaps are hand-built arrays — a 2×2 RGBA buffer is `new Uint8ClampedArray([r1,g1,b1,255, r2,g2,b2,255, r3,g3,b3,255, r4,g4,b4,255])` with `width=2, height=2`. Pixel layout is row-major, left-to-right, top-to-bottom. Add a `buildTestBuffer(width: number, height: number, pixels: Array<[number, number, number]>): Uint8ClampedArray` helper to `test/testUtils.ts` — each entry in `pixels` is `[r, g, b]`; alpha is hardcoded to `255`.
 
 For AC 1.3 specifically: test setup replaces `displayCtx.putImageData` with a spy (`vi.spyOn(renderer['displayCtx'], 'putImageData')`) before advancing the frame, then asserts `spy.mock.calls.length === 1`.
 
@@ -590,6 +623,8 @@ For AC 1.3 specifically: test setup replaces `displayCtx.putImageData` with a sp
 ### Universal: Example App Coverage
 
 **Applies to every public-facing API surface added in this version — no exceptions.**
+
+**Before modifying `example/src/main.ts`:** Read the existing file in full. Preserve all existing functionality. New demo elements are additive — append them below existing content or in a clearly separated, labeled section. Do not remove or alter existing event listeners, rendering logic, or UI elements from v0.0.1.
 
 Every feature that adds or changes the public API of the library must be accompanied by a working demonstration in `example/src/main.ts` (and any supporting example files). The demonstration:
 
@@ -623,6 +658,7 @@ Every feature that adds or changes the public API of the library must be accompa
 
 **1.3 — Batched dirty-rect flushing during frame**
 
+- **Prerequisite (B-4):** Before implementing this AC, verify that `SectorBBox` uses **inclusive** `maxX`/`maxY` bounds by reading v0.0.1's `SectorRegistry.ts` bbox-building code (the loop that expands the bbox as pixels are scanned). Additionally, a unit test must directly assert: `registry.bboxes.get(someHexKey).maxX` equals the largest x-coordinate actually occupied by any pixel of that sector (confirming inclusive semantics, not one-past). This check guards every `+1` in the dirty-rect formula.
 - Given two `setSectorColor` calls to different sectors inside a single frame callback: test harness spies on `displayCtx.putImageData`, advances one frame, and asserts `spy.mock.calls.length === 1` (not two).
 - The `putImageData` call passes `(displayImageData, 0, 0, dx, dy, dw, dh)` where `dx = min(bbox1.minX, bbox2.minX)`, `dy = min(bbox1.minY, bbox2.minY)`, `dw = max(bbox1.maxX, bbox2.maxX) - dx + 1`, `dh = max(bbox1.maxY, bbox2.maxY) - dy + 1` — the minimal axis-aligned bounding box union of the two sectors' `SectorBBox` values (inclusive bounds converted to width/height via +1).
 - Pixel state is correct after the flush: both sectors show the correct colors.
@@ -646,10 +682,19 @@ Every feature that adds or changes the public API of the library must be accompa
 - The example app includes a DOM element with `id="frame-counter"` (or equivalent labeled display) that shows a live frame count incrementing on every render frame.
 - In addition, the demo must include a sector that visibly pulses color on each frame (e.g., cycles through a palette via `setSectorColor` inside an `onFrame` callback). This exercises the batching path — a developer can confirm both the counter and the pulsing sector are active without opening DevTools.
 - Opening `localhost:3000` and observing both the counter and the color pulse is sufficient to confirm the frame hook and batching path are working.
+- **DOM ID collision check:** Before adding `id="frame-counter"` (and the IDs in ACs 2.10 and 3.10), inspect the v0.0.1 `example/src/main.ts` to confirm none of these IDs already exist. If any do, rename the existing v0.0.1 element with a `-legacy` suffix, or prefix all new IDs with `v2-`. Document the chosen convention in a comment in `example/src/main.ts`.
 
 **1.8 — Destroy-during-tick**
 
 - A callback that calls `engine.destroy()` during execution: the remaining callbacks in the snapshot still fire. Any subsequent `setSectorColor` calls in those callbacks throw `'MapEngine: destroyed'`, which is caught by the per-callback try/catch and logged — no uncaught exception. `_flushPendingDirty()` is a no-op (dirty rect was cleared by `destroy()`), and no further rAF frames run.
+
+**1.9 — Invalid CSS color string parity (M-11)**
+
+- `engine.setSectorColor(hexKey, '###not-valid###')` fills the sector with RGB `(0, 0, 0)` (black) without throwing an exception. This verifies that `parseColorToRgb`'s silent-fallback behavior matches v0.0.1's `OffscreenCanvas`-based color parser. Test both the batched path (`_inTick === true`) and the immediate path (`_inTick === false`) to confirm parity in both dispatch routes.
+
+**1.10 — Import isolation (M-7)**
+
+- `SectorRegistry.ts` has no transitive import path to `src/internal/color.ts`. Verify via: (a) direct grep — `grep -r 'internal/color' src/SectorRegistry.ts src/SectorBitmapParser.ts` — and (b) transitive check via `npx madge --extensions ts src/SectorRegistry.ts | grep color` (`madge` is not currently in `devDependencies`; install it first with `npm install --save-dev madge`). If `madge` is unavailable, manually trace all `import` statements in `SectorRegistry.ts` and each transitively imported file to confirm none reach `src/internal/color.ts`. Document the exact verification command used in a comment in `test/testUtils.ts`.
 
 ---
 
@@ -664,13 +709,14 @@ Every feature that adds or changes the public API of the library must be accompa
 - After priming: `advanceFrame(renderer, 2000)` with speed 0.5× and `ticksPerSecond: 1`. Assert exactly 1 tick fires.
 - Tick callbacks fire in `onTick` registration order within a single tick.
 - When asserting accumulator state, use `expect(clock['_accumulator']).toBeCloseTo(0, 10)` rather than strict `=== 0` to guard against sub-nanosecond IEEE-754 residuals.
+- **onTick-during-tick behavior (B-5):** A `ClockTickCallback` that calls `onTick(newCb)` during tick N causes `newCb` to fire on tick N+1 within the same frame (per-tick snapshot semantics). Verify: construct a `GameClock` with `ticksPerSecond: 1`; after priming, call `clock.setSpeed(10)` then `advanceFrame(renderer, 1000)` — this produces 10 ticks. Register a callback that calls `onTick(newCb)` during tick 1. Assert `newCb` receives `elapsed === 2, 3, ..., 10` (9 calls total within that same frame).
 
 **2.2 — Pause / resume**
 
 - `clock.pause()` stops the accumulator; no `onTick` callbacks fire while paused.
 - `clock.resume()` restores the clock to its pre-pause speed; ticks resume firing at that speed.
 - `clock.pause()` while already paused is a no-op (no error, no state corruption).
-- `clock.resume()` while not paused is a no-op.
+- `clock.resume()` while not paused is a no-op. Specifically, `clock.resume()` called on a just-constructed, never-paused clock leaves `speed === 1` unchanged.
 - **Accumulated-progress deterministic test** (prime first, then all calls use `advanceFrame(renderer, dtMillis)`):
   1. `advanceFrame(renderer, 500)` → accumulator = 0.5, 0 ticks.
   2. `clock.pause()`.
@@ -742,6 +788,7 @@ Every feature that adds or changes the public API of the library must be accompa
 **3.1 — Bidirectionality**
 
 - For any two definition-registered sectors A and B sharing at least one pair of 4-connected (orthogonally adjacent) pixels: B is in `registry.adjacency.get(A)` AND A is in `registry.adjacency.get(B)`.
+- **toHexKey consistency (M-6):** Populate the test definition with a sector whose key is derived from `toHexKey(r, g, b)` (e.g., the same values used to paint its pixel in the test bitmap); assert `registry.adjacency.get(toHexKey(r, g, b))` is defined (not `undefined`) after `loadMap` completes. This verifies that definition-map population and pixel-scan adjacency derivation use the same `toHexKey` function with matching casing and format.
 
 **3.2 — Deduplication**
 
@@ -767,6 +814,7 @@ Every feature that adds or changes the public API of the library must be accompa
 - `engine.getNeighbors(hexKey)` returns the identical `ReadonlySet` reference (`===`) returned by `engine.registry.adjacency.get(hexKey)`. The implementation is a one-liner (`return this._registry.adjacency.get(hexKey)`) with no wrapping, cloning, or copying.
 - Returns `undefined` for a hex key not in the definition.
 - Returns an empty `ReadonlySet` for a defined but isolated sector.
+- `engine.getNeighbors(bitmapOnlyHexKey)` returns `undefined` for a hex key present in the pixel buffer but absent from the definition (bitmap-only color). Assert this explicitly with a sector color that appears in the test bitmap but has no definition entry.
 
 **3.7 — `borderEdges` retained**
 
@@ -775,7 +823,7 @@ Every feature that adds or changes the public API of the library must be accompa
 
 **3.8 — No additional scan pass**
 
-- The adjacency construction logic lives entirely inside the existing O(W×H) pixel loop in `SectorRegistry`. **Code review criterion:** the adjacency write logic must reside in the same iteration block as the `borderEdges` write logic — verified by inspection during PR review. As a supporting sanity check, `SectorRegistry.ts` must not contain more than one loop that iterates over pixel rows (e.g., `for (let y`). Reviewers verify by inspection; the grep is a hint, not a proof, since alternative loop constructs would bypass a naive pattern match.
+- The adjacency construction logic lives entirely inside the existing O(W×H) pixel loop in `SectorRegistry`. **Code review checklist:** the reviewer confirms by reading `SectorRegistry.ts` that the adjacency write logic resides inside the same pixel-iteration block as the `borderEdges` write logic. No automated grep check is included for this criterion — loop structure is verified by inspection only. (The naive `for (let y` grep would produce false positives from unrelated variable names and would miss `while`, `forEach`, or `for...of` loop constructs entirely.)
 
 **3.9 — P-1/P-2 compliance**
 
@@ -784,8 +832,8 @@ Every feature that adds or changes the public API of the library must be accompa
 
 **3.10 — Example app demonstration**
 
-- The example app calls `engine.getNeighbors(hexKey)` on a clicked sector and logs the neighbor hex keys to a labeled on-page `<div id="neighbor-output">`. Highlight-on-click (calling `setSectorColor` on neighbor sectors) is out of scope for the example to avoid state-management complexity in the demo.
-- A developer can click any sector in the browser and immediately see the adjacent hex keys printed in `#neighbor-output` without opening DevTools.
+- The example app calls `engine.getNeighbors(hexKey)` on a clicked sector, logs the neighbor hex keys to a labeled on-page `<div id="neighbor-output">`, **and highlights the neighbor sectors** by calling `setSectorColor` on each. On the next click (a different sector), previously highlighted neighbors are reset via `resetSectorColor` before highlighting the new set.
+- A developer can click any sector in the browser and immediately see: (1) adjacent hex keys printed in `#neighbor-output` and (2) neighbor sectors visibly colored in the map — without opening DevTools.
 
 **3.11 — Destroyed-guard on `getNeighbors`**
 
@@ -817,15 +865,15 @@ Every feature that adds or changes the public API of the library must be accompa
 
 ## KNOWN RISKS
 
-| ID      | Risk                                                                                                                            | Severity | Likelihood | Mitigation                                                                                                                                                                                                                        |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **R-1** | `setSectorColor` called both inside and outside a frame callback in the same frame causes double-flush                          | Medium   | High       | The `_inTick` flag gates the dispatch path. Only calls made inside the frame callback are batched; calls outside flush immediately as before. Consolidated flush runs after all frame callbacks return.                           |
-| **R-2** | `_frameCallbacks` iteration corrupted by self-removal via `offFrame` inside a callback                                          | Medium   | Low        | Iterate over a snapshot (`[...this._frameCallbacks]`) when firing. Mutation of the live array does not affect the snapshot.                                                                                                       |
-| **R-3** | Adjacency set-membership check per pixel (`adjacencyMutable.has(neighborKey)`) adds measurable scan time at large bitmap scales | Low      | Low        | O(1) Map lookup; cost is negligible relative to the existing `borderEdges` path which also reads neighbor pixels. No new memory allocation inside the hot loop.                                                                   |
-| **R-4** | `_preRenderHook` fires before `MapRenderer` has valid display canvas state                                                      | Low      | Low        | Hook is wired in `MapEngine.loadMap()` after `new MapRenderer(...)` completes and the display canvas is initialized. The renderer's first rAF frame cannot fire before the event loop yields back to the caller of `loadMap()`.   |
-| **R-5** | `borderEdges` external consumers not aware of deprecation                                                                       | Low      | Low        | Already `@experimental`. `@deprecated` annotation added; removal deferred until CA-6 determines final fate. No behavioral change.                                                                                                 |
-| **R-6** | `GameClock` constructed after `MapEngine.destroy()` silently does nothing                                                       | Low      | Low        | `onFrame` already respects the destroyed-guard and is a no-op post-destroy. `GameClock` constructor inherits this behavior — no special handling needed, but consumers must be aware to avoid silent no-ops.                      |
-| **R-7** | Lag spike causes `MAX_TICKS_PER_FRAME` cap to silently discard game time                                                        | Medium   | Low        | Cap is documented behavior, not a bug. Discarding is preferable to a catch-up burst. Consumers who need tick-accurate simulation (e.g., replays) should not rely on `GameClock` alone — that use case is explicitly out of scope. |
+| ID      | Risk                                                                                                                            | Severity | Likelihood | Mitigation                                                                                                                                                                                                                                                                                                  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **R-1** | `setSectorColor` called both inside and outside a frame callback in the same frame causes double-flush                          | Medium   | High       | The `_inTick` flag gates the dispatch path. Only calls made inside the frame callback are batched; calls outside flush immediately as before. Consolidated flush runs after all frame callbacks return.                                                                                                     |
+| **R-2** | `_frameCallbacks` iteration corrupted by self-removal via `offFrame` inside a callback                                          | Medium   | Low        | Iterate over a snapshot (`[...this._frameCallbacks]`) when firing. Mutation of the live array does not affect the snapshot.                                                                                                                                                                                 |
+| **R-3** | Adjacency set-membership check per pixel (`adjacencyMutable.has(neighborKey)`) adds measurable scan time at large bitmap scales | Low      | Low        | O(1) Map lookup; cost is negligible relative to the existing `borderEdges` path which also reads neighbor pixels. No new memory allocation inside the hot loop.                                                                                                                                             |
+| **R-4** | `_preRenderHook` fires before `MapRenderer` has valid display canvas state                                                      | Low      | Low        | Hook is wired synchronously in `MapEngine.loadMap()` with no `await` between `new MapRenderer(...)` and the hook assignment (§1.3 sync wiring requirement). `requestAnimationFrame` cannot fire before the current synchronous execution completes, so the hook is always set before the first frame fires. |
+| **R-5** | `borderEdges` external consumers not aware of deprecation                                                                       | Low      | Low        | Already `@experimental`. `@deprecated` annotation added; removal deferred until CA-6 determines final fate. No behavioral change.                                                                                                                                                                           |
+| **R-6** | `GameClock` constructed after `MapEngine.destroy()` silently does nothing                                                       | Low      | Low        | `onFrame` already respects the destroyed-guard and is a no-op post-destroy. `GameClock` constructor inherits this behavior — no special handling needed, but consumers must be aware to avoid silent no-ops.                                                                                                |
+| **R-7** | Lag spike causes `MAX_TICKS_PER_FRAME` cap to silently discard game time                                                        | Medium   | Low        | Cap is documented behavior, not a bug. Discarding is preferable to a catch-up burst. Consumers who need tick-accurate simulation (e.g., replays) should not rely on `GameClock` alone — that use case is explicitly out of scope.                                                                           |
 
 ---
 
@@ -841,15 +889,16 @@ Every feature that adds or changes the public API of the library must be accompa
    Epic 1 (CA-1) → Epic 2 (CA-9) → Epic 3 (CA-2).
 
 3. Test harness for dt timing: RESOLVED — Vitest + @vitest/browser with testUtils.advanceFrame(renderer, dtMillis)
-   exported from test/testUtils.ts. Advances a mocked performance.now() by dtMillis milliseconds and
-   directly invokes the pre-render hook closure, bypassing real rAF. Frame callbacks receive
+   exported from test/testUtils.ts. Uses vi.useFakeTimers({ toFake: ['performance'] }) + vi.advanceTimersByTime(dtMillis),
+   then directly invokes the pre-render hook closure, bypassing real rAF. Frame callbacks receive
    dt = dtMillis / 1000 seconds. testUtils.ts is a deliverable of Epic 1.
-   Priming: first advanceFrame call always produces dt=0 (sentinel). Tests needing dt>0 must call
-   advanceFrame(renderer, 1) once first to prime _lastFrameTime out of the sentinel state.
+   Sentinel: _lastFrameTime initializes to -1 (not 0). Priming: first advanceFrame call always produces
+   dt=0; tests needing dt>0 must call advanceFrame(renderer, 1) once first to set _lastFrameTime to a
+   valid (non-sentinel) value. See Test Harness Strategy for prescribed mocking approach.
 
-4. AC 3.8 scan time: RESOLVED — code review criterion (not brittle grep) verifies adjacency logic
-   lives in the same iteration block as borderEdges. Supporting sanity grep looks for more than one
-   for (let y) loop. See AC 3.8.
+4. AC 3.8 scan time: RESOLVED — code review criterion only (no automated grep). Reviewer confirms by
+   reading SectorRegistry.ts that adjacency write logic resides in the same pixel-iteration block as
+   borderEdges. The for (let y) grep was removed due to false-positive/false-negative risk. See AC 3.8.
 
 5. GameClock export path: RESOLVED — top-level named export from src/index.ts alongside MapEngine.
    GameClock is imported from 'map-engine' directly, not a sub-path.
