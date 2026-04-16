@@ -8,7 +8,7 @@ This repo uses a strict three-tier documentation system defined in `docs/claude-
 
 1. `CLAUDE.md` — global directives, loaded every session
 2. `.claude/rules/*.md` — path-scoped domain rules
-3. `docs/` — project docs (PRD, PROGRESS, ROADMAP, epics, archive)
+3. `docs/` — project docs (active sprint workspace, ROADMAP, templates, archive)
 
 **Never create any external or machine-local persistence for this project.** This means:
 
@@ -110,7 +110,7 @@ Before concluding any task, run in this order:
 2. `npm run typecheck:example` — zero type errors (example workspace)
 3. `npm run build` — clean library output
 4. `npm run test` — full test suite passes
-5. Update relevant `.claude/rules/*.md` files if domain patterns changed, then update `docs/PROGRESS.md`
+5. Update relevant `.claude/rules/*.md` files if domain patterns changed, then update `docs/active/PROGRESS.md`
 6. `npm run format` — apply Prettier to all edited files
 
 **When modifying the public API:** also update `example/src/main.ts` to reflect the change — the example must always demonstrate the current, accurate API surface.
@@ -133,15 +133,16 @@ sharp@^0.33.0           # fixture generation only
 - `MapRenderer` and `MapEngine` are **main-thread only**
 - JSON hex keys are **not** normalized — `"FF0000"` ≠ `"ff0000"`; consumer's responsibility
 - `createImageBitmap` called without options (safe because bitmap guarantees alpha=255)
-- Do not implement anything in the "v0.0.1 explicitly does not include" list (see `docs/PRD.md` §"What v0.0.1 Explicitly Does Not Include")
+- Do not implement anything in the "explicitly does not include" list (see `docs/active/PRD.md` §"What This Version Explicitly Does Not Include")
 
 ## Documentation
 
-- `docs/PROGRESS.md` — **read this first at the start of every session**; tracks task completion status, session logs, and lessons learned. If the Task Registry is empty or the active version is `None`, do not begin implementation — wait for the user to start a new cycle.
-- `docs/PRD.md` — full implementation spec for the active version. If the Overview section is empty or marked `TODO`, do not infer requirements — stop and ask.
-- `docs/epics/` — epic files for the active version; each task has a full work spec and done-when criteria. Empty between development cycles.
+- `docs/active/PROGRESS.md` — **read this first at the start of every session**; tracks task completion status, session logs, and lessons learned. If the Task Registry is empty or the active version is `None`, do not begin implementation — wait for the user to start a new cycle.
+- `docs/active/PRD.md` — full implementation spec for the active version. If the Status is `DRAFT` or the Overview section is empty or marked `TODO`, do not infer requirements — stop and ask.
+- `docs/active/epics/` — epic files for the active version; each task has a full work spec and done-when criteria. Empty between development cycles.
 - `docs/archive/` — completed versions organized by SemVer tag (e.g., `v0.0.1/`). Treat as read-only historical reference; never modify archive contents.
-- `docs/claude-strategy.md` — three-tier docs strategy and Active vs. Archive directory conventions.
+- `docs/templates/` — blank starter templates (`PRD_TEMPLATE.md`, `PROGRESS_TEMPLATE.md`) used to initialize a new sprint's `docs/active/` workspace.
+- `docs/claude-strategy.md` — three-tier docs strategy, sprint lifecycle, and directory conventions.
 
 > **Archiving is a human-triggered event.** NEVER move files into `docs/archive/` autonomously. Only execute an archive sequence when the user explicitly instructs you to do so in that session.
 
@@ -169,9 +170,9 @@ all bump `v0.0.y` while this era is active.
 
 **Every session must follow this protocol:**
 
-1. **Read `docs/PROGRESS.md` first.** It tells you exactly what has been done, what is in progress, what is blocked, and where the last session left off. Never start implementation work without reading it.
-2. **Check if a development cycle is active.** If the Task Registry is empty or the active version is `None`, stop — do not begin implementation. Wait for the user to populate `docs/PRD.md` and `docs/epics/` to start the next cycle.
+1. **Read `docs/active/PROGRESS.md` first.** It tells you exactly what has been done, what is in progress, what is blocked, and where the last session left off. Never start implementation work without reading it.
+2. **Check if a development cycle is active.** If the Task Registry is empty or the active version is `None`, stop — do not begin implementation. Wait for the user to populate `docs/active/PRD.md` and `docs/active/epics/` to start the next cycle.
 3. **Find the next task.** The Task Registry lists all tasks with their current status. Pick up from the first `[ ]` (not started) or `[~]` (in progress) task.
-4. **Read the epic file for that task.** Epic files are in `docs/epics/`. They contain the full work spec, PRD references, and done-when criteria for every task.
-5. **Cross-reference the PRD.** `docs/PRD.md` is the canonical authority. Epic files cite specific PRD sections — go there for algorithm details and acceptance criteria.
-6. **Update `docs/PROGRESS.md` when done.** Before closing a session: mark completed tasks `[x]`, mark any blocked task `[!]`, append a Session Log entry (date, tasks touched, outcome, decisions made, where you left off), and add any non-obvious discoveries to Lessons Learned.
+4. **Read the epic file for that task.** Epic files are in `docs/active/epics/`. They contain the full work spec, PRD references, and done-when criteria for every task.
+5. **Cross-reference the PRD.** `docs/active/PRD.md` is the canonical authority. Epic files cite specific PRD sections — go there for algorithm details and acceptance criteria.
+6. **Update `docs/active/PROGRESS.md` when done.** Before closing a session: mark completed tasks `[x]`, mark any blocked task `[!]`, append a Session Log entry (date, tasks touched, outcome, decisions made, where you left off), and add any non-obvious discoveries to Lessons Learned.

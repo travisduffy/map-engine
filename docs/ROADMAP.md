@@ -316,7 +316,7 @@ None. Pure `SectorRegistry` spatial data. No Three.js, no DOM.
 
 ---
 
-### CA-3: Input Pipeline Hardening & Game Feel
+### CA-3 (Completed): Input Pipeline Hardening & Game Feel
 
 **Horizon:** Immediate (ongoing maintenance track) — **Shipped 2026-04-13**
 **Module ownership:** `MapEngine` + `MapRenderer` — input ownership is the core issue.

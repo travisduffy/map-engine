@@ -12,8 +12,8 @@
 1. Read this file in full.
 2. Check **Current Status** — if it reads `NO ACTIVE SPRINT`, do not begin implementation work. Wait for the user to define the next version.
 3. If a sprint is active, find the next incomplete task in the Task Registry.
-4. Cross-reference the task's epic file (`docs/epics/`) for the full work spec.
-5. Cross-reference `docs/PRD.md` for acceptance criteria and algorithm details.
+4. Cross-reference the task's epic file (`docs/active/epics/`) for the full work spec.
+5. Cross-reference `docs/active/PRD.md` for acceptance criteria and algorithm details.
 
 **During a session:**
 
@@ -42,7 +42,7 @@
 
 **Phase:** NO ACTIVE SPRINT — v0.0.1 closed; awaiting next development cycle
 **Active version:** None
-**Next task:** None — Task Registry is empty; populate `docs/PRD.md` and `docs/epics/` to begin the next cycle
+**Next task:** None — Task Registry is empty; populate `docs/active/PRD.md` and `docs/active/epics/` to begin the next cycle
 **Blocking issues:** None
 
 ---
@@ -54,7 +54,7 @@
 
 ### Epic N: [Epic Title]
 
-> Full spec: `docs/epics/epic-N-[slug].md`
+> Full spec: `docs/active/epics/epic-N-[slug].md`
 
 | Status | Task    | Description |
 | ------ | ------- | ----------- |
