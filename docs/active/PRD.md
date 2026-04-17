@@ -96,8 +96,10 @@ The following principles are non-negotiable constraints from `docs/ROADMAP.md §
 | `_registry`        | `MapRenderer`    | `SectorRegistry`                       | Private; reference to the registry passed at construction; used to access `pixelIndices`, `bboxes`, and `sourceBuffer` |
 | `_loaded`          | `MapEngine`      | `boolean`                              | Private; `false` until `loadMap()` completes successfully; stays `true` after `destroy()`                              |
 | `_destroyed`       | `MapEngine`      | `boolean`                              | Private; `false` until `destroy()` is called (only set when `_loaded === true`)                                        |
+| `_parser`          | `MapEngine`      | `SectorBitmapParser`                   | Private instance; constructed once in `MapEngine` constructor, retained for lifetime, not nulled by `destroy()`        |
 | `_registry`        | `MapEngine`      | `SectorRegistry \| null`               | Private; null until `loadMap()` completes                                                                              |
 | `_renderer`        | `MapEngine`      | `MapRenderer \| null`                  | Private; null until `loadMap()` completes                                                                              |
+| `_canvas`          | `MapEngine`      | `HTMLCanvasElement \| null`            | Private; null until `loadMap()` completes; nulled by `destroy()`                                                       |
 | `registry`         | `MapEngine`      | `SectorRegistry`                       | **Public getter** (already exists in v0.0.1); throws if destroyed or not loaded                                        |
 | `_sectorMap`       | `SectorRegistry` | `Map<string, SectorData>`              | Private; fully populated from definition file before the pixel scan begins                                             |
 | `pixelIndices`     | `SectorRegistry` | `Map<string, Uint32Array>`             | Flat pixel indices per sector                                                                                          |
@@ -118,6 +120,50 @@ constructor(
 ```
 
 `SectorDefinitionFile` is the JSON definition type (from `types.ts`). Parameters are positional in this order. Epic 3 tests construct `SectorRegistry` directly using this signature — do not infer it from context; read `src/SectorRegistry.ts` first to confirm.
+
+**`SectorDefinitionFile` type shape (from `types.ts`):**
+
+```typescript
+type SectorDefinitionFile = Record<string, SectorData>
+// where SectorData = { name: string; [key: string]: unknown }
+```
+
+It is a **flat map** from hex key to sector data — not an array, not a nested structure. A minimal test definition literal:
+
+```typescript
+const definition: SectorDefinitionFile = {
+  ff0000: { name: 'Red Sector' },
+  '00ff00': { name: 'Green Sector' },
+}
+```
+
+Keys are lowercase hex strings without `#` prefix (matching `toHexKey` output). The `name` field is required; all other fields are optional.
+
+**`MapConfig` type shape (from `types.ts`):**
+
+```typescript
+interface MapConfig {
+  bitmapUrl: string
+  definitionUrl: string
+  canvas: HTMLCanvasElement
+}
+```
+
+This is the complete and exhaustive shape — no additional required fields. `loadMap(config: MapConfig)` is the v0.0.1 (and v0.0.2) public method signature.
+
+**`MapRenderer` constructor signature (v0.0.1):**
+
+```typescript
+constructor(canvas: HTMLCanvasElement, registry: SectorRegistry)
+```
+
+Exactly two parameters. v0.0.2 appends `_preRenderHook` as the third and final parameter:
+
+```typescript
+constructor(canvas: HTMLCanvasElement, registry: SectorRegistry, _preRenderHook: () => void)
+```
+
+Do not infer the v0.0.1 parameter list from context — confirm by reading `src/MapRenderer.ts` before modifying.
 
 **Methods (existing v0.0.1 implementations — referenced in §1.4):**
 
@@ -196,14 +242,14 @@ offFrame(callback: FrameCallback): void
 **`onFrame` behavior:**
 
 - Appends `callback` to `_frameCallbacks: FrameCallback[]` — a flat ordered array on `MapEngine`. Not routed through the existing `_handlers` Set system; frame callbacks must fire in registration order, and `Set<Function>` does not guarantee order.
-- Respects the destroyed-guard: if `MapEngine` has been destroyed, `onFrame` is a no-op (consistent with the existing `on` / `off` guard pattern).
+- **Destroyed-guard:** if `this._destroyed === true`, `onFrame` returns immediately without registering the callback and without throwing. (Note: `on()`/`off()` in v0.0.1 throw on destroyed; `onFrame`/`offFrame` intentionally do not — they are no-ops.)
 - **Pre-load behavior:** If called before `loadMap()` has completed, `onFrame` is allowed and appends `callback` to `_frameCallbacks`. Callbacks begin firing on the first rAF frame once the renderer is running. No callbacks fire before `loadMap()` completes and the rAF loop starts.
 - **Pre-load then destroy (without loading):** If `onFrame(cb)` is called before `loadMap()` completes, then `destroy()` is called before `loadMap()` — v0.0.1's `destroy()` is a no-op when `_loaded === false` (confirmed behavior: the `if (!this._loaded) return` guard fires, leaving `_destroyed === false`). In this case `_frameCallbacks` is **not** cleared by the no-op destroy. Callbacks registered before `loadMap` will still fire if `loadMap` is called afterward. This edge case is accepted behavior for v0.0.2 — do not add special handling.
 
 **`offFrame` behavior:**
 
 - Splices `callback` from `_frameCallbacks` by reference equality (`===`). If the callback is not registered, no-op.
-- Respects the destroyed-guard.
+- **Destroyed-guard:** if `this._destroyed === true`, `offFrame` returns immediately without effect and without throwing.
 
 **Callback firing semantics:**
 
@@ -222,9 +268,9 @@ offFrame(callback: FrameCallback): void
 
 **New field:** `_preRenderHook: (() => void) | null`
 
-- Set to the value passed via the constructor's `_preRenderHook` parameter. Set back to `null` in `MapRenderer.destroy()`.
-- Called as the **first statement** in the rAF callback, before any other per-frame work (camera updates, resize checks). The `performance.now()` timestamp is captured inside the hook closure itself — the rAF callback simply calls `_preRenderHook()` with no preceding work.
-- **Sync wiring requirement (B-1):** `MapRenderer`'s constructor accepts `_preRenderHook` as a required parameter. `MapEngine.loadMap()` passes the hook closure directly at construction time — no `await` may appear before the `new MapRenderer(...)` call. Do not use post-construction assignment. This eliminates any possibility of a race between hook installation and the first rAF frame. **Do not alter `MapRenderer`'s constructor to invoke the first rAF frame synchronously**, as this would break the wiring guarantee. **Parameter position:** v0.0.2 appends `_preRenderHook` as the **final** parameter of `MapRenderer`'s constructor. Read `src/MapRenderer.ts` to confirm the existing parameter list before modifying — do not assume any specific arity.
+- Set to the value passed via the constructor's `_preRenderHook` parameter. Set back to `null` in `MapRenderer.destroy()` — specifically, **after** `cancelAnimationFrame(this._animFrameId)` (existing behavior) and before any other cleanup. This prevents a queued-but-not-yet-fired rAF callback from invoking the hook after the renderer is destroyed.
+- Called as the **first statement** in the rAF callback, before any other per-frame work (camera updates, resize checks). The rAF callback must guard the call: `if (this._preRenderHook) this._preRenderHook()`. The null check handles the edge case where `cancelAnimationFrame` was called but the callback was already dispatched before cancellation took effect. The `performance.now()` timestamp is captured inside the hook closure itself — no work precedes the `if (this._preRenderHook)` guard.
+- **Sync wiring requirement (B-1):** `MapRenderer`'s constructor accepts `_preRenderHook` as a required parameter. `MapEngine.loadMap()` passes the hook closure directly at construction time — no `await` may appear before the `new MapRenderer(...)` call. Do not use post-construction assignment. This eliminates any possibility of a race between hook installation and the first rAF frame. **Do not alter `MapRenderer`'s constructor to invoke the first rAF frame synchronously**, as this would break the wiring guarantee. **Parameter position:** v0.0.2 appends `_preRenderHook` as the **final** (third) parameter of `MapRenderer`'s constructor. The confirmed v0.0.1 signature is `constructor(canvas: HTMLCanvasElement, registry: SectorRegistry)` — the v0.0.2 signature is therefore `constructor(canvas: HTMLCanvasElement, registry: SectorRegistry, _preRenderHook: () => void)`. See v0.0.1 Source Reference for the confirmed parameter list.
 - **Variable capture pattern:** The hook closure captures the `renderer` local variable by reference. Declare `renderer` with `let` before constructing the closure, then assign `renderer = new MapRenderer(..., hook)`. The closure is valid because `renderer` is assigned synchronously before any rAF frame fires. The §1.4 pseudocode's `renderer` references use this captured local — not `this._renderer`. Using `const` for `renderer` will fail because the variable must be read before its `const` initializer completes; use `let`.
 
 **New field:** `_lastFrameTime: number`
@@ -277,19 +323,47 @@ offFrame(callback: FrameCallback): void
   ```
   This matches the existing dirty-rect call pattern in v0.0.1 `MapRenderer.setSectorColor`.
 
+**`MapRenderer.destroy()` additions (v0.0.2):** In the existing `destroy()` body, after `cancelAnimationFrame(this._animFrameId)`, add:
+
+1. `this._preRenderHook = null` — prevents a pending rAF callback from firing the hook after teardown.
+2. `this._pendingDirtyRect = null` — discards any staged pixel writes that were never flushed. This handles the case where `renderer.destroy()` is called directly (not via `MapEngine.destroy()`). `MapEngine.destroy()` also explicitly nulls `_pendingDirtyRect` before calling `renderer.destroy()` (step 1 of the destroy sequence in §1.4) — both paths guarantee it is `null` before `_flushPendingDirty()` could be reached.
+
 All six `@internal` methods and fields allow `MapEngine` to access them directly without bracket-notation workarounds or `// @ts-ignore`. They are not part of the documented public library interface — by convention, symbols tagged `@internal` are excluded from the public API surface — but TypeScript's access modifier treats them as public. Do not mark them `private` or `protected`.
 
 #### 1.4 Batching Coordination (`MapEngine`)
 
-**New field:** `_inTick: boolean` — lives on `MapEngine`.
+**New field:** `_inTick: boolean` — lives on `MapEngine`. Initializes to `false`.
 
 - Set to `true` immediately before firing frame callbacks.
-- Set to `false` immediately after all callbacks return.
+- Set to `false` immediately after all callbacks return (always in `finally`).
 - Used by `MapEngine.setSectorColor` / `MapEngine.resetSectorColor` to select the dispatch path.
 
 **Shared color parsing utility:**
 
 Extract `parseColorToRgb(color: string): { r: number; g: number; b: number }` to `src/internal/color.ts`. This utility uses a **module-scope singleton** 1×1 `OffscreenCanvas` and its 2D context — allocated once at module load, reused on every call. Allocating a new `OffscreenCanvas` per call is unacceptable in the hot path (a tick firing 100 `setSectorColor` calls would otherwise create 100 canvas allocations per frame).
+
+**Implementation:** Replicate the exact technique from v0.0.1's `_colorParserCanvas`/`_colorParserCtx` usage in `MapRenderer.setSectorColor`:
+
+```typescript
+// src/internal/color.ts
+/** @main-thread-only — uses OffscreenCanvas; do not import from SectorRegistry or SectorBitmapParser */
+const _canvas = new OffscreenCanvas(1, 1)
+const _ctx = _canvas.getContext('2d')!
+
+export function parseColorToRgb(color: string): {
+  r: number
+  g: number
+  b: number
+} {
+  _ctx.clearRect(0, 0, 1, 1)
+  _ctx.fillStyle = color
+  _ctx.fillRect(0, 0, 1, 1)
+  const d = _ctx.getImageData(0, 0, 1, 1).data
+  return { r: d[0], g: d[1], b: d[2] }
+}
+```
+
+The `clearRect` is required to reset any previous color before assigning `fillStyle`. Invalid CSS strings cause `fillStyle` to silently retain its previous value (which `clearRect` resets to transparent black — `{r:0,g:0,b:0}`), matching v0.0.1's silent-fallback behavior exactly.
 
 `src/internal/color.ts` must carry a top-of-file JSDoc: `/** @main-thread-only — uses OffscreenCanvas; do not import from SectorRegistry or SectorBitmapParser */`. AC 3.9's grep must additionally verify `SectorRegistry.ts` does not import `./internal/color` or any file that transitively does.
 
@@ -315,7 +389,8 @@ else:
 
 **`MapEngine.resetSectorColor` dispatch logic (updated):**
 
-- Same pattern: if `_inTick`, call `_renderer._patchSectorPixelsFromSource(hexKey)` — which reads the original pixel values from `_registry.sourceBuffer` internally and stages them into `_pendingDirtyRect`. If not in a tick, call `_renderer.resetSectorColor(hexKey)` immediately. `MapEngine` must never read `_registry.sourceBuffer` directly in its reset path; all source-buffer knowledge lives in `MapRenderer`.
+- `resetSectorColor` follows the identical two-check guard pattern as `setSectorColor`: `_destroyed` is checked first (throws `'MapEngine: destroyed'`), then `_loaded` (throws `'MapEngine: not loaded — call loadMap() first'`). The `_inTick` dispatch check follows after both guards pass.
+- Same batching pattern: if `_inTick`, call `_renderer._patchSectorPixelsFromSource(hexKey)` — which reads the original pixel values from `_registry.sourceBuffer` internally and stages them into `_pendingDirtyRect`. If not in a tick, call `_renderer.resetSectorColor(hexKey)` immediately. `MapEngine` must never read `_registry.sourceBuffer` directly in its reset path; all source-buffer knowledge lives in `MapRenderer`.
 
 **Pre-render hook closure (wired in `loadMap`):**
 
@@ -361,12 +436,19 @@ this._renderer = renderer
 **Modified `loadMap()` structure (v0.0.2):** The following pseudocode shows the complete execution order of the modified `loadMap()`. The critical constraint is that no `await` may appear between the hook declaration and `new MapRenderer(..., hook)`:
 
 ```typescript
-async loadMap(bitmapUrl: string, definitionUrl: string, canvas: HTMLCanvasElement): Promise<void> {
-  // ... existing guards (re-load / destroyed checks) ...
+// v0.0.1 signature is loadMap(config: MapConfig): Promise<void>
+// where MapConfig = { bitmapUrl: string, definitionUrl: string, canvas: HTMLCanvasElement }
+// The v0.0.2 signature is UNCHANGED — this pseudocode uses shorthand names for readability.
+async loadMap(config: MapConfig): Promise<void> {
+  // ... existing guards (re-load / destroyed / in-progress checks) ...
 
-  // EXISTING: async operations — bitmap fetch/decode and definition fetch
-  const { buffer, width, height } = await SectorBitmapParser.parse(bitmapUrl)
-  const definition = await fetch(definitionUrl).then(r => r.json())
+  // EXISTING: async operations — bitmap fetch/decode and definition fetch run in parallel
+  // via Promise.all. This is v0.0.1's existing pattern — do not change it.
+  // The only structural change to loadMap() in v0.0.2 is the hook closure and MapRenderer call below.
+  const [{ buffer, width, height }, definition] = await Promise.all([
+    this._parser.parse(config.bitmapUrl),
+    fetch(config.definitionUrl).then(r => r.json()),
+  ])
 
   // EXISTING: construct registry from parsed data
   const registry = new SectorRegistry(buffer, width, height, definition)
@@ -375,8 +457,12 @@ async loadMap(bitmapUrl: string, definitionUrl: string, canvas: HTMLCanvasElemen
   // NEW (v0.0.2): build hook closure BEFORE constructing MapRenderer — no await between these two lines
   let renderer: MapRenderer
   const hook = (): void => { /* ... as shown above ... */ }
-  renderer = new MapRenderer(canvas, registry, hook)  // constructor parameter, not post-assignment
+  renderer = new MapRenderer(config.canvas, registry, hook)  // hook passed as constructor parameter (B-1)
   this._renderer = renderer
+  this._canvas = config.canvas
+
+  // EXISTING: wire canvas event listeners for picking (pointermove, click)
+  // ... existing listener wiring ...
 
   // EXISTING: mark as loaded — rAF loop has already been scheduled inside MapRenderer constructor
   this._loaded = true
@@ -669,11 +755,88 @@ No new data formats or file schemas. New type exports: `FrameCallback` (CA-1) an
 1. Advances a mocked `performance.now()` by `dtMillis` milliseconds.
 2. Directly invokes the pre-render hook closure (i.e., `renderer['_preRenderHook']?.()`) bypassing real `requestAnimationFrame`.
 
+**`advanceFrame` does not invoke `renderer.render()`.** Pixel-state assertions operate on `displayImageData.data` directly — the Three.js render pass is orthogonal to CPU-side pixel correctness. A confused agent must not call the full render pipeline in test helpers; `advanceFrame` fires the pre-render hook and nothing more.
+
+**Epic 1 and 2 test setup — using existing fixtures (resolves BLOCKER):**
+
+Epic 1 and 2 tests use `engine.loadMap(config: MapConfig)` to construct a fully loaded engine, then extract the renderer. **No mocking of `SectorBitmapParser.parse` or `fetch` is required.** The Vitest browser mode setup (Playwright) serves static files from the project root — the same fixture files used by v0.0.1's `MapEngine.test.ts` work without modification:
+
+```typescript
+const BITMAP_URL = '/test/fixtures/test-4x4.png'
+const DEFINITION_URL = '/test/fixtures/test-4x4.json'
+```
+
+The 4×4 bitmap has four sectors in **2×2 quadrant layout** — each sector occupies exactly 4 pixels:
+
+| Quadrant     | Hex key  | Pixels (col, row)          | bbox                               |
+| ------------ | -------- | -------------------------- | ---------------------------------- |
+| Top-left     | `ff0000` | (0,0), (1,0), (0,1), (1,1) | `{minX:0, minY:0, maxX:1, maxY:1}` |
+| Top-right    | `00ff00` | (2,0), (3,0), (2,1), (3,1) | `{minX:2, minY:0, maxX:3, maxY:1}` |
+| Bottom-left  | `0000ff` | (0,2), (1,2), (0,3), (1,3) | `{minX:0, minY:2, maxX:1, maxY:3}` |
+| Bottom-right | `ffff00` | (2,2), (3,2), (2,3), (3,3) | `{minX:2, minY:2, maxX:3, maxY:3}` |
+
+All 16 pixels are definition-registered sectors (no bitmap-only colors in this fixture). When testing bbox-union assertions (AC 1.3), account for 2×2 bboxes — a dirty-rect union of `ff0000` + `00ff00` spans `{minX:0, minY:0, maxX:3, maxY:1}`, producing `putImageData(..., 0, 0, 4, 2)` (width = 3-0+1 = 4, height = 1-0+1 = 2). It provides sufficient surface for all Epic 1 and 2 ACs.
+
+A `makeCanvas(width = 800, height = 600): HTMLCanvasElement` helper must be added to `test/testUtils.ts` (it currently lives only in `MapEngine.test.ts`). It creates, styles, sets `clientWidth`/`clientHeight` via `Object.defineProperty`, appends to `document.body`, and returns the canvas:
+
+```typescript
+export function makeCanvas(width = 800, height = 600): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${height}px`
+  canvas.width = width
+  canvas.height = height
+  Object.defineProperty(canvas, 'clientWidth', {
+    value: width,
+    configurable: true,
+  })
+  Object.defineProperty(canvas, 'clientHeight', {
+    value: height,
+    configurable: true,
+  })
+  document.body.appendChild(canvas)
+  return canvas
+}
+```
+
+Tests must call `canvas.remove()` and `engine.destroy()` in `afterEach` to avoid DOM and WebGL resource leaks.
+
+**Standard Epic 1/2 test preamble (use in `beforeEach`):**
+
+```typescript
+let canvas: HTMLCanvasElement
+let engine: MapEngine
+let renderer: MapRenderer
+
+beforeEach(async () => {
+  canvas = makeCanvas()
+  engine = new MapEngine()
+  await engine.loadMap({
+    bitmapUrl: BITMAP_URL,
+    definitionUrl: DEFINITION_URL,
+    canvas,
+  })
+  renderer = engine['_renderer'] as MapRenderer
+})
+
+afterEach(() => {
+  engine?.destroy()
+  canvas?.remove()
+  vi.useRealTimers()
+})
+```
+
+`vi.useFakeTimers({ toFake: ['performance'] })` is called inside individual tests or in a `beforeEach` alongside the preamble above — not shown here to keep the preamble minimal. The `afterEach` must always call `vi.useRealTimers()` to avoid cross-test contamination.
+
 **Extracting the renderer in tests:** Tests that construct a `MapEngine` and call `loadMap` must extract the renderer via `engine['_renderer']` (bracket notation, per the private-field access convention). Epic 1 and 2 tests will typically follow this pattern:
 
 ```typescript
 const engine = new MapEngine()
-await engine.loadMap(bitmapUrl, definitionUrl, canvas)
+await engine.loadMap({
+  bitmapUrl: BITMAP_URL,
+  definitionUrl: DEFINITION_URL,
+  canvas,
+})
 const renderer = engine['_renderer'] as MapRenderer
 // pass renderer to advanceFrame
 ```
@@ -746,7 +909,7 @@ Every feature that adds or changes the public API of the library must be accompa
 - **Prerequisite (B-4):** Before implementing this AC, verify that `SectorBBox` uses **inclusive** `maxX`/`maxY` bounds by reading v0.0.1's `SectorRegistry.ts` bbox-building code (the loop that expands the bbox as pixels are scanned). Additionally, a unit test must directly assert: `registry.bboxes.get(someHexKey).maxX` equals the largest x-coordinate actually occupied by any pixel of that sector (confirming inclusive semantics, not one-past). This check guards every `+1` in the dirty-rect formula.
 - Given two `setSectorColor` calls to different sectors inside a single frame callback: test harness spies on `displayCtx.putImageData`, advances one frame, and asserts `spy.mock.calls.length === 1` (not two).
 - The `putImageData` call passes `(displayImageData, 0, 0, dx, dy, dw, dh)` where `dx = min(bbox1.minX, bbox2.minX)`, `dy = min(bbox1.minY, bbox2.minY)`, `dw = max(bbox1.maxX, bbox2.maxX) - dx + 1`, `dh = max(bbox1.maxY, bbox2.maxY) - dy + 1` — the minimal axis-aligned bounding box union of the two sectors' `SectorBBox` values (inclusive bounds converted to width/height via +1).
-- Pixel state is correct after the flush: both sectors show the correct colors.
+- Pixel state is correct after the flush: for each sector, read `renderer['displayImageData'].data` at a known byte offset — `const byteOffset = registry.pixelIndices.get(hexKey)![0] * 4` — and assert `data[byteOffset]`, `data[byteOffset+1]`, `data[byteOffset+2]` match the `r`, `g`, `b` components of the color passed to `setSectorColor`. Use `parseColorToRgb` (the shared utility) to convert the CSS color string to `{r,g,b}` for the assertion. Both sectors must show their correct colors in `displayImageData.data` before any `renderer.render()` call.
 - `renderer['_texture'].needsUpdate` is set exactly once per frame when dirty state exists from a frame callback.
 
 **1.4 — Immediate flush outside frame callback**
@@ -776,6 +939,7 @@ Every feature that adds or changes the public API of the library must be accompa
 **1.9 — Invalid CSS color string parity (M-11)**
 
 - `engine.setSectorColor(hexKey, '###not-valid###')` fills the sector with RGB `(0, 0, 0)` (black) without throwing an exception. This verifies that `parseColorToRgb`'s silent-fallback behavior matches v0.0.1's `OffscreenCanvas`-based color parser. Test both the batched path (`_inTick === true`) and the immediate path (`_inTick === false`) to confirm parity in both dispatch routes.
+- **Sequential-call clearRect test:** Call `engine.setSectorColor(hexKey, 'red')` (sets sector to red), then immediately call `engine.setSectorColor(hexKey, '###not-valid###')`. Assert the sector's pixels are `(0, 0, 0)` (black), **not** `(255, 0, 0)` (red). This confirms `_ctx.clearRect(0, 0, 1, 1)` in `parseColorToRgb` resets the singleton canvas state between calls — without `clearRect`, the invalid color string would leave `fillStyle` at its previous `'red'` value, producing the wrong color.
 
 **1.10 — Import isolation (M-7)**
 
@@ -798,7 +962,7 @@ Every feature that adds or changes the public API of the library must be accompa
 - After priming: `advanceFrame(renderer, 2000)` with speed 0.5× and `ticksPerSecond: 1`. Assert exactly 1 tick fires.
 - Tick callbacks fire in `onTick` registration order within a single tick.
 - When asserting accumulator state, use `expect(clock['_accumulator']).toBeCloseTo(0, 10)` rather than strict `=== 0` to guard against sub-nanosecond IEEE-754 residuals.
-- **onTick-during-tick behavior (B-5):** A `ClockTickCallback` that calls `onTick(newCb)` during tick N causes `newCb` to fire on tick N+1 within the same frame (per-tick snapshot semantics). Verify: construct a `GameClock` with `ticksPerSecond: 1`. Register a callback via `onTick` that, on its first invocation (`elapsed === 1`), calls `onTick(newCb)` and then removes itself via `offTick`. After priming, call `clock.setSpeed(10)` then `advanceFrame(renderer, 1000)` — this produces 10 ticks. Assert `newCb` receives `elapsed === 2, 3, ..., 10` (9 calls total within that same frame).
+- **onTick-during-tick behavior (B-5):** A `ClockTickCallback` that calls `onTick(newCb)` during tick N causes `newCb` to fire on tick N+1 within the same frame (per-tick snapshot semantics). Verify: construct a `GameClock` with `ticksPerSecond: 1`. Register a callback via `onTick` that, on its first invocation (`elapsed === 1`), calls `onTick(newCb)` and then removes itself via `offTick`. Prime with `advanceFrame(renderer, 1)` (dt = 0, no ticks fire). Then call `clock.setSpeed(10)` then `advanceFrame(renderer, 1000)` — dt = 1.0s × speed 10 = 10.0 accumulated seconds → 10 ticks. Assert `newCb` receives `elapsed === 2, 3, ..., 10` (9 calls total within that same frame).
 
 **2.2 — Pause / resume**
 
@@ -974,30 +1138,34 @@ Every feature that adds or changes the public API of the library must be accompa
 
 ---
 
-<!-- RESOLVED DECISIONS — formerly OPEN ITEMS:
+## RESOLVED DECISIONS
 
-1. getNeighbors pre-load guard: RESOLVED — throws 'MapEngine: not loaded — call loadMap() first',
-   consistent with the existing guard pattern on all other state-dependent MapEngine methods
-   (getSector, getSectorKeys, setSectorColor, resetSectorColor). See §3.2.
+All open questions and reviewer-cycle resolutions for traceability:
 
-2. Epic file structure: RESOLVED — agents implement directly against this PRD.
-   Per-epic task files in docs/active/epics/ are populated by the BDFL before handoff.
-   If absent, implement sequentially against the §CORE FUNCTIONALITY sections in order:
-   Epic 1 (CA-1) → Epic 2 (CA-9) → Epic 3 (CA-2).
-
-3. Test harness for dt timing: RESOLVED — Vitest + @vitest/browser with testUtils.advanceFrame(renderer, dtMillis)
-   exported from test/testUtils.ts. Uses vi.useFakeTimers({ toFake: ['performance'] }) + vi.advanceTimersByTime(dtMillis),
-   then directly invokes the pre-render hook closure, bypassing real rAF. Frame callbacks receive
-   dt = dtMillis / 1000 seconds. testUtils.ts is a deliverable of Epic 1.
-   Sentinel: _lastFrameTime initializes to -1 (not 0). Priming: first advanceFrame call always produces
-   dt=0; tests needing dt>0 must call advanceFrame(renderer, 1) once first to set _lastFrameTime to a
-   valid (non-sentinel) value. See Test Harness Strategy for prescribed mocking approach.
-
-4. AC 3.8 scan time: RESOLVED — code review criterion only (no automated grep). Reviewer confirms by
-   reading SectorRegistry.ts that adjacency write logic resides in the same pixel-iteration block as
-   borderEdges. The for (let y) grep was removed due to false-positive/false-negative risk. See AC 3.8.
-
-5. GameClock export path: RESOLVED — top-level named export from src/index.ts alongside MapEngine.
-   GameClock is imported from 'map-engine' directly, not a sub-path.
-
--->
+| ID        | Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **OQ-1**  | `getNeighbors` pre-load guard: throws `'MapEngine: not loaded — call loadMap() first'`, consistent with the existing guard pattern on all other state-dependent `MapEngine` methods (`getSector`, `getSectorKeys`, `setSectorColor`, `resetSectorColor`). See §3.2.                                                                                                                                                                                                                                                                                                             |
+| **OQ-2**  | Epic file structure: agents implement directly against this PRD. Per-epic task files in `docs/active/epics/` are populated by the BDFL before handoff. If absent, implement sequentially: Epic 1 (CA-1) → Epic 2 (CA-9) → Epic 3 (CA-2).                                                                                                                                                                                                                                                                                                                                        |
+| **OQ-3**  | Test harness for dt timing: Vitest + `@vitest/browser` with `testUtils.advanceFrame(renderer, dtMillis)` exported from `test/testUtils.ts`. Uses `vi.useFakeTimers({ toFake: ['performance'] })` + `vi.advanceTimersByTime(dtMillis)`, then directly invokes the pre-render hook closure, bypassing real rAF. Frame callbacks receive `dt = dtMillis / 1000` seconds. `_lastFrameTime` initializes to `-1` (sentinel). First `advanceFrame` call always produces `dt = 0`; tests needing `dt > 0` must prime with `advanceFrame(renderer, 1)` first. See Test Harness Strategy. |
+| **OQ-4**  | AC 3.8 scan-time verification: code review criterion only (no automated grep). Reviewer confirms by reading `SectorRegistry.ts` that adjacency write logic resides in the same pixel-iteration block as `borderEdges`. `for (let y)` grep removed due to false-positive/false-negative risk. See AC 3.8.                                                                                                                                                                                                                                                                        |
+| **OQ-5**  | `GameClock` export path: top-level named export from `src/index.ts` alongside `MapEngine`. Imported from `'map-engine'` directly, not a sub-path.                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **R1-1**  | MAJOR: `MapRenderer` v0.0.1 constructor signature confirmed and added to Source Reference: `constructor(canvas: HTMLCanvasElement, registry: SectorRegistry)`. v0.0.2 signature: `constructor(canvas: HTMLCanvasElement, registry: SectorRegistry, _preRenderHook: () => void)`. Pseudocode updated to reflect actual `MapConfig` signature of `loadMap`.                                                                                                                                                                                                                       |
+| **R1-2**  | MINOR: `parseColorToRgb` implementation body added to §1.4: replicates the v0.0.1 `fillStyle`/`fillRect`/`getImageData` pattern. Module-scope singleton `OffscreenCanvas`. `clearRect` required before each parse to reset fallback state. Invalid CSS strings silently produce `{r:0,g:0,b:0}`.                                                                                                                                                                                                                                                                                |
+| **R1-3**  | MINOR: `resetSectorColor` guard order made explicit in §1.4: `_destroyed` checked first (throws), then `_loaded` (throws), then `_inTick` dispatch — identical two-check pattern as `setSectorColor`.                                                                                                                                                                                                                                                                                                                                                                           |
+| **R1-4**  | MINOR: Note added to Test Harness Strategy: `advanceFrame` does not invoke `renderer.render()`. Pixel-state assertions operate on `displayImageData.data` directly — Three.js render pass is orthogonal to CPU-side pixel correctness.                                                                                                                                                                                                                                                                                                                                          |
+| **R1-5**  | MAJOR: AC 1.3 pixel-correctness assertion technique specified: read `renderer['displayImageData'].data[byteOffset]` where `byteOffset = registry.pixelIndices.get(hexKey)![0] * 4`; assert `r`, `g`, `b` match the CSS color passed to `setSectorColor` (convert via `parseColorToRgb`).                                                                                                                                                                                                                                                                                        |
+| **R1-6**  | BLOCKER: Epic 1/2 test setup specified in Test Harness Strategy. No mocking required. Tests use existing fixtures (`'/test/fixtures/test-4x4.png'`, `'/test/fixtures/test-4x4.json'`) served by Vitest browser mode. `makeCanvas()` helper moved to `test/testUtils.ts`. Standard `beforeEach`/`afterEach` preamble provided. `loadMap` takes `MapConfig` object — `{ bitmapUrl, definitionUrl, canvas }`.                                                                                                                                                                      |
+| **R1-7**  | MINOR: `_canvas: HTMLCanvasElement \| null` added to Source Reference fields table for `MapEngine`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **R1-8**  | MINOR: `onFrame`/`offFrame` destroyed-guard semantics made explicit: both return without effect when `_destroyed === true`, no error thrown. `on()`/`off()` throw on destroyed; `onFrame`/`offFrame` intentionally do not — this difference is now stated in §1.2.                                                                                                                                                                                                                                                                                                              |
+| **R1-9**  | MAJOR: `SectorDefinitionFile` type shape added to Source Reference: `Record<string, SectorData>` where `SectorData = { name: string; [key: string]: unknown }`. Concrete test literal shown. Keys are lowercase hex strings without `#` prefix.                                                                                                                                                                                                                                                                                                                                 |
+| **R1-10** | MAJOR: `offFrame` post-destroy behavior made unambiguous in §1.2: no-op, does not throw. This ensures `GameClock.destroy()` calling `engine.offFrame(...)` after `engine.destroy()` is always safe.                                                                                                                                                                                                                                                                                                                                                                             |
+| **R1-11** | MINOR: `MapRenderer.destroy()` additions specified in §1.3: after `cancelAnimationFrame`, set `this._preRenderHook = null` then `this._pendingDirtyRect = null`, before other cleanup. Prevents stale hook invocation and discards staged writes on direct `renderer.destroy()` calls.                                                                                                                                                                                                                                                                                          |
+| **R1-12** | MINOR: `_inTick` initial value stated in §1.4: initializes to `false`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **R1-13** | MINOR: `_pendingDirtyRect` cleared in `MapRenderer.destroy()` — both `MapEngine.destroy()` (step 1) and `MapRenderer.destroy()` now explicitly null it, ensuring no post-destroy `putImageData` call regardless of call path.                                                                                                                                                                                                                                                                                                                                                   |
+| **R1-14** | MINOR: AC 2.1 B-5 priming call made explicit: `advanceFrame(renderer, 1)` (dt = 0, no ticks fire) before `clock.setSpeed(10)` and `advanceFrame(renderer, 1000)`.                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **R2-1**  | MAJOR: Test fixture pixel layout corrected in Test Harness Strategy. The 4×4 bitmap has four **2×2 quadrants** (4 pixels each, 16 total) — not "one pixel each." Exact layout, per-sector bboxes, and a sample dirty-rect union calculation (`ff0000` + `00ff00` → `putImageData(..., 0, 0, 4, 2)`) added to guard against incorrect bbox-union assertions.                                                                                                                                                                                                                     |
+| **R2-2**  | MINOR: `_parser: SectorBitmapParser` added to Source Reference fields table for `MapEngine`. Instance field constructed once in `MapEngine` constructor, retained for lifetime. `loadMap` pseudocode already used `this._parser.parse(...)` — now documented.                                                                                                                                                                                                                                                                                                                   |
+| **R2-3**  | MINOR: rAF null-guard for `_preRenderHook` added to §1.3: the rAF callback must use `if (this._preRenderHook) this._preRenderHook()` to handle the edge case where `cancelAnimationFrame` was called but the callback was already dispatched.                                                                                                                                                                                                                                                                                                                                   |
+| **R2-4**  | MINOR: `MapConfig` type shape added to Source Reference: `{ bitmapUrl: string, definitionUrl: string, canvas: HTMLCanvasElement }` — complete and exhaustive.                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **R2-5**  | MINOR: Sequential-call `clearRect` test added to AC 1.9: `setSectorColor('red')` then `setSectorColor('###invalid###')` must yield black `(0,0,0)`, confirming `clearRect` resets the singleton parser state between calls.                                                                                                                                                                                                                                                                                                                                                     |
+| **R2-6**  | MINOR: `Promise.all` note added to `loadMap` pseudocode: the parallel-fetch pattern is v0.0.1's existing structure — preserve it. The only structural change to `loadMap` in v0.0.2 is the hook closure and updated `MapRenderer` constructor call.                                                                                                                                                                                                                                                                                                                             |
