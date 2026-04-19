@@ -171,8 +171,17 @@ all bump `v0.0.y` while this era is active.
 **Every session must follow this protocol:**
 
 1. **Read `docs/active/PROGRESS.md` first.** It tells you exactly what has been done, what is in progress, what is blocked, and where the last session left off. Never start implementation work without reading it.
-2. **Check if a development cycle is active.** If the Task Registry is empty or the active version is `None`, stop — do not begin implementation. Wait for the user to populate `docs/active/PRD.md` and `docs/active/epics/` to start the next cycle.
+2. **Check if a development cycle is active.** If the Task Registry is empty or the active version is `None`, stop — do not begin implementation. Wait for the user to explicitly start the sprint (see Sprint Activation rule below).
 3. **Find the next task.** The Task Registry lists all tasks with their current status. Pick up from the first `[ ]` (not started) or `[~]` (in progress) task.
 4. **Read the epic file for that task.** Epic files are in `docs/active/epics/`. They contain the full work spec, PRD references, and done-when criteria for every task.
 5. **Cross-reference the PRD.** `docs/active/PRD.md` is the canonical authority. Epic files cite specific PRD sections — go there for algorithm details and acceptance criteria.
 6. **Update `docs/active/PROGRESS.md` when done.** Before closing a session: mark completed tasks `[x]`, mark any blocked task `[!]`, append a Session Log entry (date, tasks touched, outcome, decisions made, where you left off), and add any non-obvious discoveries to Lessons Learned.
+
+### Sprint Activation — BDFL-Only, Non-Negotiable
+
+**The BDFL (user) is the sole authority on when a sprint starts. This rule has no exceptions.**
+
+- **Epic files existing in `docs/active/epics/` does NOT mean a sprint is active.** They are preparation artifacts — written ahead of time so the sprint is ready to start, not a signal that it has started.
+- **Never autonomously populate the Task Registry** in `docs/active/PROGRESS.md` or change the Current Status from `NO ACTIVE SPRINT` to active. These edits must only happen when the BDFL gives explicit, intentional instruction to start the sprint in the current session.
+- **Never infer sprint start from context.** The presence of epic files, a finalized PRD, or any other preparation work is not authorization to begin. Wait for the explicit "start the sprint" instruction.
+- When the BDFL does start the sprint, the activation sequence is: update Current Status, populate the Task Registry with all epics and tasks, then begin Task 1.1 of Epic 1.
