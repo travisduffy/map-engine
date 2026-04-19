@@ -49,7 +49,15 @@
 
 ## Task Registry
 
-<!-- TODO: Populate with epics and tasks when a new development cycle begins. -->
+<!-- ⚠️  SPRINT ACTIVATION IS A BDFL-ONLY ACTION ⚠️
+     The presence of epic files in docs/active/epics/ does NOT mean a sprint is active.
+     Do NOT populate this Task Registry and do NOT change Current Status to active unless
+     the BDFL (user) has given explicit, intentional instruction to start the sprint in
+     this session. Epic files are preparation artifacts. The sprint starts only when the
+     BDFL says so — never autonomously.
+-->
+
+<!-- TODO: Populate with epics and tasks when the BDFL explicitly starts the sprint. -->
 <!-- Format each epic as shown below:
 
 ### Epic N: [Epic Title]
@@ -62,7 +70,7 @@
 
 -->
 
-_(No active tasks. Populate when the next development cycle begins.)_
+_(No active tasks. Sprint not yet started — awaiting BDFL instruction to begin.)_
 
 ---
 
