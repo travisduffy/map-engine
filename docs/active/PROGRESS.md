@@ -42,7 +42,7 @@
 
 **Phase:** Active — v0.0.2 development in progress
 **Active version:** v0.0.2
-**Next task:** Task 3.1 — `SectorRegistry.adjacency` and Deprecations
+**Next task:** Task 3.2 — `MapEngine.getNeighbors`
 **Blocking issues:** None
 
 ---
@@ -75,7 +75,7 @@
 
 | Status | Task    | Description                                 |
 | ------ | ------- | ------------------------------------------- |
-| `[ ]`  | **3.1** | `SectorRegistry.adjacency` and Deprecations |
+| `[x]`  | **3.1** | `SectorRegistry.adjacency` and Deprecations |
 | `[ ]`  | **3.2** | `MapEngine.getNeighbors`                    |
 | `[ ]`  | **3.3** | Epic 3 Tests and Example App                |
 
@@ -102,6 +102,20 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-20 — Task 3.1: `SectorRegistry.adjacency` and Deprecations
+
+**Tasks touched:** 3.1
+**Outcome:** completed
+
+**What happened:**
+Added `readonly adjacency: ReadonlyMap<string, ReadonlySet<string>>` to `SectorRegistry`. Pre-scan step initializes `adjacencyMutable` with empty sets for all definition-registered keys. Inside the existing O(W×H) scan, alongside `borderEdges` logic, computed `isDefinedSector` once per pixel and added bidirectional adjacency entries when both pixel and its right/bottom neighbor are in `_sectorMap`. Post-scan casts and assigns `this.adjacency`. Added `@deprecated` JSDoc to `borderEdges` field (exact PRD §3.3 wording) and `BorderEdge` type in `types.ts`. All 174 tests pass; typecheck and build clean.
+
+**Decisions made:**
+No ambiguities — all implementation details fully specified by epic and PRD.
+
+**Left off at:**
+Task 3.1 complete. Next: Task 3.2 — `MapEngine.getNeighbors`.
 
 ### 2026-04-20 — Task 2.2: Epic 2 Tests and Example App
 

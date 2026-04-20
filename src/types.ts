@@ -13,6 +13,10 @@ export interface MapConfig {
 
 /**
  * A pixel-boundary edge between two adjacent sectors.
+ * @deprecated Use `SectorRegistry.adjacency` for neighbor queries. `BorderEdge` retains
+ * richer spatial data (exact pixel coordinates of each edge segment) not exposed by
+ * `adjacency`. Retained until Dynamic Perimeter Rendering (CA-6) determines whether
+ * a more structured perimeter representation supersedes it.
  * @experimental — shape may change in a future version
  */
 export interface BorderEdge {
