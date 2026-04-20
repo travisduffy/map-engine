@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { SectorRegistry } from './SectorRegistry'
+import { parseColorToRgb } from './internal/color'
 
 export class MapRenderer {
   readonly scene: THREE.Scene
@@ -14,8 +15,6 @@ export class MapRenderer {
   readonly displayCtx: OffscreenCanvasRenderingContext2D
   readonly displayImageData: ImageData
   private readonly _texture: THREE.CanvasTexture<OffscreenCanvas>
-  private readonly _colorParserCanvas: OffscreenCanvas
-  private readonly _colorParserCtx: OffscreenCanvasRenderingContext2D
 
   // Stored for pan/zoom in Tasks 2.5/2.6
   protected readonly _canvas: HTMLCanvasElement
@@ -131,10 +130,6 @@ export class MapRenderer {
       registry.height
     )
     this.displayCtx.putImageData(this.displayImageData, 0, 0)
-
-    // Color parser helper — created once, reused in setSectorColor
-    this._colorParserCanvas = new OffscreenCanvas(1, 1)
-    this._colorParserCtx = this._colorParserCanvas.getContext('2d')!
 
     // CanvasTexture wired to the display OffscreenCanvas
     this._texture = new THREE.CanvasTexture(displayCanvas)
@@ -331,14 +326,7 @@ export class MapRenderer {
       return
     }
 
-    // Parse CSS color via 1×1 canvas
-    this._colorParserCtx.clearRect(0, 0, 1, 1)
-    this._colorParserCtx.fillStyle = color
-    this._colorParserCtx.fillRect(0, 0, 1, 1)
-    const parsed = this._colorParserCtx.getImageData(0, 0, 1, 1).data
-    const r = parsed[0]
-    const g = parsed[1]
-    const b = parsed[2]
+    const { r, g, b } = parseColorToRgb(color)
 
     // Write color to all pixels in this sector
     const indices = this._registry.pixelIndices.get(hexKey)!

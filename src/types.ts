@@ -31,6 +31,12 @@ export interface SectorBBox {
   maxY: number
 }
 
+// dt is elapsed wall-clock seconds since the previous frame (e.g. 0.01667 at 60fps).
+// On the very first rAF frame after loadMap() completes, dt === 0.
+// On all subsequent frames, dt is elapsed wall-clock seconds since the previous frame,
+// regardless of when a given callback was registered via onFrame.
+export type FrameCallback = (dt: number) => void
+
 /** Result of a successful pick operation. */
 export interface PickResult {
   hexKey: string

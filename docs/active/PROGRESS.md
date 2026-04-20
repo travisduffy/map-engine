@@ -53,31 +53,31 @@
 
 > Full spec: `docs/active/epics/epic-1-frame-hook.md`
 
-| Status | Task    | Description |
-| ------ | ------- | ----------- |
-| `[ ]`  | **1.1** | Shared Color Utility and Test Infrastructure |
-| `[ ]`  | **1.2** | `MapRenderer` Batching Internals |
+| Status | Task    | Description                                    |
+| ------ | ------- | ---------------------------------------------- |
+| `[x]`  | **1.1** | Shared Color Utility and Test Infrastructure   |
+| `[ ]`  | **1.2** | `MapRenderer` Batching Internals               |
 | `[ ]`  | **1.3** | `MapEngine` Hook Wiring, Dispatch, and Destroy |
-| `[ ]`  | **1.4** | Epic 1 Tests and Example App |
+| `[ ]`  | **1.4** | Epic 1 Tests and Example App                   |
 
 ### Epic 2: The Game Clock
 
 > Full spec: `docs/active/epics/epic-2-game-clock.md`
 
-| Status | Task    | Description |
-| ------ | ------- | ----------- |
-| `[ ]`  | **2.1** | `GameClock` Implementation |
+| Status | Task    | Description                  |
+| ------ | ------- | ---------------------------- |
+| `[ ]`  | **2.1** | `GameClock` Implementation   |
 | `[ ]`  | **2.2** | Epic 2 Tests and Example App |
 
 ### Epic 3: The Adjacency Graph
 
 > Full spec: `docs/active/epics/epic-3-adjacency-graph.md`
 
-| Status | Task    | Description |
-| ------ | ------- | ----------- |
+| Status | Task    | Description                                 |
+| ------ | ------- | ------------------------------------------- |
 | `[ ]`  | **3.1** | `SectorRegistry.adjacency` and Deprecations |
-| `[ ]`  | **3.2** | `MapEngine.getNeighbors` |
-| `[ ]`  | **3.3** | Epic 3 Tests and Example App |
+| `[ ]`  | **3.2** | `MapEngine.getNeighbors`                    |
+| `[ ]`  | **3.3** | Epic 3 Tests and Example App                |
 
 ---
 
@@ -103,7 +103,19 @@
 
 -->
 
-_(No sessions logged yet.)_
+### 2026-04-20 — Task 1.1: Shared Color Utility and Test Infrastructure
+
+**Tasks touched:** 1.1
+**Outcome:** completed
+
+**What happened:**
+Added `FrameCallback` type to `src/types.ts`. Created `src/internal/color.ts` with module-scope OffscreenCanvas singleton and `parseColorToRgb`. Removed `_colorParserCanvas`/`_colorParserCtx` from `MapRenderer` and updated `setSectorColor` to use the shared utility. Created `test/testUtils.ts` exporting `makeCanvas`, `advanceFrame`, and `buildTestBuffer`. Removed the local `makeCanvas` definition from `test/MapEngine.test.ts` and replaced with import from `./testUtils`.
+
+**Decisions made:**
+No ambiguities — all implementation details were fully specified by the epic and PRD.
+
+**Left off at:**
+Task 1.1 complete. Next: Task 1.2 — `MapRenderer` Batching Internals.
 
 ---
 
