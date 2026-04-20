@@ -39,6 +39,7 @@ const btnClockSpeedHalf = document.getElementById('btn-clock-speed-half')!
 const btnClockSpeed1 = document.getElementById('btn-clock-speed-1')!
 const btnClockSpeed2 = document.getElementById('btn-clock-speed-2')!
 const btnClockSpeed5 = document.getElementById('btn-clock-speed-5')!
+const neighborOutputEl = document.getElementById('neighbor-output')!
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,9 @@ let gameClock: GameClock | null = null
 let frameCount = 0
 let pulseHexKey: string | null = null
 let pulsePhase = 0
+
+// Neighbor highlight state
+let previousNeighbors = new Set<string>()
 
 // ─── Hover handler (declared separately so we can off() it) ──────────────────
 
@@ -81,6 +85,28 @@ function onHover(result: PickResult | null): void {
 
 // ─── Click handler ───────────────────────────────────────────────────────────
 
+function applyNeighborHighlights(hexKey: string): void {
+  const neighbors = engine!.getNeighbors(hexKey)
+  if (!neighbors) return
+  const keys: string[] = []
+  for (const hex of neighbors) {
+    if (hex !== selectedHex) {
+      engine!.setSectorColor(hex, '#aaccff')
+      previousNeighbors.add(hex)
+      keys.push(hex)
+    }
+  }
+  neighborOutputEl.textContent = keys.length > 0 ? keys.join(', ') : '(none)'
+}
+
+function resetNeighborHighlights(exceptHex: string | null = null): void {
+  for (const hex of previousNeighbors) {
+    if (hex !== exceptHex) engine!.resetSectorColor(hex)
+  }
+  previousNeighbors.clear()
+  neighborOutputEl.textContent = '—'
+}
+
 function onClick(result: PickResult): void {
   if (selectedHex === result.hexKey) {
     // Deselect
@@ -88,6 +114,7 @@ function onClick(result: PickResult): void {
     pulseHexKey = null
     pulsePhase = 0
     engine!.resetSectorColor(wasSelected)
+    resetNeighborHighlights()
     selectedHex = null
     clearSelectedPanel()
     // Re-apply hover highlight if still hovering the same sector
@@ -97,10 +124,13 @@ function onClick(result: PickResult): void {
   } else {
     // Move selection: release previous, start pulsing new
     if (selectedHex) engine!.resetSectorColor(selectedHex)
+    // Reset previous neighbor highlights; skip the new selection to avoid flash
+    resetNeighborHighlights(result.hexKey)
     pulseHexKey = result.hexKey
     pulsePhase = 0
     selectedHex = result.hexKey
     renderSelectedPanel(result)
+    applyNeighborHighlights(result.hexKey)
   }
 }
 
@@ -163,6 +193,8 @@ function stopEngine(): void {
   clockSpeedEl.textContent = 'Speed: 1×'
   pulseHexKey = null
   pulsePhase = 0
+  previousNeighbors.clear()
+  neighborOutputEl.textContent = '—'
 }
 
 // ─── UI rendering helpers ─────────────────────────────────────────────────────

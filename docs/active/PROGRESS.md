@@ -42,7 +42,7 @@
 
 **Phase:** Active — v0.0.2 development in progress
 **Active version:** v0.0.2
-**Next task:** Task 3.3 — Epic 3 Tests and Example App
+**Next task:** None — all tasks complete
 **Blocking issues:** None
 
 ---
@@ -77,7 +77,7 @@
 | ------ | ------- | ------------------------------------------- |
 | `[x]`  | **3.1** | `SectorRegistry.adjacency` and Deprecations |
 | `[x]`  | **3.2** | `MapEngine.getNeighbors`                    |
-| `[ ]`  | **3.3** | Epic 3 Tests and Example App                |
+| `[x]`  | **3.3** | Epic 3 Tests and Example App                |
 
 ---
 
@@ -102,6 +102,22 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-20 — Task 3.3: Epic 3 Tests and Example App
+
+**Tasks touched:** 3.3
+**Outcome:** completed
+
+**What happened:**
+Created `test/AdjacencyGraph.test.ts` with 14 tests covering ACs 3.1–3.7, 3.9, 3.11, and pre-load guard. Direct `SectorRegistry` construction tests use `buildTestBuffer` with hand-built pixel buffers; MapEngine tests (ACs 3.6, 3.11, pre-load guard) use `loadMap` with beforeEach/afterEach. Added `<section id="neighbor-panel">` to `example/index.html` with `<div id="neighbor-output">`. Updated `example/src/main.ts` with `previousNeighbors` state, `neighborOutputEl` ref, and two helpers (`applyNeighborHighlights`, `resetNeighborHighlights`). The `onClick` handler now resets previous neighbor highlights on each click before applying new ones, skipping `selectedHex` to avoid fighting the pulse loop. All 188 tests pass; typecheck and build clean.
+
+**Decisions made:**
+
+- AC 3.7 `@deprecated` annotation check: JSDoc is stripped by esbuild when Vite serves `.ts` files — cannot be verified via `fetch('/src/...')`. The annotation is confirmed present by reading source directly; the automated test covers only behavioral correctness of `borderEdges`.
+- AC 3.8 (no second scan pass) is a code-review criterion per the epic; no automated test added.
+
+**Left off at:**
+Task 3.3 complete. Epic 3 fully done. All v0.0.2 tasks complete.
 
 ### 2026-04-20 — Task 3.2: `MapEngine.getNeighbors`
 
@@ -238,6 +254,7 @@ Task 1.1 complete. Next: Task 1.2 — `MapRenderer` Batching Internals.
 
 > Non-obvious things discovered during implementation that future sessions should know. Append entries; do not delete old ones.
 
+- **`@deprecated` JSDoc is stripped by esbuild** — `fetch('/src/File.ts')` in browser tests returns compiled JS with comments removed. Annotations like `@deprecated` cannot be verified via source fetch; use code review instead.
 - **`Texture.needsUpdate` is write-only in Three.js** — reading it returns `undefined`. Tests that need to verify a texture flush should assert `_texture.version` delta instead.
 - **`parseColorToRgb` needs explicit fillStyle reset** — `clearRect` alone does not reset the fillStyle; calling `_ctx.fillStyle = '#000000'` before `_ctx.fillStyle = color` is required so invalid CSS strings fall back to black rather than the previous valid color.
 - **AC 1.10 grep isolation in browser tests** — use `fetch('/src/FileName.ts')` to load source files as text in Vitest browser mode; Vite serves them from the dev server.
