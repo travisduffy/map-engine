@@ -42,7 +42,7 @@
 
 **Phase:** Active — v0.0.2 development in progress
 **Active version:** v0.0.2
-**Next task:** Task 3.2 — `MapEngine.getNeighbors`
+**Next task:** Task 3.3 — Epic 3 Tests and Example App
 **Blocking issues:** None
 
 ---
@@ -76,7 +76,7 @@
 | Status | Task    | Description                                 |
 | ------ | ------- | ------------------------------------------- |
 | `[x]`  | **3.1** | `SectorRegistry.adjacency` and Deprecations |
-| `[ ]`  | **3.2** | `MapEngine.getNeighbors`                    |
+| `[x]`  | **3.2** | `MapEngine.getNeighbors`                    |
 | `[ ]`  | **3.3** | Epic 3 Tests and Example App                |
 
 ---
@@ -102,6 +102,20 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-20 — Task 3.2: `MapEngine.getNeighbors`
+
+**Tasks touched:** 3.2
+**Outcome:** completed
+
+**What happened:**
+Added `getNeighbors(hexKey: string): ReadonlySet<string> | undefined` to `MapEngine` following the established two-check guard pattern (`_destroyed` first, `_loaded` second). Body is a one-liner: `return this._registry!.adjacency.get(hexKey)`. Typecheck and build pass cleanly.
+
+**Decisions made:**
+No ambiguities — fully specified by epic and PRD.
+
+**Left off at:**
+Task 3.2 complete. Next: Task 3.3 — Epic 3 Tests and Example App.
 
 ### 2026-04-20 — Task 3.1: `SectorRegistry.adjacency` and Deprecations
 
