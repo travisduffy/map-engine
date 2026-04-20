@@ -103,6 +103,20 @@
 
 -->
 
+### 2026-04-20 — Post-1.4 example app deviation: pulse tied to selected sector
+
+**Tasks touched:** (no task — out-of-band improvement)
+**Outcome:** completed
+
+**What happened:**
+Changed `example/src/main.ts` so the hue-cycle pulse (onFrame demo) only fires on the currently selected sector rather than the statically hardcoded first sector. `pulseHexKey` is now set in `onClick` on select and cleared on deselect. `SELECT_COLOR` constant removed — the pulse drives the selected sector's color entirely. Epic 1's "Done when" criterion ("pulsing sector visible at localhost:3000") is still satisfied; the pulse is just interaction-driven rather than unconditional.
+
+**Decisions made:**
+No PRD or epic change required for Epic 2 — its AC 2.10 instruction to read the file in full before editing covers the new state. Epic 3 AC 3.10 was updated with an explicit implementation note warning that `selectedHex` is pulsed every frame and neighbor highlights must not be applied to it, and that previous neighbors must be reset carefully to avoid touching `selectedHex`.
+
+**Left off at:**
+Example app is in a clean state. Next task: 2.1 — `GameClock` Implementation.
+
 ### 2026-04-20 — Task 1.4: Epic 1 Tests and Example App
 
 **Tasks touched:** 1.4

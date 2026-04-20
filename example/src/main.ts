@@ -37,7 +37,6 @@ const frameCounterEl = document.getElementById('frame-counter')!
 let engine: MapEngine | null = null
 let lastHovered: string | null = null
 let selectedHex: string | null = null
-const SELECT_COLOR = '#ffe066'
 
 // Frame hook state
 let frameCount = 0
@@ -77,6 +76,8 @@ function onClick(result: PickResult): void {
   if (selectedHex === result.hexKey) {
     // Deselect
     const wasSelected = selectedHex
+    pulseHexKey = null
+    pulsePhase = 0
     engine!.resetSectorColor(wasSelected)
     selectedHex = null
     clearSelectedPanel()
@@ -85,9 +86,10 @@ function onClick(result: PickResult): void {
       engine!.setSectorColor(wasSelected, '#e8e8d0')
     }
   } else {
-    // Move selection: release previous, highlight new
+    // Move selection: release previous, start pulsing new
     if (selectedHex) engine!.resetSectorColor(selectedHex)
-    engine!.setSectorColor(result.hexKey, SELECT_COLOR)
+    pulseHexKey = result.hexKey
+    pulsePhase = 0
     selectedHex = result.hexKey
     renderSelectedPanel(result)
   }
@@ -123,7 +125,6 @@ async function startEngine(): Promise<void> {
   })
 
   // Register frame hook after loadMap — demonstrates onFrame API
-  pulseHexKey = engine.getSectorKeys()[0] ?? null
   engine.onFrame(onFrameTick)
 
   setStatus('Ready — scroll to zoom, drag to pan')
