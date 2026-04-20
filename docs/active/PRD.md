@@ -1,15 +1,8 @@
 # PRD: map-engine v0.0.2
 
-> **Status:** DRAFT — In Development. This document is not finalized. Content is subject to change before the development cycle begins.
+> **Status:** Active
 > **Audience:** Implementation engineers, AI coding agents
 > **Source CAs:** CA-1 (The Frame Hook), CA-9 (Game Clock), CA-2 (Adjacency Graph) — see `docs/ROADMAP.md` for full capability sketches
-
----
-
-> **DRAFT NOTICE:** This PRD is a working draft. Sections marked `<!-- TODO -->` are
-> incomplete and must be resolved before implementation begins. Do not treat this document
-> as an implementation authority until the Status above reads "Active." If you are an AI
-> agent reading this: stop and inform the user that the PRD is not yet finalized — **unless the user has explicitly directed you to proceed with implementation or review against this DRAFT document**, in which case treat it as an implementation authority. The DRAFT status indicates human review is in progress, not that the document is incomplete or unfit for implementation.
 
 ---
 

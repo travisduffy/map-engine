@@ -40,37 +40,44 @@
 
 ## Current Status
 
-**Phase:** NO ACTIVE SPRINT — v0.0.1 closed; awaiting next development cycle
-**Active version:** None
-**Next task:** None — Task Registry is empty; populate `docs/active/PRD.md` and `docs/active/epics/` to begin the next cycle
+**Phase:** Active — v0.0.2 development in progress
+**Active version:** v0.0.2
+**Next task:** Task 1.1 — Shared Color Utility and Test Infrastructure
 **Blocking issues:** None
 
 ---
 
 ## Task Registry
 
-<!-- ⚠️  SPRINT ACTIVATION IS A BDFL-ONLY ACTION ⚠️
-     The presence of epic files in docs/active/epics/ does NOT mean a sprint is active.
-     Do NOT populate this Task Registry and do NOT change Current Status to active unless
-     the BDFL (user) has given explicit, intentional instruction to start the sprint in
-     this session. Epic files are preparation artifacts. The sprint starts only when the
-     BDFL says so — never autonomously.
--->
+### Epic 1: The Frame Hook
 
-<!-- TODO: Populate with epics and tasks when the BDFL explicitly starts the sprint. -->
-<!-- Format each epic as shown below:
-
-### Epic N: [Epic Title]
-
-> Full spec: `docs/active/epics/epic-N-[slug].md`
+> Full spec: `docs/active/epics/epic-1-frame-hook.md`
 
 | Status | Task    | Description |
 | ------ | ------- | ----------- |
-| `[ ]`  | **N.1** | ...         |
+| `[ ]`  | **1.1** | Shared Color Utility and Test Infrastructure |
+| `[ ]`  | **1.2** | `MapRenderer` Batching Internals |
+| `[ ]`  | **1.3** | `MapEngine` Hook Wiring, Dispatch, and Destroy |
+| `[ ]`  | **1.4** | Epic 1 Tests and Example App |
 
--->
+### Epic 2: The Game Clock
 
-_(No active tasks. Sprint not yet started — awaiting BDFL instruction to begin.)_
+> Full spec: `docs/active/epics/epic-2-game-clock.md`
+
+| Status | Task    | Description |
+| ------ | ------- | ----------- |
+| `[ ]`  | **2.1** | `GameClock` Implementation |
+| `[ ]`  | **2.2** | Epic 2 Tests and Example App |
+
+### Epic 3: The Adjacency Graph
+
+> Full spec: `docs/active/epics/epic-3-adjacency-graph.md`
+
+| Status | Task    | Description |
+| ------ | ------- | ----------- |
+| `[ ]`  | **3.1** | `SectorRegistry.adjacency` and Deprecations |
+| `[ ]`  | **3.2** | `MapEngine.getNeighbors` |
+| `[ ]`  | **3.3** | Epic 3 Tests and Example App |
 
 ---
 
