@@ -42,7 +42,7 @@
 
 **Phase:** Active — v0.0.2 development in progress
 **Active version:** v0.0.2
-**Next task:** Task 2.2 — Epic 2 Tests and Example App
+**Next task:** Task 3.1 — `SectorRegistry.adjacency` and Deprecations
 **Blocking issues:** None
 
 ---
@@ -67,7 +67,7 @@
 | Status | Task    | Description                  |
 | ------ | ------- | ---------------------------- |
 | `[x]`  | **2.1** | `GameClock` Implementation   |
-| `[ ]`  | **2.2** | Epic 2 Tests and Example App |
+| `[x]`  | **2.2** | Epic 2 Tests and Example App |
 
 ### Epic 3: The Adjacency Graph
 
@@ -102,6 +102,20 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-20 — Task 2.2: Epic 2 Tests and Example App
+
+**Tasks touched:** 2.2
+**Outcome:** completed
+
+**What happened:**
+Created `test/GameClock.test.ts` with 15 tests covering all ACs (2.1a, 2.1b, 2.2–2.9, 2.11–2.14). AC 2.9 uses a fresh engine inline (not the beforeEach engine) to isolate the one-callback assertion. Added `<section id="clock-panel">` to `example/index.html` with tick-counter, clock-speed, and speed control buttons. Updated `example/src/main.ts` to import `GameClock`, create a clock after `loadMap`, register an `onTick` callback updating the UI, wire speed controls, and destroy the clock in `stopEngine`. All 174 tests pass; typecheck and typecheck:example clean.
+
+**Decisions made:**
+AC 2.5 split into two `it()` blocks (2.5a cap, 2.5b below-cap) to avoid accumulator carryover between sub-assertions. AC 2.9 keeps fake timers from `beforeEach` (they're already active) and only creates a fresh engine to isolate the one-callback count.
+
+**Left off at:**
+Task 2.2 complete. Epic 2 fully done. Next: Task 3.1 — `SectorRegistry.adjacency` and Deprecations.
 
 ### 2026-04-20 — Task 2.1: `GameClock` Implementation
 

@@ -9,15 +9,16 @@
  */
 
 import MapEngine, {
+  GameClock,
   toHexKey,
   type PickResult,
   type SectorData,
 } from 'map-engine'
 
 // ─── ID conventions ──────────────────────────────────────────────────────────
-// v0.0.2 adds: frame-counter
-// v0.0.2+ reserved (Tasks 2.2, 3.3 — add here, no renaming needed):
-//   tick-counter, clock-speed, neighbor-output
+// v0.0.2 adds: frame-counter, tick-counter, clock-speed
+// v0.0.2+ reserved (Task 3.3 — add here, no renaming needed):
+//   neighbor-output
 
 // ─── DOM refs ────────────────────────────────────────────────────────────────
 
@@ -31,12 +32,20 @@ const btnReload = document.getElementById('btn-reload')!
 const sectorList = document.getElementById('sector-list')!
 const sectorCount = document.getElementById('sector-count')!
 const frameCounterEl = document.getElementById('frame-counter')!
+const tickCounterEl = document.getElementById('tick-counter')!
+const clockSpeedEl = document.getElementById('clock-speed')!
+const btnClockPause = document.getElementById('btn-clock-pause')!
+const btnClockSpeedHalf = document.getElementById('btn-clock-speed-half')!
+const btnClockSpeed1 = document.getElementById('btn-clock-speed-1')!
+const btnClockSpeed2 = document.getElementById('btn-clock-speed-2')!
+const btnClockSpeed5 = document.getElementById('btn-clock-speed-5')!
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
 let engine: MapEngine | null = null
 let lastHovered: string | null = null
 let selectedHex: string | null = null
+let gameClock: GameClock | null = null
 
 // Frame hook state
 let frameCount = 0
@@ -127,6 +136,13 @@ async function startEngine(): Promise<void> {
   // Register frame hook after loadMap — demonstrates onFrame API
   engine.onFrame(onFrameTick)
 
+  // Create GameClock — demonstrates standalone clock API
+  gameClock = new GameClock(engine, { ticksPerSecond: 1 })
+  gameClock.onTick(elapsed => {
+    tickCounterEl.textContent = `Ticks: ${elapsed}`
+    clockSpeedEl.textContent = `Speed: ${gameClock!.speed}×`
+  })
+
   setStatus('Ready — scroll to zoom, drag to pan')
   renderSectorList()
 }
@@ -135,12 +151,16 @@ function stopEngine(): void {
   if (!engine) return
   engine.off('sectorHover', onHover)
   engine.off('sectorClick', onClick)
+  gameClock?.destroy()
+  gameClock = null
   engine.destroy() // also clears all onFrame callbacks
   engine = null
   lastHovered = null
   selectedHex = null
   frameCount = 0
   frameCounterEl.textContent = 'Frames: 0'
+  tickCounterEl.textContent = 'Ticks: 0'
+  clockSpeedEl.textContent = 'Speed: 1×'
   pulseHexKey = null
   pulsePhase = 0
 }
@@ -294,6 +314,47 @@ chkHover.addEventListener('change', () => {
     }
     engine.off('sectorHover', onHover)
   }
+})
+
+// Clock controls
+btnClockPause.addEventListener('click', () => {
+  if (!gameClock) return
+  if (gameClock.paused) {
+    gameClock.resume()
+    btnClockPause.textContent = 'Pause'
+  } else {
+    gameClock.pause()
+    btnClockPause.textContent = 'Resume'
+  }
+  clockSpeedEl.textContent = `Speed: ${gameClock.speed}×`
+})
+
+btnClockSpeedHalf.addEventListener('click', () => {
+  if (!gameClock) return
+  gameClock.setSpeed(0.5)
+  btnClockPause.textContent = 'Pause'
+  clockSpeedEl.textContent = `Speed: ${gameClock.speed}×`
+})
+
+btnClockSpeed1.addEventListener('click', () => {
+  if (!gameClock) return
+  gameClock.setSpeed(1)
+  btnClockPause.textContent = 'Pause'
+  clockSpeedEl.textContent = `Speed: ${gameClock.speed}×`
+})
+
+btnClockSpeed2.addEventListener('click', () => {
+  if (!gameClock) return
+  gameClock.setSpeed(2)
+  btnClockPause.textContent = 'Pause'
+  clockSpeedEl.textContent = `Speed: ${gameClock.speed}×`
+})
+
+btnClockSpeed5.addEventListener('click', () => {
+  if (!gameClock) return
+  gameClock.setSpeed(5)
+  btnClockPause.textContent = 'Pause'
+  clockSpeedEl.textContent = `Speed: ${gameClock.speed}×`
 })
 
 // Reload: demonstrates destroy() + fresh loadMap()
