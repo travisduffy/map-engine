@@ -56,7 +56,7 @@
 | Status | Task    | Description                                    |
 | ------ | ------- | ---------------------------------------------- |
 | `[x]`  | **1.1** | Shared Color Utility and Test Infrastructure   |
-| `[ ]`  | **1.2** | `MapRenderer` Batching Internals               |
+| `[x]`  | **1.2** | `MapRenderer` Batching Internals               |
 | `[ ]`  | **1.3** | `MapEngine` Hook Wiring, Dispatch, and Destroy |
 | `[ ]`  | **1.4** | Epic 1 Tests and Example App                   |
 
@@ -102,6 +102,20 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-20 — Task 1.2: `MapRenderer` Batching Internals
+
+**Tasks touched:** 1.2
+**Outcome:** completed
+
+**What happened:**
+Added `SectorBBox` import. Added three new `@internal public` fields (`_preRenderHook`, `_lastFrameTime`, `_pendingDirtyRect`) and updated the constructor to accept `_preRenderHook: () => void` as a third required parameter. Added the `if (this._preRenderHook) this._preRenderHook()` call as the first statement of the rAF loop. Implemented `_patchSectorPixels`, `_patchSectorPixelsFromSource`, and `_flushPendingDirty`. Updated `destroy()` to null both new fields after `cancelAnimationFrame`. Typecheck produces exactly one expected error (MapEngine.ts new MapRenderer call missing third arg); all 148 tests pass.
+
+**Decisions made:**
+No ambiguities — all implementation details were fully specified.
+
+**Left off at:**
+Task 1.2 complete. Next: Task 1.3 — `MapEngine` Hook Wiring, Dispatch, and Destroy.
 
 ### 2026-04-20 — Task 1.1: Shared Color Utility and Test Infrastructure
 
