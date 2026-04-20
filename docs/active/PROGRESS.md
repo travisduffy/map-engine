@@ -42,7 +42,7 @@
 
 **Phase:** Active — v0.0.2 development in progress
 **Active version:** v0.0.2
-**Next task:** Task 2.1 — `GameClock` Implementation
+**Next task:** Task 2.2 — Epic 2 Tests and Example App
 **Blocking issues:** None
 
 ---
@@ -66,7 +66,7 @@
 
 | Status | Task    | Description                  |
 | ------ | ------- | ---------------------------- |
-| `[ ]`  | **2.1** | `GameClock` Implementation   |
+| `[x]`  | **2.1** | `GameClock` Implementation   |
 | `[ ]`  | **2.2** | Epic 2 Tests and Example App |
 
 ### Epic 3: The Adjacency Graph
@@ -102,6 +102,20 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-20 — Task 2.1: `GameClock` Implementation
+
+**Tasks touched:** 2.1
+**Outcome:** completed
+
+**What happened:**
+Added `ClockTickCallback` type to `src/types.ts`. Created `src/GameClock.ts` with full implementation: fixed-step accumulator, `MAX_TICKS_PER_FRAME = 10` cap, per-tick snapshot semantics, try/catch around callbacks, `pause`/`resume`/`setSpeed` with `_lastSpeed` invariant, `onTick`/`offTick`, `destroy()`. Exported `GameClock` from `src/index.ts`. Typecheck, build pass; AC 2.14 grep check returns zero matches.
+
+**Decisions made:**
+No ambiguities — all implementation details fully specified by epic and PRD.
+
+**Left off at:**
+Task 2.1 complete. Next: Task 2.2 — Epic 2 Tests and Example App.
 
 ### 2026-04-20 — Post-1.4 example app deviation: pulse tied to selected sector
 
