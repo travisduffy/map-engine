@@ -42,7 +42,7 @@
 
 **Phase:** Active — v0.0.2 development in progress
 **Active version:** v0.0.2
-**Next task:** Task 1.1 — Shared Color Utility and Test Infrastructure
+**Next task:** Task 2.1 — `GameClock` Implementation
 **Blocking issues:** None
 
 ---
@@ -58,7 +58,7 @@
 | `[x]`  | **1.1** | Shared Color Utility and Test Infrastructure   |
 | `[x]`  | **1.2** | `MapRenderer` Batching Internals               |
 | `[x]`  | **1.3** | `MapEngine` Hook Wiring, Dispatch, and Destroy |
-| `[ ]`  | **1.4** | Epic 1 Tests and Example App                   |
+| `[x]`  | **1.4** | Epic 1 Tests and Example App                   |
 
 ### Epic 2: The Game Clock
 
@@ -102,6 +102,23 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-20 — Task 1.4: Epic 1 Tests and Example App
+
+**Tasks touched:** 1.4
+**Outcome:** completed
+
+**What happened:**
+Created `test/FrameHook.test.ts` with all 11 ACs (1.1–1.12, 1.10). Updated `example/index.html` to add `<section id="frame-hook-panel">` with `<div id="frame-counter">`. Updated `example/src/main.ts` to register `onFrameTick` via `engine.onFrame()` after `loadMap`, incrementing a live frame counter and pulsing the first sector's color on each frame via `setSectorColor`. Discovered and fixed a bug in `src/internal/color.ts`: `parseColorToRgb` needed `_ctx.fillStyle = '#000000'` before `_ctx.fillStyle = color` so invalid CSS color strings fall back to black rather than the previous valid fillStyle. Also discovered that Three.js `Texture.needsUpdate` is a write-only setter (no getter); AC 1.3 assertion uses `_texture.version` delta instead. All 159 tests pass.
+
+**Decisions made:**
+
+- AC 1.10 grep isolation implemented as a browser test using `fetch('/src/...')` to load source files as text and asserting no forbidden imports — works because Vite serves source files in dev/test mode.
+- `_texture.needsUpdate` in Three.js is setter-only; changed AC 1.3 assertion to `expect(renderer['_texture'].version).toBeGreaterThan(versionBefore)`.
+- Fixed `parseColorToRgb` to reset fillStyle to `#000000` before each parse; this is what the PRD's AC 1.9 "invalid → black" expectation requires.
+
+**Left off at:**
+Task 1.4 complete. Epic 1 fully done. Next: Task 2.1 — `GameClock` Implementation.
 
 ### 2026-04-20 — Task 1.3: `MapEngine` Hook Wiring, Dispatch, and Destroy
 
@@ -151,4 +168,6 @@ Task 1.1 complete. Next: Task 1.2 — `MapRenderer` Batching Internals.
 
 > Non-obvious things discovered during implementation that future sessions should know. Append entries; do not delete old ones.
 
-_(None yet — populated as implementation proceeds.)_
+- **`Texture.needsUpdate` is write-only in Three.js** — reading it returns `undefined`. Tests that need to verify a texture flush should assert `_texture.version` delta instead.
+- **`parseColorToRgb` needs explicit fillStyle reset** — `clearRect` alone does not reset the fillStyle; calling `_ctx.fillStyle = '#000000'` before `_ctx.fillStyle = color` is required so invalid CSS strings fall back to black rather than the previous valid color.
+- **AC 1.10 grep isolation in browser tests** — use `fetch('/src/FileName.ts')` to load source files as text in Vitest browser mode; Vite serves them from the dev server.

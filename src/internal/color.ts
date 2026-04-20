@@ -8,6 +8,7 @@ export function parseColorToRgb(color: string): {
   b: number
 } {
   _ctx.clearRect(0, 0, 1, 1)
+  _ctx.fillStyle = '#000000' // reset so invalid colors fall back to black, not a stale value
   _ctx.fillStyle = color
   _ctx.fillRect(0, 0, 1, 1)
   const d = _ctx.getImageData(0, 0, 1, 1).data

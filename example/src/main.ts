@@ -14,6 +14,11 @@ import MapEngine, {
   type SectorData,
 } from 'map-engine'
 
+// ─── ID conventions ──────────────────────────────────────────────────────────
+// v0.0.2 adds: frame-counter
+// v0.0.2+ reserved (Tasks 2.2, 3.3 — add here, no renaming needed):
+//   tick-counter, clock-speed, neighbor-output
+
 // ─── DOM refs ────────────────────────────────────────────────────────────────
 
 const canvas = document.getElementById('map') as HTMLCanvasElement
@@ -25,6 +30,7 @@ const chkHover = document.getElementById('chk-hover') as HTMLInputElement
 const btnReload = document.getElementById('btn-reload')!
 const sectorList = document.getElementById('sector-list')!
 const sectorCount = document.getElementById('sector-count')!
+const frameCounterEl = document.getElementById('frame-counter')!
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -32,6 +38,11 @@ let engine: MapEngine | null = null
 let lastHovered: string | null = null
 let selectedHex: string | null = null
 const SELECT_COLOR = '#ffe066'
+
+// Frame hook state
+let frameCount = 0
+let pulseHexKey: string | null = null
+let pulsePhase = 0
 
 // ─── Hover handler (declared separately so we can off() it) ──────────────────
 
@@ -82,6 +93,19 @@ function onClick(result: PickResult): void {
   }
 }
 
+// ─── Frame hook ───────────────────────────────────────────────────────────────
+
+function onFrameTick(dt: number): void {
+  frameCount++
+  frameCounterEl.textContent = `Frames: ${frameCount}`
+
+  if (pulseHexKey && engine) {
+    pulsePhase = (pulsePhase + dt * 1.5) % 1
+    const hue = Math.round(pulsePhase * 360)
+    engine.setSectorColor(pulseHexKey, `hsl(${hue}, 90%, 55%)`)
+  }
+}
+
 // ─── Engine lifecycle ─────────────────────────────────────────────────────────
 
 async function startEngine(): Promise<void> {
@@ -98,6 +122,10 @@ async function startEngine(): Promise<void> {
     canvas,
   })
 
+  // Register frame hook after loadMap — demonstrates onFrame API
+  pulseHexKey = engine.getSectorKeys()[0] ?? null
+  engine.onFrame(onFrameTick)
+
   setStatus('Ready — scroll to zoom, drag to pan')
   renderSectorList()
 }
@@ -106,10 +134,14 @@ function stopEngine(): void {
   if (!engine) return
   engine.off('sectorHover', onHover)
   engine.off('sectorClick', onClick)
-  engine.destroy()
+  engine.destroy() // also clears all onFrame callbacks
   engine = null
   lastHovered = null
   selectedHex = null
+  frameCount = 0
+  frameCounterEl.textContent = 'Frames: 0'
+  pulseHexKey = null
+  pulsePhase = 0
 }
 
 // ─── UI rendering helpers ─────────────────────────────────────────────────────
