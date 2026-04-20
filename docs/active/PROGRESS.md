@@ -57,7 +57,7 @@
 | ------ | ------- | ---------------------------------------------- |
 | `[x]`  | **1.1** | Shared Color Utility and Test Infrastructure   |
 | `[x]`  | **1.2** | `MapRenderer` Batching Internals               |
-| `[ ]`  | **1.3** | `MapEngine` Hook Wiring, Dispatch, and Destroy |
+| `[x]`  | **1.3** | `MapEngine` Hook Wiring, Dispatch, and Destroy |
 | `[ ]`  | **1.4** | Epic 1 Tests and Example App                   |
 
 ### Epic 2: The Game Clock
@@ -102,6 +102,20 @@
 [Exact task and step where the session ended, so the next session can resume without re-reading everything.]
 
 -->
+
+### 2026-04-20 — Task 1.3: `MapEngine` Hook Wiring, Dispatch, and Destroy
+
+**Tasks touched:** 1.3
+**Outcome:** completed
+
+**What happened:**
+Added `_frameCallbacks: FrameCallback[]` and `_inTick: boolean` fields. Implemented `onFrame`/`offFrame`. Rewired `loadMap` to build the hook closure (capturing the `renderer` binding via `let`) before `new MapRenderer(...)` and pass it as the third argument. Updated `setSectorColor` to call `parseColorToRgb` and route through `_patchSectorPixels` when `_inTick`, or the immediate path otherwise. Updated `resetSectorColor` similarly. Updated `destroy()` to prepend `_frameCallbacks = []` and null `_pendingDirtyRect` before `renderer.destroy()`. All 148 tests pass; typecheck and build clean.
+
+**Decisions made:**
+The PRD described `destroy()` as having an `if (!this._loaded) return` guard — actual code uses `if (this._destroyed) return` with conditional `_destroyed = true` at the end. Applied the two new prepended steps before the existing renderer destroy, guarded with `if (this._renderer)` for the pendingDirtyRect null — semantically equivalent to the PRD intent.
+
+**Left off at:**
+Task 1.3 complete. Next: Task 1.4 — Epic 1 Tests and Example App.
 
 ### 2026-04-20 — Task 1.2: `MapRenderer` Batching Internals
 
