@@ -66,17 +66,28 @@ function onHover(result: PickResult | null): void {
       lastHovered !== result.hexKey &&
       lastHovered !== selectedHex
     ) {
-      engine!.resetSectorColor(lastHovered)
+      if (previousNeighbors.has(lastHovered)) {
+        engine!.setSectorColor(lastHovered, '#aaccff')
+      } else {
+        engine!.resetSectorColor(lastHovered)
+      }
     }
-    // Apply transient highlight only if not the selected sector
-    if (result.hexKey !== selectedHex) {
+    // Apply transient highlight only if not the selected sector and not a neighbor highlight
+    if (
+      result.hexKey !== selectedHex &&
+      !previousNeighbors.has(result.hexKey)
+    ) {
       engine!.setSectorColor(result.hexKey, '#e8e8d0')
     }
     lastHovered = result.hexKey
     renderHoverPanel(result)
   } else {
     if (lastHovered && lastHovered !== selectedHex) {
-      engine!.resetSectorColor(lastHovered)
+      if (previousNeighbors.has(lastHovered)) {
+        engine!.setSectorColor(lastHovered, '#aaccff')
+      } else {
+        engine!.resetSectorColor(lastHovered)
+      }
     }
     lastHovered = null
     clearHoverPanel()
