@@ -13,7 +13,15 @@ export class SectorRegistry {
   readonly bboxes: Map<string, SectorBBox>
   readonly centroids: Map<string, { x: number; y: number }>
   readonly pixelIndices: Map<string, Uint32Array>
+  /**
+   * @deprecated Use `adjacency` for neighbor queries. `borderEdges` retains richer
+   * spatial data (exact pixel coordinates of each edge segment) that `adjacency` does
+   * not expose. Retained until Dynamic Perimeter Rendering (CA-6) determines whether
+   * a more structured perimeter representation supersedes it.
+   * @experimental
+   */
   readonly borderEdges: BorderEdge[]
+  readonly adjacency: ReadonlyMap<string, ReadonlySet<string>>
 
   private _sectorMap: Map<string, SectorData>
 
@@ -41,6 +49,11 @@ export class SectorRegistry {
 
     this.bboxes = new Map<string, SectorBBox>()
     this.borderEdges = []
+
+    const adjacencyMutable = new Map<string, Set<string>>()
+    for (const hexKey of this._sectorMap.keys()) {
+      adjacencyMutable.set(hexKey, new Set<string>())
+    }
 
     // Per-sector accumulators
     const centroidSums = new Map<
@@ -96,7 +109,9 @@ export class SectorRegistry {
           bitmapOnlyKeys.add(hexKey)
         }
 
-        // Border edges: check neighbors for every pixel regardless of definition membership
+        // Border edges + adjacency: check neighbors for every pixel
+        const isDefinedSector = this._sectorMap.has(hexKey)
+
         if (x < width - 1) {
           const rOff = (y * width + (x + 1)) * 4
           const rHex = toHexKey(
@@ -112,6 +127,10 @@ export class SectorRegistry {
               sectorA: hexKey,
               sectorB: rHex,
             })
+            if (isDefinedSector && adjacencyMutable.has(rHex)) {
+              adjacencyMutable.get(hexKey)!.add(rHex)
+              adjacencyMutable.get(rHex)!.add(hexKey)
+            }
           }
         }
 
@@ -130,6 +149,10 @@ export class SectorRegistry {
               sectorA: hexKey,
               sectorB: bHex,
             })
+            if (isDefinedSector && adjacencyMutable.has(bHex)) {
+              adjacencyMutable.get(hexKey)!.add(bHex)
+              adjacencyMutable.get(bHex)!.add(hexKey)
+            }
           }
         }
       }
@@ -149,6 +172,11 @@ export class SectorRegistry {
       pixelIndicesMap.set(key, new Uint32Array(indices))
     }
     this.pixelIndices = pixelIndicesMap
+
+    this.adjacency = adjacencyMutable as ReadonlyMap<
+      string,
+      ReadonlySet<string>
+    >
 
     // Load-time validation — warn but never throw
     for (const hexKey of this._sectorMap.keys()) {

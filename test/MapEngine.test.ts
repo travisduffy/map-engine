@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { MapEngine } from '../src/MapEngine'
+import { makeCanvas } from './testUtils'
 
 describe('MapEngine — constructor and event subscription', () => {
   it('constructs without arguments', () => {
@@ -94,26 +95,6 @@ describe('MapEngine — constructor and event subscription', () => {
     }).not.toThrow()
   })
 })
-
-// --- Helper for browser-mode lifecycle tests ---
-
-function makeCanvas(width = 800, height = 600): HTMLCanvasElement {
-  const canvas = document.createElement('canvas')
-  canvas.style.width = `${width}px`
-  canvas.style.height = `${height}px`
-  canvas.width = width
-  canvas.height = height
-  Object.defineProperty(canvas, 'clientWidth', {
-    value: width,
-    configurable: true,
-  })
-  Object.defineProperty(canvas, 'clientHeight', {
-    value: height,
-    configurable: true,
-  })
-  document.body.appendChild(canvas)
-  return canvas
-}
 
 const BITMAP_URL = '/test/fixtures/test-4x4.png'
 const DEFINITION_URL = '/test/fixtures/test-4x4.json'

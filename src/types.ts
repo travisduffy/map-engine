@@ -13,6 +13,10 @@ export interface MapConfig {
 
 /**
  * A pixel-boundary edge between two adjacent sectors.
+ * @deprecated Use `SectorRegistry.adjacency` for neighbor queries. `BorderEdge` retains
+ * richer spatial data (exact pixel coordinates of each edge segment) not exposed by
+ * `adjacency`. Retained until Dynamic Perimeter Rendering (CA-6) determines whether
+ * a more structured perimeter representation supersedes it.
  * @experimental — shape may change in a future version
  */
 export interface BorderEdge {
@@ -30,6 +34,16 @@ export interface SectorBBox {
   maxX: number
   maxY: number
 }
+
+// elapsed is the 1-indexed count of ticks fired since this GameClock was constructed,
+// including the current one. The first tick's callback receives elapsed === 1.
+export type ClockTickCallback = (elapsed: number) => void
+
+// dt is elapsed wall-clock seconds since the previous frame (e.g. 0.01667 at 60fps).
+// On the very first rAF frame after loadMap() completes, dt === 0.
+// On all subsequent frames, dt is elapsed wall-clock seconds since the previous frame,
+// regardless of when a given callback was registered via onFrame.
+export type FrameCallback = (dt: number) => void
 
 /** Result of a successful pick operation. */
 export interface PickResult {

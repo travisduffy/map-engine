@@ -2,7 +2,8 @@ import * as THREE from 'three'
 import { SectorBitmapParser } from './SectorBitmapParser'
 import { SectorRegistry } from './SectorRegistry'
 import { MapRenderer } from './MapRenderer'
-import type { MapConfig, SectorData, PickResult } from './types'
+import type { MapConfig, SectorData, PickResult, FrameCallback } from './types'
+import { parseColorToRgb } from './internal/color'
 
 export class MapEngine {
   private _loaded: boolean = false
@@ -17,6 +18,8 @@ export class MapEngine {
   private _boundPointerMove: ((e: PointerEvent) => void) | null = null
   private _boundClick: ((e: MouseEvent) => void) | null = null
   private readonly _raycaster: THREE.Raycaster
+  private _frameCallbacks: FrameCallback[] = []
+  private _inTick: boolean = false
 
   constructor() {
     this._parser = new SectorBitmapParser()
@@ -40,6 +43,17 @@ export class MapEngine {
     if (this._destroyed) throw new Error('MapEngine: destroyed')
     const set = this._handlers.get(_event)
     if (set) set.delete(_handler)
+  }
+
+  onFrame(callback: FrameCallback): void {
+    if (this._destroyed) return
+    this._frameCallbacks.push(callback)
+  }
+
+  offFrame(callback: FrameCallback): void {
+    if (this._destroyed) return
+    const idx = this._frameCallbacks.indexOf(callback)
+    if (idx !== -1) this._frameCallbacks.splice(idx, 1)
   }
 
   private _emit(event: string, payload: unknown): void {
@@ -140,7 +154,29 @@ export class MapEngine {
       ])
 
       const registry = new SectorRegistry(buffer, width, height, definition)
-      const renderer = new MapRenderer(config.canvas, registry)
+      let renderer: MapRenderer
+      const hook = (): void => {
+        const now = performance.now()
+        const dt =
+          renderer._lastFrameTime === -1
+            ? 0
+            : (now - renderer._lastFrameTime) / 1000
+        renderer._lastFrameTime = now
+        this._inTick = true
+        try {
+          for (const cb of [...this._frameCallbacks]) {
+            try {
+              cb(dt)
+            } catch (err) {
+              console.error('[map-engine] FrameCallback threw:', err)
+            }
+          }
+        } finally {
+          this._inTick = false
+          renderer._flushPendingDirty()
+        }
+      }
+      renderer = new MapRenderer(config.canvas, registry, hook)
 
       this._canvas = config.canvas
       this._registry = registry
@@ -164,6 +200,10 @@ export class MapEngine {
     // Step 1: idempotent — never throws
     if (this._destroyed) return
 
+    // Step 0 (new): clear frame callbacks
+    this._frameCallbacks = []
+    // Step 1 (new): clear pending dirty rect before renderer.destroy() disposes the canvas context
+    if (this._renderer) this._renderer._pendingDirtyRect = null
     // Step 2: destroy renderer (disposes rAF, geometry, material, texture, MapRenderer listeners)
     if (this._renderer) {
       this._renderer.destroy()
@@ -227,13 +267,29 @@ export class MapEngine {
     if (this._destroyed) throw new Error('MapEngine: destroyed')
     if (!this._loaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
-    this._renderer!.setSectorColor(hexKey, color)
+    const { r, g, b } = parseColorToRgb(color) // eslint-disable-line @typescript-eslint/no-unused-vars
+    if (this._inTick) {
+      this._renderer!._patchSectorPixels(hexKey, r, g, b)
+    } else {
+      this._renderer!.setSectorColor(hexKey, color)
+    }
   }
 
   resetSectorColor(hexKey: string): void {
     if (this._destroyed) throw new Error('MapEngine: destroyed')
     if (!this._loaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
-    this._renderer!.resetSectorColor(hexKey)
+    if (this._inTick) {
+      this._renderer!._patchSectorPixelsFromSource(hexKey)
+    } else {
+      this._renderer!.resetSectorColor(hexKey)
+    }
+  }
+
+  getNeighbors(hexKey: string): ReadonlySet<string> | undefined {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    return this._registry!.adjacency.get(hexKey)
   }
 }

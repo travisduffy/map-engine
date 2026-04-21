@@ -9,10 +9,16 @@
  */
 
 import MapEngine, {
+  GameClock,
   toHexKey,
   type PickResult,
   type SectorData,
 } from 'map-engine'
+
+// ─── ID conventions ──────────────────────────────────────────────────────────
+// v0.0.2 adds: frame-counter, tick-counter, clock-speed
+// v0.0.2+ reserved (Task 3.3 — add here, no renaming needed):
+//   neighbor-output
 
 // ─── DOM refs ────────────────────────────────────────────────────────────────
 
@@ -25,13 +31,30 @@ const chkHover = document.getElementById('chk-hover') as HTMLInputElement
 const btnReload = document.getElementById('btn-reload')!
 const sectorList = document.getElementById('sector-list')!
 const sectorCount = document.getElementById('sector-count')!
+const frameCounterEl = document.getElementById('frame-counter')!
+const tickCounterEl = document.getElementById('tick-counter')!
+const clockSpeedEl = document.getElementById('clock-speed')!
+const btnClockPause = document.getElementById('btn-clock-pause')!
+const btnClockSpeedHalf = document.getElementById('btn-clock-speed-half')!
+const btnClockSpeed1 = document.getElementById('btn-clock-speed-1')!
+const btnClockSpeed2 = document.getElementById('btn-clock-speed-2')!
+const btnClockSpeed5 = document.getElementById('btn-clock-speed-5')!
+const neighborOutputEl = document.getElementById('neighbor-output')!
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
 let engine: MapEngine | null = null
 let lastHovered: string | null = null
 let selectedHex: string | null = null
-const SELECT_COLOR = '#ffe066'
+let gameClock: GameClock | null = null
+
+// Frame hook state
+let frameCount = 0
+let pulseHexKey: string | null = null
+let pulsePhase = 0
+
+// Neighbor highlight state
+let previousNeighbors = new Set<string>()
 
 // ─── Hover handler (declared separately so we can off() it) ──────────────────
 
@@ -43,17 +66,28 @@ function onHover(result: PickResult | null): void {
       lastHovered !== result.hexKey &&
       lastHovered !== selectedHex
     ) {
-      engine!.resetSectorColor(lastHovered)
+      if (previousNeighbors.has(lastHovered)) {
+        engine!.setSectorColor(lastHovered, '#aaccff')
+      } else {
+        engine!.resetSectorColor(lastHovered)
+      }
     }
-    // Apply transient highlight only if not the selected sector
-    if (result.hexKey !== selectedHex) {
+    // Apply transient highlight only if not the selected sector and not a neighbor highlight
+    if (
+      result.hexKey !== selectedHex &&
+      !previousNeighbors.has(result.hexKey)
+    ) {
       engine!.setSectorColor(result.hexKey, '#e8e8d0')
     }
     lastHovered = result.hexKey
     renderHoverPanel(result)
   } else {
     if (lastHovered && lastHovered !== selectedHex) {
-      engine!.resetSectorColor(lastHovered)
+      if (previousNeighbors.has(lastHovered)) {
+        engine!.setSectorColor(lastHovered, '#aaccff')
+      } else {
+        engine!.resetSectorColor(lastHovered)
+      }
     }
     lastHovered = null
     clearHoverPanel()
@@ -62,11 +96,36 @@ function onHover(result: PickResult | null): void {
 
 // ─── Click handler ───────────────────────────────────────────────────────────
 
+function applyNeighborHighlights(hexKey: string): void {
+  const neighbors = engine!.getNeighbors(hexKey)
+  if (!neighbors) return
+  const keys: string[] = []
+  for (const hex of neighbors) {
+    if (hex !== selectedHex) {
+      engine!.setSectorColor(hex, '#aaccff')
+      previousNeighbors.add(hex)
+      keys.push(hex)
+    }
+  }
+  neighborOutputEl.textContent = keys.length > 0 ? keys.join(', ') : '(none)'
+}
+
+function resetNeighborHighlights(exceptHex: string | null = null): void {
+  for (const hex of previousNeighbors) {
+    if (hex !== exceptHex) engine!.resetSectorColor(hex)
+  }
+  previousNeighbors.clear()
+  neighborOutputEl.textContent = '—'
+}
+
 function onClick(result: PickResult): void {
   if (selectedHex === result.hexKey) {
     // Deselect
     const wasSelected = selectedHex
+    pulseHexKey = null
+    pulsePhase = 0
     engine!.resetSectorColor(wasSelected)
+    resetNeighborHighlights()
     selectedHex = null
     clearSelectedPanel()
     // Re-apply hover highlight if still hovering the same sector
@@ -74,11 +133,28 @@ function onClick(result: PickResult): void {
       engine!.setSectorColor(wasSelected, '#e8e8d0')
     }
   } else {
-    // Move selection: release previous, highlight new
+    // Move selection: release previous, start pulsing new
     if (selectedHex) engine!.resetSectorColor(selectedHex)
-    engine!.setSectorColor(result.hexKey, SELECT_COLOR)
+    // Reset previous neighbor highlights; skip the new selection to avoid flash
+    resetNeighborHighlights(result.hexKey)
+    pulseHexKey = result.hexKey
+    pulsePhase = 0
     selectedHex = result.hexKey
     renderSelectedPanel(result)
+    applyNeighborHighlights(result.hexKey)
+  }
+}
+
+// ─── Frame hook ───────────────────────────────────────────────────────────────
+
+function onFrameTick(dt: number): void {
+  frameCount++
+  frameCounterEl.textContent = `Frames: ${frameCount}`
+
+  if (pulseHexKey && engine) {
+    pulsePhase = (pulsePhase + dt * 1.5) % 1
+    const hue = Math.round(pulsePhase * 360)
+    engine.setSectorColor(pulseHexKey, `hsl(${hue}, 90%, 55%)`)
   }
 }
 
@@ -98,6 +174,16 @@ async function startEngine(): Promise<void> {
     canvas,
   })
 
+  // Register frame hook after loadMap — demonstrates onFrame API
+  engine.onFrame(onFrameTick)
+
+  // Create GameClock — demonstrates standalone clock API
+  gameClock = new GameClock(engine, { ticksPerSecond: 1 })
+  gameClock.onTick(elapsed => {
+    tickCounterEl.textContent = `Ticks: ${elapsed}`
+    clockSpeedEl.textContent = `Speed: ${gameClock!.speed}×`
+  })
+
   setStatus('Ready — scroll to zoom, drag to pan')
   renderSectorList()
 }
@@ -106,10 +192,20 @@ function stopEngine(): void {
   if (!engine) return
   engine.off('sectorHover', onHover)
   engine.off('sectorClick', onClick)
-  engine.destroy()
+  gameClock?.destroy()
+  gameClock = null
+  engine.destroy() // also clears all onFrame callbacks
   engine = null
   lastHovered = null
   selectedHex = null
+  frameCount = 0
+  frameCounterEl.textContent = 'Frames: 0'
+  tickCounterEl.textContent = 'Ticks: 0'
+  clockSpeedEl.textContent = 'Speed: 1×'
+  pulseHexKey = null
+  pulsePhase = 0
+  previousNeighbors.clear()
+  neighborOutputEl.textContent = '—'
 }
 
 // ─── UI rendering helpers ─────────────────────────────────────────────────────
@@ -261,6 +357,47 @@ chkHover.addEventListener('change', () => {
     }
     engine.off('sectorHover', onHover)
   }
+})
+
+// Clock controls
+btnClockPause.addEventListener('click', () => {
+  if (!gameClock) return
+  if (gameClock.paused) {
+    gameClock.resume()
+    btnClockPause.textContent = 'Pause'
+  } else {
+    gameClock.pause()
+    btnClockPause.textContent = 'Resume'
+  }
+  clockSpeedEl.textContent = `Speed: ${gameClock.speed}×`
+})
+
+btnClockSpeedHalf.addEventListener('click', () => {
+  if (!gameClock) return
+  gameClock.setSpeed(0.5)
+  btnClockPause.textContent = 'Pause'
+  clockSpeedEl.textContent = `Speed: ${gameClock.speed}×`
+})
+
+btnClockSpeed1.addEventListener('click', () => {
+  if (!gameClock) return
+  gameClock.setSpeed(1)
+  btnClockPause.textContent = 'Pause'
+  clockSpeedEl.textContent = `Speed: ${gameClock.speed}×`
+})
+
+btnClockSpeed2.addEventListener('click', () => {
+  if (!gameClock) return
+  gameClock.setSpeed(2)
+  btnClockPause.textContent = 'Pause'
+  clockSpeedEl.textContent = `Speed: ${gameClock.speed}×`
+})
+
+btnClockSpeed5.addEventListener('click', () => {
+  if (!gameClock) return
+  gameClock.setSpeed(5)
+  btnClockPause.textContent = 'Pause'
+  clockSpeedEl.textContent = `Speed: ${gameClock.speed}×`
 })
 
 // Reload: demonstrates destroy() + fresh loadMap()

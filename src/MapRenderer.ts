@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import type { SectorRegistry } from './SectorRegistry'
+import type { SectorBBox } from './types'
+import { parseColorToRgb } from './internal/color'
 
 export class MapRenderer {
   readonly scene: THREE.Scene
@@ -14,8 +16,6 @@ export class MapRenderer {
   readonly displayCtx: OffscreenCanvasRenderingContext2D
   readonly displayImageData: ImageData
   private readonly _texture: THREE.CanvasTexture<OffscreenCanvas>
-  private readonly _colorParserCanvas: OffscreenCanvas
-  private readonly _colorParserCtx: OffscreenCanvasRenderingContext2D
 
   // Stored for pan/zoom in Tasks 2.5/2.6
   protected readonly _canvas: HTMLCanvasElement
@@ -55,7 +55,18 @@ export class MapRenderer {
 
   private _destroyed = false
 
-  constructor(canvas: HTMLCanvasElement, registry: SectorRegistry) {
+  /** @internal */
+  public _preRenderHook: (() => void) | null
+  /** @internal */
+  public _lastFrameTime: number = -1
+  /** @internal */
+  public _pendingDirtyRect: SectorBBox | null = null
+
+  constructor(
+    canvas: HTMLCanvasElement,
+    registry: SectorRegistry,
+    _preRenderHook: () => void
+  ) {
     if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
       throw new Error(
         'MapEngine: canvas has zero dimensions — ensure the canvas element is in the DOM and has non-zero CSS dimensions before calling loadMap()'
@@ -64,6 +75,7 @@ export class MapRenderer {
 
     this._canvas = canvas
     this._registry = registry
+    this._preRenderHook = _preRenderHook
 
     // WebGL renderer
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false })
@@ -131,10 +143,6 @@ export class MapRenderer {
       registry.height
     )
     this.displayCtx.putImageData(this.displayImageData, 0, 0)
-
-    // Color parser helper — created once, reused in setSectorColor
-    this._colorParserCanvas = new OffscreenCanvas(1, 1)
-    this._colorParserCtx = this._colorParserCanvas.getContext('2d')!
 
     // CanvasTexture wired to the display OffscreenCanvas
     this._texture = new THREE.CanvasTexture(displayCanvas)
@@ -273,6 +281,7 @@ export class MapRenderer {
     // browser composites the correctly-sized result with no intermediate flash.
     const loop = () => {
       this._animFrameId = requestAnimationFrame(loop)
+      if (this._preRenderHook) this._preRenderHook()
       const w = this._canvas.clientWidth
       const h = this._canvas.clientHeight
       if (w !== this._currentW || h !== this._currentH) {
@@ -331,14 +340,7 @@ export class MapRenderer {
       return
     }
 
-    // Parse CSS color via 1×1 canvas
-    this._colorParserCtx.clearRect(0, 0, 1, 1)
-    this._colorParserCtx.fillStyle = color
-    this._colorParserCtx.fillRect(0, 0, 1, 1)
-    const parsed = this._colorParserCtx.getImageData(0, 0, 1, 1).data
-    const r = parsed[0]
-    const g = parsed[1]
-    const b = parsed[2]
+    const { r, g, b } = parseColorToRgb(color)
 
     // Write color to all pixels in this sector
     const indices = this._registry.pixelIndices.get(hexKey)!
@@ -364,6 +366,97 @@ export class MapRenderer {
     )
 
     this._texture.needsUpdate = true
+  }
+
+  /** @internal */
+  public _patchSectorPixels(
+    hexKey: string,
+    r: number,
+    g: number,
+    b: number
+  ): void {
+    if (!this._registry.pixelIndices.has(hexKey)) return
+    const arr = this._registry.pixelIndices.get(hexKey)!
+    const data = this.displayImageData.data
+    for (let i = 0; i < arr.length; i++) {
+      const byteOffset = arr[i] * 4
+      data[byteOffset] = r
+      data[byteOffset + 1] = g
+      data[byteOffset + 2] = b
+    }
+    const bbox = this._registry.bboxes.get(hexKey)!
+    if (this._pendingDirtyRect === null) {
+      this._pendingDirtyRect = { ...bbox }
+    } else {
+      this._pendingDirtyRect.minX = Math.min(
+        this._pendingDirtyRect.minX,
+        bbox.minX
+      )
+      this._pendingDirtyRect.minY = Math.min(
+        this._pendingDirtyRect.minY,
+        bbox.minY
+      )
+      this._pendingDirtyRect.maxX = Math.max(
+        this._pendingDirtyRect.maxX,
+        bbox.maxX
+      )
+      this._pendingDirtyRect.maxY = Math.max(
+        this._pendingDirtyRect.maxY,
+        bbox.maxY
+      )
+    }
+  }
+
+  /** @internal */
+  public _patchSectorPixelsFromSource(hexKey: string): void {
+    if (!this._registry.pixelIndices.has(hexKey)) return
+    const arr = this._registry.pixelIndices.get(hexKey)!
+    const data = this.displayImageData.data
+    const src = this._registry.sourceBuffer
+    for (let i = 0; i < arr.length; i++) {
+      const byteOffset = arr[i] * 4
+      data[byteOffset] = src[byteOffset]
+      data[byteOffset + 1] = src[byteOffset + 1]
+      data[byteOffset + 2] = src[byteOffset + 2]
+    }
+    const bbox = this._registry.bboxes.get(hexKey)!
+    if (this._pendingDirtyRect === null) {
+      this._pendingDirtyRect = { ...bbox }
+    } else {
+      this._pendingDirtyRect.minX = Math.min(
+        this._pendingDirtyRect.minX,
+        bbox.minX
+      )
+      this._pendingDirtyRect.minY = Math.min(
+        this._pendingDirtyRect.minY,
+        bbox.minY
+      )
+      this._pendingDirtyRect.maxX = Math.max(
+        this._pendingDirtyRect.maxX,
+        bbox.maxX
+      )
+      this._pendingDirtyRect.maxY = Math.max(
+        this._pendingDirtyRect.maxY,
+        bbox.maxY
+      )
+    }
+  }
+
+  /** @internal */
+  public _flushPendingDirty(): void {
+    if (this._pendingDirtyRect === null) return
+    const r = this._pendingDirtyRect!
+    this.displayCtx.putImageData(
+      this.displayImageData,
+      0,
+      0,
+      r.minX,
+      r.minY,
+      r.maxX - r.minX + 1,
+      r.maxY - r.minY + 1
+    )
+    this._texture.needsUpdate = true
+    this._pendingDirtyRect = null
   }
 
   resetSectorColor(hexKey: string): void {
@@ -401,6 +494,8 @@ export class MapRenderer {
     if (this._destroyed) return
     this._destroyed = true
     cancelAnimationFrame(this._animFrameId)
+    this._preRenderHook = null
+    this._pendingDirtyRect = null
     this._canvas.removeEventListener('pointerdown', this._onPointerDown)
     this._canvas.removeEventListener('pointermove', this._onPointerMove)
     this._canvas.removeEventListener('pointerup', this._onPointerUp)
