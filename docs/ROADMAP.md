@@ -57,13 +57,13 @@ them. If a proposed design violates one, the design changes — not the principl
 Dependency order, read top-to-bottom. An arrow means "requires."
 
 ```
-CA-3: Input Pipeline Hardening        (no deps — structural refactor)
+CA-3: Input Pipeline Hardening        ✓ shipped v0.0.2 (no deps — structural refactor)
 
-CA-1: The Frame Hook                  (no deps — foundational)
+CA-1: The Frame Hook                  ✓ shipped v0.0.2 (no deps — foundational)
   ├── CA-7: GPU Map Modes             (Frame Hook must ship first for frame-coherent palette swaps)
-  └── CA-9: Game Clock                (Frame Hook is the time source; onFrame drives the accumulator)
+  └── CA-9: Game Clock                ✓ shipped v0.0.2 (Frame Hook is the time source; onFrame drives the accumulator)
 
-CA-2: Adjacency Graph                 (no deps — pure SectorRegistry addition)
+CA-2: Adjacency Graph                 ✓ shipped v0.0.2 (no deps — pure SectorRegistry addition)
   └── CA-4: Pathfinding Primitives    (Adjacency must ship first)
         └── CA-5: Hierarchical Aggregation   (Pathfinding context informs group-graph design)
               └── CA-6: Dynamic Perimeter Rendering  (requires Aggregation)
@@ -76,10 +76,14 @@ CA-2: Adjacency Graph                 (no deps — pure SectorRegistry addition)
 
 ---
 
-### CA-1: The Frame Hook (Pre-Render Callback)
+### CA-1 (Completed): The Frame Hook (Pre-Render Callback)
 
-**Horizon:** Immediate
+**Horizon:** Immediate — **Shipped 2026-04-20**
 **Module ownership:** `MapEngine` (hook surface) + `MapRenderer` (hook execution point)
+
+#### What Shipped
+
+`onFrame(callback: FrameCallback): void` and `offFrame(callback: FrameCallback): void` added to `MapEngine`. `_preRenderHook: (() => void) | null` wired into `MapRenderer`'s rAF loop as the first call each frame. `_inTick: boolean` on `MapEngine` gates frame-callback dispatch; `_pendingDirtyRect: SectorBBox | null` on `MapRenderer` accumulates dirty rects during the tick and flushes them in a single `putImageData` + `texture.needsUpdate = true` call after all callbacks return. `setSectorColor`/`resetSectorColor` called outside a frame callback continue to flush immediately. `_lastFrameTime` tracks the previous rAF timestamp for `dt` computation; `dt === 0` on the first frame. `parseColorToRgb` extracted to `src/internal/color.ts` as a shared module-scope OffscreenCanvas singleton. `_frameCallbacks: FrameCallback[]` is a flat ordered array (not a Set) to preserve registration order. 11 tests added; total 159 at ship.
 
 #### Job Story
 
@@ -180,10 +184,14 @@ None. This is a foundational primitive.
 
 ---
 
-### CA-2: Adjacency Graph — Phase 1 of the Spatial Runtime
+### CA-2 (Completed): Adjacency Graph — Phase 1 of the Spatial Runtime
 
-**Horizon:** Immediate
+**Horizon:** Immediate — **Shipped 2026-04-20**
 **Module ownership:** `SectorRegistry` (data) → future `SpatialGraph` class (traversal)
+
+#### What Shipped
+
+`readonly adjacency: ReadonlyMap<string, ReadonlySet<string>>` added to `SectorRegistry`. Built during the existing O(W×H) constructor scan alongside `borderEdges` — zero additional passes. Each definition-registered key is pre-initialized to an empty `Set` before the scan; bidirectional entries are added for any two adjacent pixels where both keys are in `_sectorMap`. `getNeighbors(hexKey: string): ReadonlySet<string> | undefined` added to `MapEngine` as a one-liner convenience proxy. `@deprecated` JSDoc added to `borderEdges` on `SectorRegistry` and `BorderEdge` type in `types.ts`. 14 tests added; total 188 at ship.
 
 #### Job Story
 
@@ -720,10 +728,14 @@ can be computed from `pixelIndices` with no other prerequisites.
 
 ---
 
-### CA-9: Game Clock (Temporal Primitive)
+### CA-9 (Completed): Game Clock (Temporal Primitive)
 
-**Horizon:** Near Future
+**Horizon:** Near Future — **Shipped 2026-04-20**
 **Module ownership:** New `GameClock` class (standalone export, main-thread).
+
+#### What Shipped
+
+`GameClock` class added as a new top-level export. `ClockTickCallback` type added to `src/types.ts`. Fixed-step accumulator driven by `engine.onFrame`: each frame `accumulator += dt * speed`; when `accumulator >= (1 / ticksPerSecond)` one or more `onTick` callbacks fire and the accumulator is decremented. `MAX_TICKS_PER_FRAME = 10` cap prevents spiral-of-death on lag spikes. `setSpeed(multiplier)`, `pause()`, `resume()` (restores last non-zero speed), `onTick`/`offTick`, `paused`/`speed`/`elapsed` getters, and `destroy()` (unregisters from `onFrame`). Callbacks wrapped in try/catch to prevent a failing subscriber from halting the clock. 15 tests added; total 174 at ship.
 
 #### Job Story
 
