@@ -1,8 +1,8 @@
 # SCOPE_STATEMENT.md Audit Prompt
 
-> **Purpose:** Recurring audit process for `project/SCOPE_STATEMENT.md`. Run this whenever the scope document needs a review pass. The process reads the codebase as ground truth, uses `SCOPE_STATEMENT.md` itself as the canonical direction source, and produces a revised `SCOPE_STATEMENT.md` as the only output.
+> **Purpose:** Recurring audit process for `docs/performance-refactor/SCOPE_STATEMENT.md`. Run this whenever the scope document needs a review pass. The process reads the codebase as ground truth, uses `SCOPE_STATEMENT.md` itself as the canonical direction source, and produces a revised `SCOPE_STATEMENT.md` as the only output.
 >
-> **Write permission:** `project/SCOPE_STATEMENT.md` only. Everything else is read-only.
+> **Write permission:** `docs/performance-refactor/SCOPE_STATEMENT.md` only. Everything else is read-only.
 
 ---
 
@@ -11,8 +11,8 @@
 **Source-of-truth hierarchy (in descending authority):**
 
 1. **The codebase** (`src/`, `test/`) — what actually exists, what is actually tested, what actually couples to what. When the SCOPE makes a factual claim about the code, the code wins.
-2. **`project/SCOPE_STATEMENT.md` Sections 2–4** — canonical direction: the Core Engineering Mandates (Pillar definitions), the Evidence Base (findings, cross-analysis, root-cause hierarchy), and the Leverage Analysis (V-number scoring table, matrix categorization, dependency graph). These drive the _direction_ of the SCOPE and are not subject to revision based on codebase findings alone.
-3. **`project/SCOPE_STATEMENT.md` Sections 5–9** — the auditable body: Scope Description, Tangible Deliverables, Acceptance Criteria, Exclusions, and Constraints. These must accurately reflect both the current code state and the direction established in Sections 2–4.
+2. **`docs/performance-refactor/SCOPE_STATEMENT.md` Sections 2–4** — canonical direction: the Core Engineering Mandates (Pillar definitions), the Evidence Base (findings, cross-analysis, root-cause hierarchy), and the Leverage Analysis (V-number scoring table, matrix categorization, dependency graph). These drive the _direction_ of the SCOPE and are not subject to revision based on codebase findings alone.
+3. **`docs/performance-refactor/SCOPE_STATEMENT.md` Sections 5–9** — the auditable body: Scope Description, Tangible Deliverables, Acceptance Criteria, Exclusions, and Constraints. These must accurately reflect both the current code state and the direction established in Sections 2–4.
 
 **Failure modes to eliminate:**
 
@@ -28,7 +28,7 @@
 
 ## Phase 1 — Load Canonical Direction
 
-Read `project/SCOPE_STATEMENT.md` in full before touching the codebase. It is the single document — canonical direction and auditable body in one.
+Read `docs/performance-refactor/SCOPE_STATEMENT.md` in full before touching the codebase. It is the single document — canonical direction and auditable body in one.
 
 Read it section by section and extract the following:
 
@@ -264,11 +264,11 @@ When the SCOPE explicitly says a data structure or test suite is "preserved" or 
 
 ## Phase 6 — Write the Revised SCOPE_STATEMENT.md
 
-After completing Phases 1–5, produce the revised `project/SCOPE_STATEMENT.md`.
+After completing Phases 1–5, produce the revised `docs/performance-refactor/SCOPE_STATEMENT.md`.
 
 **Rules:**
 
-- Only write to `project/SCOPE_STATEMENT.md`. No other files may be created or modified.
+- Only write to `docs/performance-refactor/SCOPE_STATEMENT.md`. No other files may be created or modified.
 - Preserve the document's section structure (Sections 1–9 plus any subsections from the current version). Restructure only when necessary for clarity.
 - For each change, the change must be traceable to a specific finding from the audit (a line in the code, a test assertion, a property type, etc.).
 - Do not add speculation. Every added fact must be verifiable in `src/` or `test/`.
