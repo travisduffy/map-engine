@@ -27,6 +27,7 @@ Establish the "Hierarchy of Truth" by loading:
 
 1. `GEMINI.md` (Mandates)
 2. `docs/ROADMAP.md` (Target)
+3. `docs/ROADMAP_TRACEABILITY_MATRIX.md` (Audit Revision Traceability Matrix)
 
 ### Phase 2: The Two-Pass Audit
 
@@ -34,6 +35,7 @@ Establish the "Hierarchy of Truth" by loading:
 
 - Ensure logical flow and zero internal contradictions.
 - Verify Job Stories, dependencies (A1-B6), and technical fidelity notes are consistent.
+- **Traceability Check:** Cross-reference current roadmap state against the `ROADMAP_TRACEABILITY_MATRIX.md` to ensure previously resolved findings have not regressed.
 
 **Pass 2: Code-Truth Verification (Doc-vs-Code)**
 
@@ -47,13 +49,15 @@ Output a report detailing:
 
 1. **Discrepancy Log:** Hallucinations, Context Loss, and Inaccuracies with Proof.
 2. **Risk & Friction Points:** Underspecified gotchas or missing dependencies.
-3. **Proposed Revision Plan:** Prioritized edits (DO NOT implement until authorized).
+3. **Proposed Revision Plan:** Prioritized edits.
+4. **Audit Matrix Update:** Drafted entries for `docs/ROADMAP_TRACEABILITY_MATRIX.md` covering all new discrepancies.
 
 ### Phase 4: Post-Audit Procedure
 
 1. Present the Report.
 2. Wait for BDFL prioritization.
 3. Execute Revision Pass ONLY upon explicit instruction.
+4. **Finality Gate:** Update `docs/ROADMAP_TRACEABILITY_MATRIX.md` with the resolution status and section citations for every addressed finding.
 
 ---
 
