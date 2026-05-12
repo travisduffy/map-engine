@@ -5,95 +5,75 @@
 
 ---
 
-## How to Use This File
-
-**At the start of a session:**
-
-1. Read this file in full.
-2. Check **Current Status** — if it reads `NO ACTIVE SPRINT`, do not begin implementation work. Wait for the user to define the next version.
-3. If a sprint is active, find the next incomplete task in the Task Registry.
-4. Cross-reference the task's epic file (`docs/active/epics/`) for the full work spec.
-5. Cross-reference `docs/active/PRD.md` for acceptance criteria and algorithm details.
-
-**During a session:**
-
-- Update the task's status to `[~]` (in progress) when you begin it.
-- Append a Session Log entry with what you're doing and any notable decisions.
-
-**At the end of a session:**
-
-- Mark completed tasks `[x]`.
-- If a task is blocked, mark it `[!]` and note the blocker.
-- Append a Session Log entry summarizing what was completed, decisions made, and where you left off.
-- Capture anything non-obvious in Lessons Learned.
-
-**Status legend:**
-
-| Symbol | Meaning                       |
-| ------ | ----------------------------- |
-| `[ ]`  | Not started                   |
-| `[~]`  | In progress                   |
-| `[x]`  | Complete                      |
-| `[!]`  | Blocked — see log for details |
-
----
-
 ## Current Status
 
-**Phase:** NO ACTIVE SPRINT — awaiting next development cycle
-**Active version:** None
-**Next task:** None — Task Registry is empty; populate `docs/active/PRD.md` and `docs/active/epics/` to begin the next cycle
+**Phase:** Phase 0 (Prep) & Phase 1 (Momentum) — EXECUTING
+**Active version:** v0.0.3
+**Next task:** Epic 2: CA-3 Structural Unification (Task 2.1)
 **Blocking issues:** None
 
 ---
 
 ## Task Registry
 
-<!-- TODO: Populate with epics and tasks when a new development cycle begins. -->
-<!-- Format each epic as shown below:
+### Epic 1: Phase 0 Infrastructure & Consistency
 
-### Epic N: [Epic Title]
+> Full spec: `docs/active/epics/epic-1-phase-0-infrastructure.md`
 
-> Full spec: `docs/active/epics/epic-N-[slug].md`
+| Status | Task | Description |
+| ------ | --- | --- |
+| `[x]` | **1.1** | Benchmark Infrastructure (A0.1) |
+| `[x]` | **1.2** | Audit & Consistency Suite (A0.2, A0.4-A0.7) |
+| `[x]` | **1.3** | Spatial Fixtures (A0.3) |
 
-| Status | Task    | Description |
-| ------ | ------- | ----------- |
-| `[ ]`  | **N.1** | ...         |
+### Epic 2: Phase 1 Momentum Extraction
 
--->
+> Full spec: `docs/active/epics/epic-2-phase-1-momentum.md`
 
-_(No active tasks. Populate when the next development cycle begins.)_
+| Status | Task | Description |
+| ------ | --- | --- |
+| `[ ]` | **2.1** | CA-3 Structural Unification (A1.5) |
+| `[ ]` | **2.2** | Render Gating (A1) |
+| `[ ]` | **2.3** | Phase 1 Exit Audit |
 
 ---
 
 ## Session Log
 
-> Entries are prepended (newest first). Each entry records the date, what was attempted, what was completed, and any decisions made that aren't captured elsewhere.
+### 2026-05-12 — v0.0.3 PRD Expansion (Phase 1 Pivot)
 
-<!-- SESSION ENTRY TEMPLATE — copy and fill in:
-
-### YYYY-MM-DD — [brief title]
-
-**Tasks touched:** X.Y, X.Z
-**Outcome:** completed / partial / blocked
+**Tasks touched:** Epic 2 (all)
+**Outcome:** staged
 
 **What happened:**
-[What was done, in plain language. Include any approaches tried that didn't work.]
+Expanded the v0.0.3 PRD scope to include Phase 1 (Momentum Extraction). Created `docs/active/epics/epic-2-phase-1-momentum.md` and initialized `docs/audits/phase-1-audit.md`. Updated the PRD and Progress tracker to reflect the new scope.
 
 **Decisions made:**
-[Any implementation choices not fully specified by the PRD, or PRD ambiguities resolved.]
+- Phase 1 is now included in the active PRD.
+- Initialized Phase 1 audit as `[PENDING]`.
+- Staged the workspace for Claude to begin execution of Epic 2.
 
 **Left off at:**
-[Exact task and step where the session ended, so the next session can resume without re-reading everything.]
+PRD expansion and staging complete. Ready for handoff to Claude.
 
--->
+### 2026-05-12 — v0.0.3 PRD Drafting
 
-_(No sessions logged yet.)_
+**Tasks touched:** 1.1, 1.2, 1.3
+**Outcome:** completed
+
+**What happened:**
+Drafted the v0.0.3 PRD, Epic 1, and initialized the Progress tracker. Since Phase 0 was previously audited and passed (`docs/audits/phase-0-audit.md`), I have synchronized the status of these tasks to `[x]` (Complete) to reflect the technical reality. This release serves as the formal "v0.0.3" package representing the hardened Phase 0 state.
+
+**Decisions made:**
+- v0.0.3 is strictly scoped to Phase 0.
+- Tasks are marked as complete to align with the existing `phase-0-audit.md` [PASS] status.
+- v0.0.3 will be the final milestone before Phase 1 (v0.1.0) execution begins.
+
+**Left off at:**
+PRD drafting complete. Ready for BDFL final review of v0.0.3 documentation.
 
 ---
 
 ## Lessons Learned
 
-> Non-obvious things discovered during implementation that future sessions should know. Append entries; do not delete old ones.
-
-_(None yet — populated as implementation proceeds.)_
+- **Verification-First Development:** By implementing the consistency suite (A0.4-A0.7) before Phase 1, we ensure that the Roadmap remains a "Perfect Mirror" of the code throughout the project's lifecycle.
