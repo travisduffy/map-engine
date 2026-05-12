@@ -22,7 +22,7 @@ Consolidate input state and listeners into a unified `InputController`. Relocate
 **Work:**
 
 - **A1.5.0 (Pre-flight):** Verify `npm run typecheck` and `npm run bench:registry-alloc` pass on `main`.
-- **A1.5.1 (Path Migration):** 
+- **A1.5.1 (Path Migration):**
   - Move `src/SectorRegistry.ts` to `src/registry/SectorRegistry.ts` (if path changes required by §12.5).
   - Move `src/SectorBitmapParser.ts` to `src/parser/SectorBitmapParser.ts`.
   - Update all imports across `src/` and `test/`.

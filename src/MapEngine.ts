@@ -2,7 +2,13 @@ import * as THREE from 'three'
 import { SectorBitmapParser } from './SectorBitmapParser'
 import { SectorRegistry } from './SectorRegistry'
 import { MapRenderer } from './MapRenderer'
-import type { MapConfig, SectorData, PickResult, FrameCallback } from './types'
+import type {
+  MapConfig,
+  PickEvent,
+  SectorData,
+  PickResult,
+  FrameCallback,
+} from './types'
 import { parseColorToRgb } from './internal/color'
 
 export class MapEngine {
@@ -15,8 +21,6 @@ export class MapEngine {
   private _canvas: HTMLCanvasElement | null = null
   private _registry: SectorRegistry | null = null
   private _renderer: MapRenderer | null = null
-  private _boundPointerMove: ((e: PointerEvent) => void) | null = null
-  private _boundClick: ((e: MouseEvent) => void) | null = null
   private readonly _raycaster: THREE.Raycaster
   private _frameCallbacks: FrameCallback[] = []
   private _inTick: boolean = false
@@ -65,7 +69,7 @@ export class MapEngine {
     }
   }
 
-  private _handlePointerEvent(event: MouseEvent, isClick: boolean): void {
+  private _handlePointerEvent(event: PickEvent, isClick: boolean): void {
     if (!this._renderer || !this._registry || !this._canvas) return
 
     // Step 1: NDC conversion via getBoundingClientRect()
@@ -176,17 +180,17 @@ export class MapEngine {
           renderer._flushPendingDirty()
         }
       }
-      renderer = new MapRenderer(config.canvas, registry, hook)
+      renderer = new MapRenderer(
+        config.canvas,
+        registry,
+        hook,
+        e => this._handlePointerEvent(e, false),
+        e => this._handlePointerEvent(e, true)
+      )
 
       this._canvas = config.canvas
       this._registry = registry
       this._renderer = renderer
-
-      this._boundPointerMove = (e: PointerEvent) =>
-        this._handlePointerEvent(e, false)
-      this._boundClick = (e: MouseEvent) => this._handlePointerEvent(e, true)
-      this._canvas.addEventListener('pointermove', this._boundPointerMove)
-      this._canvas.addEventListener('click', this._boundClick)
 
       this._loaded = true
       this._loading = false
@@ -209,23 +213,13 @@ export class MapEngine {
       this._renderer.destroy()
     }
 
-    // Step 3: remove MapEngine-owned canvas listeners (picking)
-    if (this._canvas) {
-      if (this._boundPointerMove)
-        this._canvas.removeEventListener('pointermove', this._boundPointerMove)
-      if (this._boundClick)
-        this._canvas.removeEventListener('click', this._boundClick)
-    }
-
-    // Step 4: clear event handler map
+    // Step 3: clear event handler map
     this._handlers.clear()
 
     // Step 5: null out refs
     this._registry = null
     this._renderer = null
     this._canvas = null
-    this._boundPointerMove = null
-    this._boundClick = null
     this._loading = false
 
     // Steps 6–7: conditionally mark destroyed

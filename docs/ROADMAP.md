@@ -130,7 +130,6 @@ To prevent cross-phase data-type contradictions, all milestones MUST adhere to t
 >
 > **GPU Sync Mandate (F-C.9):** WebGL-bound buffers (currently `borderEdges`) must have their data uploaded to a GPU VBO via `IThreeRenderBackend.uploadBorderEdges(buffer, count)` _before_ the CPU-side Transferable is bounced back to the Worker. The `THREE.BufferAttribute` exposed by `BorderRenderer` is bound to the managed GPU VBO, never directly to the Transferable's CPU-side array. **Critically:** Bounce-back to the Worker happens ONLY inside `MapRenderer._postRenderHook()`, ensuring Three.js has completed its draw calls before the buffer is detached.
 
-
 **Note on `pixelIndices`:** Before transferring `pixelIndices` to the Worker (B3), the main thread MUST upload it as a GPU texture source; the Worker thereafter owns the ONLY CPU-resident copy (F-3.3).
 
 ---
@@ -198,6 +197,7 @@ _Goal: Eliminate obvious waste and harden the rendering pipeline without breakin
 9. `npm` (v10 or v11+) is installed in the execution environment.
 
 **Phase 0 Acceptance Criteria (Verification REQUIRED):**
+
 - **Benchmark Stability:** Median baseline capture shows <5% variance across two consecutive nightly runs on reference hardware.
 - **Anchor Verification:** Anchor fixture `expectedAnchor` values independently re-verified against a reference implementation or second-party review.
 - **Integrity Pass:** `bin/check-finding-codes.sh` and `bin/check-roadmap-cross-refs.sh` both exit 0 on current `main`.
@@ -572,9 +572,10 @@ _Note: The `sourceBuffer` MUST be disposed immediately after `pixelIndices` extr
 
 ### 12.4 Semver Policy (F-ER.5)
 
-The BDFL (User) is the sole authority on versioning. The project is currently in a "pre-v1.0" development state where public API stability is not guaranteed. 
+The BDFL (User) is the sole authority on versioning. The project is currently in a "pre-v1.0" development state where public API stability is not guaranteed.
 
 **Pre-1.0 Planned Breaking Changes:**
+
 - **async `pick()` (Pass 8 Revision):** `MapEngine.pick()` signature will change from synchronous to `Promise<PickResult | null>`.
   - **Rationale:** Accommodate GPU readback latency and Web Worker IPC overhead. Required to maintain OMT (Off-Main-Thread) architecture without blocking the Main thread.
 
