@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Documentation Architecture — Read Before Anything Else
 
 This repo uses a strict three-tier documentation system defined in `docs/claude-strategy.md`. **All persistent AI context lives inside the repo, version-controlled, in one of exactly three places:**
@@ -113,6 +111,17 @@ Before concluding any task, run in this order:
 5. Update relevant `.claude/rules/*.md` files if domain patterns changed, then update `docs/active/PROGRESS.md`
 6. `npm run format` — apply Prettier to all edited files
 
+**Before any handoff or phase exit**, also run the consistency scripts (see `docs/PROTOCOLS.md §3`):
+
+```bash
+./bin/check-finding-codes.sh
+./bin/check-roadmap-cross-refs.sh
+./bin/check-matrix-vs-roadmap.sh
+./bin/check-roadmap-consistency.sh
+```
+
+All four must exit 0 before passing control to Gemini.
+
 **When modifying the public API:** also update `example/src/main.ts` to reflect the change — the example must always demonstrate the current, accurate API surface.
 
 ## Dev dependencies (when installing)
@@ -143,6 +152,8 @@ sharp@^0.33.0           # fixture generation only
 - `docs/archive/` — completed versions organized by SemVer tag (e.g., `v0.0.1/`). Treat as read-only historical reference; never modify archive contents.
 - `docs/templates/` — blank starter templates (`PRD_TEMPLATE.md`, `PROGRESS_TEMPLATE.md`) used to initialize a new sprint's `docs/active/` workspace.
 - `docs/claude-strategy.md` — three-tier docs strategy, sprint lifecycle, and directory conventions.
+- `docs/PROTOCOLS.md` — **normative authority for agent communication**: handoff semaphore (Token: CLAUDE/GEMINI), rolling-three-message rule, phase exit audit protocol, and consistency scripts. Read this before any handoff or phase exit.
+- `docs/HANDOFF.md` — passive inbox; read only when the BDFL explicitly instructs. Token on line 1 identifies the intended recipient.
 
 > **Archiving is a human-triggered event.** NEVER move files into `docs/archive/` autonomously. Only execute an archive sequence when the user explicitly instructs you to do so in that session.
 

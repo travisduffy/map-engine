@@ -1,0 +1,9 @@
+{
+  "b1.constructor_alloc_bytes": {
+    "value": 0,
+    "unit": "bytes",
+    "capturedAt": "",
+    "hardware": "unknown",
+    "measurementMethod": "unknown"
+  }
+}
