@@ -9,7 +9,7 @@
 
 **Phase:** Phase 0 (Prep) & Phase 1 (Momentum) — EXECUTING
 **Active version:** v0.0.3
-**Next task:** Epic 2: Phase 1 Exit Audit (Task 2.3)
+**Next task:** None — Epic 2 complete. Awaiting BDFL direction for next sprint.
 **Blocking issues:** None
 
 ---
@@ -34,11 +34,29 @@
 | ------ | ------- | ---------------------------------- |
 | `[x]`  | **2.1** | CA-3 Structural Unification (A1.5) |
 | `[x]`  | **2.2** | Render Gating (A1)                 |
-| `[ ]`  | **2.3** | Phase 1 Exit Audit                 |
+| `[x]`  | **2.3** | Phase 1 Exit Audit                 |
 
 ---
 
 ## Session Log
+
+### 2026-05-12 — Task 2.3: Phase 1 Exit Audit
+
+**Tasks touched:** 2.3
+**Outcome:** completed
+
+**What happened:**
+Executed the Phase 1 self-audit per Task 2.3 work spec. Verified all acceptance criteria mechanically before writing the report: (1) `git grep` DOM listener check — zero hits outside `src/input/InputController.ts`; (2) `npm run typecheck` — clean; (3) `test/RenderGating.test.ts` — 8/8 pass, 196/196 total; (4) all four `bin/check-*` scripts — exit 0; (5) bundle size — 5,588 bytes gzipped (well under 15 kB budget); (6) P-1/P-2 grep checks — no Three.js or DOM refs in SectorRegistry/SectorBitmapParser; (7) PR-4 — `InputController` is not exported, `src/index.ts` unchanged. Completed `docs/audits/phase-1-audit.md` with full evidence and set status to `[PASS]`.
+
+**Decisions made:**
+
+- No discrepancies found between ROADMAP §5 and implementation — discrepancy log is empty.
+- Audit authored as self-audit by Engineer per Task 2.3 work spec. Gemini may independently verify via `docs/prompts/audit-only.md` if BDFL requests.
+
+**Left off at:**
+All three Epic 2 tasks complete (`[x]`). Phase 1 audit `[PASS]`. Awaiting BDFL instruction for next sprint.
+
+---
 
 ### 2026-05-12 — Task 2.2: Render Gating (A1)
 
@@ -49,6 +67,7 @@
 Gated `renderer.render()` in the rAF loop behind `if (this._dirty)`, clearing the flag after each render. Added `this._dirty = true` to `setSectorColor`, `resetSectorColor`, and `_flushPendingDirty` (the three mutation paths that require a GPU submit). The `InputController.onDirty` callback (wired in Task 2.1) and canvas resize handler (already present) cover the remaining dirty sources. Created `test/RenderGating.test.ts` (8 tests) using a `vi.spyOn(window, 'requestAnimationFrame')` mock to capture the loop callback and invoke it manually, enabling deterministic verification of render call counts. All 196 tests pass.
 
 **Decisions made:**
+
 - Mocked `requestAnimationFrame` at the `window` level before `MapRenderer` construction to capture the loop callback — avoids timing non-determinism of real rAF in browser mode.
 - `_flushPendingDirty` sets `_dirty = true` only when `_pendingDirtyRect` is non-null (early return guards it), so the flush path only marks dirty when there is actual work to display.
 - Test exercises all four dirty sources: initial frame, pan (InputController), immediate color mutation, and in-tick patch flush.

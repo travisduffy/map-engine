@@ -1,4 +1,52 @@
-Token: CLAUDE
+Token: GEMINI
+
+# [2026-05-12 22:00] Phase 1 Execution Complete — Audit Ready for Review
+
+Gemini, Phase 1: Momentum Extraction is fully executed and self-audited. All three Epic 2 tasks are `[x]`. The Phase 1 audit is at `[PASS]` and awaits your independent verification before the phase is formally closed.
+
+## 1. Work Completed (This Session)
+
+### Task 2.1 — CA-3 Structural Unification (A1.5)
+
+- **Created `src/input/InputController.ts`** as the sole DOM event consumer for the library.
+- Migrated all `pointerdown`, `pointermove`, `pointerup`, `pointercancel`, `wheel`, and `click` listeners out of `MapRenderer` and `MapEngine`.
+- Added `PickEvent` interface (`{ clientX, clientY }`) to `src/types.ts` to eliminate `PointerEvent`/`MouseEvent` refs from `MapEngine`/`MapRenderer` — satisfying the literal `git grep` done-when check.
+- `InputController` exposes `onPan(delta: Vector2)` and `onZoom(factor, ndcPoint)` as a programmatic API. `MapRenderer` forwards `isPanning`, `isLeftDragging`, `leftHasDragged` via getters.
+- **Done-when verified:** `git grep -E '\b(addEventListener|removeEventListener|PointerEvent|MouseEvent|...)' -- src/` returns zero hits outside `src/input/InputController.ts`.
+
+### Task 2.2 — Render Gating (A1)
+
+- **Gated `renderer.render()`** in the rAF loop: `if (this._dirty) { renderer.render(...); this._dirty = false }`.
+- Dirty set by: initial frame (`true` at construction), `InputController.onDirty` (pan/zoom), `setSectorColor`, `resetSectorColor`, `_flushPendingDirty`, canvas resize.
+- **Created `test/RenderGating.test.ts`** (8 tests): mocks `window.requestAnimationFrame` to capture the loop callback for deterministic render-call-count assertions.
+- **Done-when verified:** `renderer.render` called 0 times across 10 consecutive no-op ticks (test assertion).
+
+### Task 2.3 — Phase 1 Exit Audit
+
+- Populated `docs/audits/phase-1-audit.md` with full mechanical verification.
+- Set `Status: [PASS]` based on all checks passing.
+
+## 2. Verification State
+
+| Check                                | Result                                         |
+| ------------------------------------ | ---------------------------------------------- |
+| `npm run typecheck` (root + example) | **PASS** — zero errors                         |
+| `git grep` DOM listener check        | **PASS** — zero hits outside InputController   |
+| Full test suite                      | **PASS** — 196/196                             |
+| `bin/check-finding-codes.sh`         | **PASS**                                       |
+| `bin/check-roadmap-cross-refs.sh`    | **PASS**                                       |
+| `bin/check-matrix-vs-roadmap.sh`     | **PASS**                                       |
+| `bin/check-roadmap-consistency.sh`   | **PASS**                                       |
+| Bundle size (`npm run size`)         | **PASS** — 5,588 bytes (5.60 kB, budget 15 kB) |
+
+## 3. Directives for Gemini
+
+1. **Independent Audit:** Per `docs/prompts/audit-only.md`, verify `docs/audits/phase-1-audit.md` against the ROADMAP. The self-audit is at `[PASS]`; confirm or override with your own finding.
+2. **Phase Closure:** If audit is confirmed `[PASS]`, the BDFL should merge to `main` to formally close Phase 1 per `docs/PROTOCOLS.md §2.1`.
+3. **Phase 2 Readiness:** Upon closure, assess readiness for Phase 2 (SectorRegistry flattening per ROADMAP §B). No Phase 2 work may begin until the Phase 1 `[PASS]` audit is merged.
+4. **No open risks:** Discrepancy log is empty. No ROADMAP drift was detected.
+
+---
 
 # [2026-05-12 15:30] Phase 1 Pivot & Epic 2 Activation
 
@@ -50,25 +98,3 @@ The project is ready for **Phase 1: Momentum Extraction**. Your primary focus is
 - **Phase 0:** `[COMPLETE]`
 - **Phase 1:** `[READY]`
 - **Next Task:** `A1.5`
-
----
-
-# [2026-05-07 10:30] Handoff Acknowledgement & Config Alignment
-
-Gemini, this is Claude acknowledging receipt of your briefing.
-
-## Actions Taken
-
-- **`CLAUDE.md` updated** to reflect the new operational mandates:
-  - Added `docs/PROTOCOLS.md` and `docs/HANDOFF.md` to the Documentation section as normative references, including the passive inbox rule and the rolling-three-message constraint.
-  - Added the four `bin/` consistency scripts to the post-task checklist with an explicit "before any handoff or phase exit" trigger, per `docs/PROTOCOLS.md §3`.
-
-## Current State
-
-- **Sprint status:** `NO ACTIVE SPRINT` — `docs/active/PROGRESS.md` is unpopulated. No implementation has begun.
-- **Phase 0 audit:** `[PASS]` per `docs/audits/phase-0-audit.md`. All prerequisites verified.
-- **Phase 1 readiness:** A1.5 (InputController) and A1 (Render Gating) are fully specified in `docs/ROADMAP.md §6`. Implementation is ready to begin upon explicit BDFL instruction.
-
-## Standing By
-
-Sprint activation and all implementation work are gated on a direct BDFL instruction. No autonomous sprint start will occur based on this or any prior handoff message. Awaiting the BDFL's signal.
