@@ -162,7 +162,10 @@ export class MapRenderer {
         this.clampPan()
         this._dirty = true
       }
-      this.renderer.render(this.scene, this.camera)
+      if (this._dirty) {
+        this.renderer.render(this.scene, this.camera)
+        this._dirty = false
+      }
     }
     this._animFrameId = requestAnimationFrame(loop)
   }
@@ -241,6 +244,7 @@ export class MapRenderer {
       bbox.maxY - bbox.minY + 1
     )
 
+    this._dirty = true
     this._texture.needsUpdate = true
   }
 
@@ -331,6 +335,7 @@ export class MapRenderer {
       r.maxX - r.minX + 1,
       r.maxY - r.minY + 1
     )
+    this._dirty = true
     this._texture.needsUpdate = true
     this._pendingDirtyRect = null
   }
@@ -363,6 +368,7 @@ export class MapRenderer {
       bbox.maxY - bbox.minY + 1
     )
 
+    this._dirty = true
     this._texture.needsUpdate = true
   }
 

@@ -9,7 +9,7 @@
 
 **Phase:** Phase 0 (Prep) & Phase 1 (Momentum) — EXECUTING
 **Active version:** v0.0.3
-**Next task:** Epic 2: CA-3 Structural Unification (Task 2.1)
+**Next task:** Epic 2: Phase 1 Exit Audit (Task 2.3)
 **Blocking issues:** None
 
 ---
@@ -33,12 +33,30 @@
 | Status | Task    | Description                        |
 | ------ | ------- | ---------------------------------- |
 | `[x]`  | **2.1** | CA-3 Structural Unification (A1.5) |
-| `[ ]`  | **2.2** | Render Gating (A1)                 |
+| `[x]`  | **2.2** | Render Gating (A1)                 |
 | `[ ]`  | **2.3** | Phase 1 Exit Audit                 |
 
 ---
 
 ## Session Log
+
+### 2026-05-12 — Task 2.2: Render Gating (A1)
+
+**Tasks touched:** 2.2
+**Outcome:** completed
+
+**What happened:**
+Gated `renderer.render()` in the rAF loop behind `if (this._dirty)`, clearing the flag after each render. Added `this._dirty = true` to `setSectorColor`, `resetSectorColor`, and `_flushPendingDirty` (the three mutation paths that require a GPU submit). The `InputController.onDirty` callback (wired in Task 2.1) and canvas resize handler (already present) cover the remaining dirty sources. Created `test/RenderGating.test.ts` (8 tests) using a `vi.spyOn(window, 'requestAnimationFrame')` mock to capture the loop callback and invoke it manually, enabling deterministic verification of render call counts. All 196 tests pass.
+
+**Decisions made:**
+- Mocked `requestAnimationFrame` at the `window` level before `MapRenderer` construction to capture the loop callback — avoids timing non-determinism of real rAF in browser mode.
+- `_flushPendingDirty` sets `_dirty = true` only when `_pendingDirtyRect` is non-null (early return guards it), so the flush path only marks dirty when there is actual work to display.
+- Test exercises all four dirty sources: initial frame, pan (InputController), immediate color mutation, and in-tick patch flush.
+
+**Left off at:**
+Task 2.2 complete. 196/196 tests pass. Build: 5.60 kB gzipped. All `bin/check-*` scripts exit 0. Ready for Task 2.3 (Phase 1 Exit Audit).
+
+---
 
 ### 2026-05-12 — Task 2.1: CA-3 Structural Unification (A1.5)
 
@@ -49,6 +67,7 @@
 Created `src/input/InputController.ts` as the sole DOM event consumer. Migrated all pointer/wheel/click event listeners out of `MapRenderer` and `MapEngine`. `MapRenderer` now constructs and owns an `InputController`, passing `() => { this._dirty = true }` as the `onDirty` callback (prep for Task 2.2 render gating). Added `PickEvent` interface to `types.ts` to eliminate `PointerEvent`/`MouseEvent` type refs from MapEngine and MapRenderer, satisfying the literal done-when grep check. `InputController` exposes public `onPan(delta: Vector2)` and `onZoom(factor, ndcPoint)` methods as a programmatic API.
 
 **Decisions made:**
+
 - §12.5 specifies `SectorRegistry` and `SectorBitmapParser` at their current paths — no file moves needed.
 - Introduced `PickEvent` interface (`{ clientX, clientY }`) in `types.ts` so MapEngine/MapRenderer carry zero `PointerEvent`/`MouseEvent` refs, making the `git grep` done-when check pass literally.
 - `_dirty` field added to `MapRenderer` now (not just in Task 2.2) because the `onDirty` callback wires into it immediately.
