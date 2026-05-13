@@ -102,14 +102,19 @@ The example app's map bitmap and sector definition are committed static assets. 
 
 ### Post-task checklist
 
-Before concluding any task, run in this order:
+Before concluding any task, run in two parallel batches then update state:
 
-1. `npm run typecheck` — zero type errors (root library)
-2. `npm run typecheck:example` — zero type errors (example workspace)
-3. `npm run build` — clean library output
-4. `npm run test` — full test suite passes
-5. Update relevant `.claude/rules/*.md` files if domain patterns changed, then update `docs/active/PROGRESS.md`
-6. `npm run format` — apply Prettier to all edited files
+**Batch 1 (parallel):** `npm run typecheck` + `npm run typecheck:example`
+
+**Batch 2 (parallel, after Batch 1 passes):** `npm run test` + `npm run build`
+
+`npm run test` operates on source via the Vite alias — it does not depend on `npm run build`. Always run them together in Batch 2, not sequentially.
+
+**State + format (once, at end of session — not after each individual task):**
+
+- Update relevant `.claude/rules/*.md` files if domain patterns changed.
+- Write `docs/active/PROGRESS.md` (see Efficiency Directives below).
+- `npm run format`
 
 **Before any handoff or phase exit**, also run the consistency scripts (see `docs/PROTOCOLS.md §3`):
 
@@ -176,6 +181,53 @@ all bump `v0.0.y` while this era is active.
    "the next patch release." The BDFL names the version number at release time.
 4. **The jump from v0.0.y to v0.1.0 is a BDFL-only decision.** Do not assume,
    suggest, or plan for it.
+
+## Operational Efficiency
+
+These directives are derived from measured session overhead. Apply them on every task.
+
+### 1. State files: Read once, Write once
+
+`PROGRESS.md` and `HANDOFF.md` routinely need 2–3 changes per session (status field, task table, session log). **Determine all changes before touching the file, then do one Read → one Write.** Never make multiple Edit calls to the same file in one session — each extra Edit call is pure overhead with no benefit over a full Write.
+
+### 2. Test research: Grep before broad reads
+
+Never load a full test file to find setup patterns. Grep first:
+
+```bash
+grep -n 'beforeEach\|describe\|make.*Buffer\|requestAnimationFrame\|advanceFrame' test/Target.test.ts
+```
+
+Only escalate to a full Read if the grep result is insufficient. Test files in this repo run 400–900 lines; the useful setup surface is typically 30–50.
+
+A specific signal: if a `beforeEach` in an existing test does `cancelAnimationFrame(renderer['_animFrameId'])`, the test harness bypasses the rAF loop entirely and calls `_preRenderHook` directly. This means it **cannot** test logic inside the loop body (e.g., render gating). Recognize this pattern immediately rather than reading `testUtils.ts` to confirm it.
+
+### 3. Verification: maximize parallelism
+
+The post-task checklist explicitly requires two parallel batches. The additional rule for phase-exit or handoff:
+
+```bash
+# Run these three in parallel (one shell message, three calls):
+npm run test
+npm run build && ./bin/check-finding-codes.sh && ./bin/check-roadmap-cross-refs.sh && ./bin/check-matrix-vs-roadmap.sh && ./bin/check-roadmap-consistency.sh
+npm run typecheck && npm run typecheck:example
+```
+
+`npm run test` runs against source (no build dependency). `npm run build` is independent of tests. There is no reason these ever run sequentially.
+
+### 4. Trust CLAUDE.md; do not verify via config reads
+
+If CLAUDE.md documents a behavior, treat it as authoritative. Do **not** read `vite.config.ts`, `tsconfig.json`, or `package.json` to verify information already stated here. Concretely: the test runner is Vitest browser mode (Playwright/Chromium), `vi.spyOn` works on window-level globals, `three` is external in the build — these are all stated here and do not require config file confirmation.
+
+### 5. System-reminder preloads are live context
+
+Files shown in system-reminder `Read` results at session start are already in your context window. Check what is preloaded before issuing any Read call. Re-reading a preloaded file costs a full round-trip for zero new information.
+
+### 6. Targeted reads for known sections
+
+When only a named section of a large file is needed (e.g., PRD §A1, ROADMAP §2.1, a specific audit section), use `offset` + `limit` parameters. Thirty lines around the target is almost always sufficient. Reading a full 80-line PRD to extract a 10-line section wastes 70 lines of context budget every time.
+
+---
 
 ## Session Workflow
 
