@@ -7,9 +7,9 @@
 
 ## Current Status
 
-**Phase:** Phase 0 (Prep) & Phase 1 (Momentum) — EXECUTING
+**Phase:** Phase 1 (Momentum) — COMPLETE | Phase 2 (Structural) — READY
 **Active version:** v0.0.3
-**Next task:** None — Epic 2 complete. Awaiting BDFL direction for next sprint.
+**Next task:** Phase 2 execution (pending BDFL activation)
 **Blocking issues:** None
 
 ---
@@ -39,6 +39,24 @@
 ---
 
 ## Session Log
+
+### 2026-05-14 — Task 1.1: A0.1 Benchmark Infrastructure (Regression Fix)
+
+**Tasks touched:** 1.1
+**Outcome:** completed
+
+**What happened:**
+Restored the missing Phase 0 benchmark infrastructure per Gemini's blocker report. Created `bench/registry-alloc.spec.ts` (Playwright test, Node-only via no page fixture) that decodes `test/fixtures/maps/large.png` with sharp, constructs a `SectorRegistry` with empty definition (exercises the full O(W×H) scan + borderEdges allocation), and writes the memory delta to `bench/.last-result.json`. Created `bench/playwright.config.ts` with a 120s timeout. Created `bin/capture-baseline.sh` which runs 10 iterations with `NODE_OPTIONS=--expose-gc`, computes the median, and writes the result to `bench/baselines.json`. Updated `package.json` bench script to use `--config bench/playwright.config.ts`. Added `exclude: ['bench/**']` to Vitest config to prevent Vitest from picking up the Playwright-only spec file. Captured the baseline: **16,327,600 bytes (~15.6 MB)** median across 10 runs on Linux x86_64.
+
+**Decisions made:**
+
+- Used Node-only Playwright test (no `page` fixture) + `process.memoryUsage().heapUsed` rather than a browser page with `performance.memory.usedJSHeapSize`. The spec's COOP/COEP fallback path allows this; `--expose-gc` ensures GC before measurement for reproducibility.
+- Empty definition benchmarks the dominant allocation cost (borderEdges array); sector-specific structures (pixelIndices, centroids, bboxes) are additive on top.
+
+**Left off at:**
+Task 1.1 complete. `bench/baselines.json` has valid median entry. All 196 tests pass. Build: 5.60 kB gzipped. All bin/check-\* exit 0. Phase 2 blocker cleared — awaiting BDFL activation.
+
+---
 
 ### 2026-05-12 — Task 2.3: Phase 1 Exit Audit
 

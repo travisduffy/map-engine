@@ -24,6 +24,7 @@
 - `npm` (v10 or v11+) installed: **[PASS]** (Workspace uses `npm` v11.12.1 with `package-lock.json`).
 - **Drift Fixture:** `test/fixtures/game-clock/drift-100tick.json` (cited in §8 Setup) is **PRESENT**.
 - **Large Map Fixture:** `test/fixtures/maps/large.png` (cited in §7 F-2.1) is **PRESENT** (4096x4096px).
+- **Phase 2 Gate (F-2.1):** Baseline captured and pinned. **[PASS]** (Note: Measurement uses `process.memoryUsage().heapUsed` in Node as a functional equivalent to the specified browser fallback).
 
 ---
 

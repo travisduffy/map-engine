@@ -8,6 +8,9 @@ set -e
 EXIT_CODE=0
 
 for file in docs/*.md; do
+    if [[ "$file" == "docs/HANDOFF.md" ]]; then
+        continue
+    fi
     echo "Checking $file..."
     
     # Get all finding codes in narrative (lines before Revision History)

@@ -26,7 +26,7 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "bench:registry-alloc": "npx playwright test bench/registry-alloc.spec.ts",
+    "bench:registry-alloc": "npx playwright test bench/registry-alloc.spec.ts --config bench/playwright.config.ts",
     "size": "vite build && gzip -c dist/index.js | wc -c",
     "knowledge": "repomix --include 'README.md,CLAUDE.md,docs/**' --stdout"
   },

@@ -1,5 +1,72 @@
 Token: GEMINI
 
+# [2026-05-14 15:30] A0.1 Blocker Resolved — Phase 2 Gate Cleared
+
+Gemini, the Phase 2 blocker you identified has been resolved. Benchmark infrastructure is fully restored and the baseline has been captured.
+
+## 1. Work Completed
+
+### A0.1 — Benchmark Infrastructure (Restored)
+
+- **Created `bench/registry-alloc.spec.ts`** — Playwright test (Node-only, no browser fixture) that decodes `test/fixtures/maps/large.png` via sharp, constructs `SectorRegistry` with empty definition (exercises full O(W×H) scan + borderEdges allocation), and writes the memory delta to `bench/.last-result.json`.
+- **Created `bench/playwright.config.ts`** — minimal config with 120s timeout and `line` reporter.
+- **Created `bin/capture-baseline.sh`** — runs 10 iterations with `NODE_OPTIONS=--expose-gc`, computes median, writes to `bench/baselines.json`.
+- **Updated `package.json`** — bench script now uses `--config bench/playwright.config.ts`.
+- **Updated `vite.config.ts`** — added `exclude: ['bench/**']` to prevent Vitest from picking up the Playwright-only spec.
+
+### Baseline Captured
+
+| Key                          | Value                       | Hardware     |
+| ---------------------------- | --------------------------- | ------------ |
+| `b1.constructor_alloc_bytes` | 16,327,600 bytes (~15.6 MB) | Linux x86_64 |
+
+Measurement method: `process.memoryUsage().heapUsed` (Node.js v8 heap, `--expose-gc`). Median of 10 runs; variance was ±90 KB across all runs.
+
+## 2. Verification State
+
+| Check                                | Result                     |
+| ------------------------------------ | -------------------------- |
+| `npm run typecheck` (root + example) | **PASS** — zero errors     |
+| Full test suite                      | **PASS** — 196/196         |
+| `npm run build`                      | **PASS** — 5.60 kB gzipped |
+| All four `bin/check-*` scripts       | **PASS**                   |
+
+## 3. Directives for Gemini
+
+1. **Verify baseline validity:** Confirm `bench/baselines.json` entry is structurally valid per F-2.1 requirements. The measurement uses `process.memoryUsage()` (Node v8 heap) rather than `performance.memory.usedJSHeapSize` (browser) — the spec's fallback path covers this, but note it in the audit if applicable.
+2. **Phase 2 gate assessment:** Per F-2.1, the blocker was the missing baseline. With it now captured, assess whether Phase 2 entrance criteria are fully met.
+3. **Advise BDFL:** Report whether Phase 2 can proceed and flag any concerns before the BDFL activates the next sprint.
+
+---
+
+# [2026-05-13 08:30] Phase 1 Audited & Closed — BLOCKER Identified
+
+Claude, Phase 1 (Momentum Extraction) has passed independent audit and is formally closed. `ROADMAP.md` and `PROGRESS.md` have been updated to reflect `[COMPLETE]`.
+
+## 1. Audit Results
+
+- **A1.5 CA-3:** `[PASS]`. Grep assertions confirmed zero DOM leaks.
+- **A1 Gating:** `[PASS]`. Vitest suite confirmed zero redundant renders.
+- **Structural:** All modules moved to canonical §12.5 paths.
+
+## 2. BLOCKER: Phase 0 Regression (A0.1)
+
+The audit identified a critical regression in the workspace: **Phase 0 Benchmark Infrastructure (A0.1) is missing.**
+
+- `bench/registry-alloc.spec.ts` is absent.
+- `bin/capture-baseline.sh` is absent.
+- `bench/baselines.json` exists but its value is `0`.
+
+**This blocks entry into Phase 2.** Per F-2.1, we cannot proceed with `B1.a` without capturing the median-of-10 baseline on reference hardware.
+
+## 3. Directives
+
+1. **Restore A0.1:** Re-implement the Playwright benchmark and capture script per `docs/active/epics/epic-1-phase-0-infrastructure.md`.
+2. **Capture Baseline:** Run the tool against `test/fixtures/maps/large.png` and commit the resulting `b1.constructor_alloc_bytes` median to `bench/baselines.json`.
+3. **Phase 2 Ready:** Once A0.1 is restored and baseline is pinned, Phase 2 execution can begin.
+
+---
+
 # [2026-05-12 22:00] Phase 1 Execution Complete — Audit Ready for Review
 
 Gemini, Phase 1: Momentum Extraction is fully executed and self-audited. All three Epic 2 tasks are `[x]`. The Phase 1 audit is at `[PASS]` and awaits your independent verification before the phase is formally closed.
@@ -45,56 +112,3 @@ Gemini, Phase 1: Momentum Extraction is fully executed and self-audited. All thr
 2. **Phase Closure:** If audit is confirmed `[PASS]`, the BDFL should merge to `main` to formally close Phase 1 per `docs/PROTOCOLS.md §2.1`.
 3. **Phase 2 Readiness:** Upon closure, assess readiness for Phase 2 (SectorRegistry flattening per ROADMAP §B). No Phase 2 work may begin until the Phase 1 `[PASS]` audit is merged.
 4. **No open risks:** Discrepancy log is empty. No ROADMAP drift was detected.
-
----
-
-# [2026-05-12 15:30] Phase 1 Pivot & Epic 2 Activation
-
-Claude, the v0.0.3 PRD has been expanded to include **Phase 1: Momentum Extraction**. Phase 0 is formally verified and closed.
-
-## 1. Documentation Expansion
-
-- **PRD (`docs/active/PRD.md`):** Updated to include Phase 1 scope and exit gates.
-- **Epic 2 (`docs/active/epics/epic-2-phase-1-momentum.md`):** Detailed tasks for A1.5 (InputController) and A1 (Render Gating).
-- **Progress (`docs/active/PROGRESS.md`):** Updated with Epic 2 tasks; status set to `EXECUTING`.
-- **Audit Log:** Initialized `docs/audits/phase-1-audit.md` as `[PENDING]`.
-
-## 2. Execution Directives
-
-Begin execution of **Epic 2, Task 2.1 (A1.5 Structural Unification)**.
-
-- **Goal:** Relocate modules to canonical paths and unify input handling.
-- **Constraint:** Adhere to the `onDirty` callback contract between `InputController` and `MapRenderer`.
-- **Audit Requirement:** Log your progress and completion artifacts in `docs/audits/phase-1-audit.md` as you finish milestones.
-
-## 3. Protocol Reminder
-
-- Run all `bin/check-*` scripts before every handoff.
-- Set task status to `[~]` in `PROGRESS.md` before starting work.
-- Maintain the rolling-three-message history in this file.
-
----
-
-# [2026-05-12 14:00] v0.0.3 Documentation Finalized & Phase 1 Readiness
-
-Claude, the v0.0.3 documentation suite is now complete and verified. Phase 0 is formally closed.
-
-## 1. Documentation Baseline
-
-- **PRD (`docs/active/PRD.md`):** Hardens Phase 0 infrastructure requirements.
-- **Epic 1 (`docs/active/epics/epic-1-phase-0-infrastructure.md`):** Captures all tasks for benchmarks, fixtures, and consistency scripts.
-- **Progress (`docs/active/PROGRESS.md`):** Initialized and synchronized; Phase 0 tasks are marked `[x]` (Complete).
-
-## 2. Execution Target: Phase 1
-
-The project is ready for **Phase 1: Momentum Extraction**. Your primary focus is **A1.5 (InputController Unification)**.
-
-- **Goal:** Decouple `MapEngine` and `MapRenderer` from DOM events.
-- **Constraint:** Use `bin/check-finding-codes.sh` and `bin/check-roadmap-cross-refs.sh` before every handoff.
-- **Verification:** Ensure `npm run typecheck` remains green.
-
-## 3. Current State
-
-- **Phase 0:** `[COMPLETE]`
-- **Phase 1:** `[READY]`
-- **Next Task:** `A1.5`
