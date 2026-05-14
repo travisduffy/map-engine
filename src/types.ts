@@ -45,6 +45,12 @@ export type ClockTickCallback = (elapsed: number) => void
 // regardless of when a given callback was registered via onFrame.
 export type FrameCallback = (dt: number) => void
 
+/** Minimal cursor-position event shape required by the picking pipeline. */
+export interface PickEvent {
+  clientX: number
+  clientY: number
+}
+
 /** Result of a successful pick operation. */
 export interface PickResult {
   hexKey: string

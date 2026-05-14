@@ -32,6 +32,7 @@ export default defineConfig({
     },
   },
   test: {
+    exclude: ['bench/**', 'node_modules/**'],
     browser: {
       enabled: true,
       headless: true,

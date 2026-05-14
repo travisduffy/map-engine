@@ -1,9 +1,9 @@
 {
   "b1.constructor_alloc_bytes": {
-    "value": 0,
+    "value": 16327600,
     "unit": "bytes",
-    "capturedAt": "",
-    "hardware": "unknown",
-    "measurementMethod": "unknown"
+    "capturedAt": "2026-05-14T15:29:24Z",
+    "hardware": "Linux x86_64",
+    "measurementMethod": "process.memoryUsage().heapUsed (Node.js v8 heap, --expose-gc)"
   }
 }

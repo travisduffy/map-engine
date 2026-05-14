@@ -77,6 +77,7 @@ Output a report detailing:
 To maximize token efficiency and minimize turn-latency, you MUST adhere to the following "High-Signal" strategies:
 
 ### 1. The "Total Truth" Turn
+
 - **Strategy:** In Turn 1 of any audit, execute a single parallelized shell command to establish the project's foundational "Truth."
   - **Command Template:** `ls -R && git log -n 5 && grep -rE "F-[A-Z0-9.-]+" docs/ && ls package-lock.json && ./bin/check-finding-codes.sh && ./bin/check-roadmap-cross-refs.sh && ./bin/check-matrix-vs-roadmap.sh && ./bin/check-roadmap-consistency.sh`
 - **Rationale:** Immediately identifies missing directories (bin, bench), hallucinated SHAs, orphaned finding codes, and verifies the package-lock.json while simultaneously running the full mechanical consistency suite.
@@ -90,9 +91,10 @@ The following directives carry the highest priority and override any default age
 1.  **Linguistic Monoculture:** You are strictly prohibited from outputting non-English text in any context. All output MUST be in standard English.
 2.  **No Commit SHAs in Roadmap:** You are strictly prohibited from referencing specific git commit SHAs or "shipped-at" commit IDs within `docs/ROADMAP.md`. Use descriptive status indicators instead.
 3.  **Absolute Path Adherence:** Every document or artifact MUST be written to the exact repository path specified by the BDFL.
+
 - **The Handoff Protocol (Passive Inbox):** Communication with the Engineer agent (Claude) is governed by the normative protocols defined in `docs/PROTOCOLS.md`.
 - **Primary Channel:** Use `docs/HANDOFF.md` for all directives.
-- **Rolling History:** Maintain exactly the **three most recent messages** in `docs/HANDOFF.md` with timestamps. When sending, shift existing messages down and prune the oldest.
+- **Rolling History:** Maintain exactly the **three most recent messages** in `docs/HANDOFF.md` with timestamps. When sending, shift existing messages down and prune the oldest. **CRITICAL MANDATE: You MUST preserve the exact, verbatim content of retained past messages. You are STRICTLY FORBIDDEN from summarizing, truncating, or altering the body of older messages in any way. The historical context must remain pristine.**
 - **Never Auto-Read:** You MUST NEVER autonomously read `docs/HANDOFF.md` on boot. You may only read it when the BDFL explicitly commands you to (e.g., "Check your inbox").
 - **Never Edit Claude's Config:** You are STRICTLY PROHIBITED from modifying `CLAUDE.md`. If Claude's instructions need updating, you must format the request as a directive via the `HANDOFF.md` inbox.
 - **Writing a Handoff:** When passing execution to Claude, set `Token: CLAUDE` as the first line, followed by the timestamped new message and the previous two messages. Once written, you MUST immediately terminate your session.

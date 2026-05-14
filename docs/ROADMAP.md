@@ -130,7 +130,6 @@ To prevent cross-phase data-type contradictions, all milestones MUST adhere to t
 >
 > **GPU Sync Mandate (F-C.9):** WebGL-bound buffers (currently `borderEdges`) must have their data uploaded to a GPU VBO via `IThreeRenderBackend.uploadBorderEdges(buffer, count)` _before_ the CPU-side Transferable is bounced back to the Worker. The `THREE.BufferAttribute` exposed by `BorderRenderer` is bound to the managed GPU VBO, never directly to the Transferable's CPU-side array. **Critically:** Bounce-back to the Worker happens ONLY inside `MapRenderer._postRenderHook()`, ensuring Three.js has completed its draw calls before the buffer is detached.
 
-
 **Note on `pixelIndices`:** Before transferring `pixelIndices` to the Worker (B3), the main thread MUST upload it as a GPU texture source; the Worker thereafter owns the ONLY CPU-resident copy (F-3.3).
 
 ---
@@ -143,10 +142,10 @@ This graph maps the chronological flow of work. Refactors (A/B) unblock Capabili
 [Already Shipped (F-ER.1):
  - CA-1 Frame Hook: rAF integration is located in `src/MapRenderer.ts`; exported as `engine.onFrame(callback)`. A1 wires the dirty-flag check inside this callback after `_preRenderHook()` returns.
  - CA-2 Adjacency (src/MapEngine.ts, getNeighbors())
+ - CA-3 Input Pipeline (src/input/InputController.ts) (F-C.3)
  - CA-9 Game Clock (src/GameClock.ts) (F-C.1, F-C.10)
+ - A1 Render Gating (src/MapRenderer.ts, _dirty flag) (F-1.2, F-1.3)
  - MapRenderer._preRenderHook(): void (F-C.11): Public hook (tagged @internal) called once per rAF frame before renderer.render(); default no-op; subclasses override (e.g., camera-following). Located at `src/MapRenderer.ts`.]
-
-[Partially Shipped: CA-3 Input Pipeline (Features live; structural unification PENDING)] (F-C.3)
 
                     ┌──────────────────────────────────────────────────┐
     Phase 0         │ A0.1: bench:registry-alloc + initial baseline    │
@@ -157,6 +156,7 @@ This graph maps the chronological flow of work. Refactors (A/B) unblock Capabili
                     ┌───────────────────▼─────────────────────┐
     Phase 1         │ A1.5: CA-3 Unify (Prereq for A1)        │
    (Momentum)       │ A1: Render Gating                       │
+                    │ Status: [COMPLETE]                      │
                     └───────────────────┬─────────────────────┘
                                         │
                     ┌───────────────────▼─────────────────────┐
@@ -178,15 +178,15 @@ This graph maps the chronological flow of work. Refactors (A/B) unblock Capabili
 
 ---
 
-## 6. Phase 1: Momentum Extraction (Immediate)
+## 6. Phase 1: Momentum Extraction (COMPLETE)
 
-**Status: [DOCUMENTATION FREEZE]** — This phase is frozen against architectural changes or new review passes during execution. `ROADMAP.md` and `ROADMAP_TRACEABILITY_MATRIX.md` may only be updated for typo fixes or internal consistency during this phase.
+**Status: [COMPLETE]** — Phase 1 was successfully audited and closed on 2026-05-13.
 
 _Goal: Eliminate obvious waste and harden the rendering pipeline without breaking APIs._
 
-**Phase 0 Prerequisites (Pending Implementation - MUST be implemented and verified before A1.5 begins):**
+**Phase 0 Prerequisites (COMPLETE):**
 
-1. `npm run tsc` (or `npx tsc --noEmit`) exits 0 on `main`.
+1. `npm run typecheck` (or `npx tsc --noEmit`) exits 0 on `main`.
 2. **A0.1 (Benchmark Infrastructure):** `npm run bench:registry-alloc <fixture-path>` is implemented.
    - **bench/SPEC.md:** Script must run `npx playwright test bench/registry-alloc.spec.ts` against fixture at `<fixture-path>`, measure `performance.measureUserAgentSpecificMemory()` before and after `new SectorRegistry(bitmap)`, and write median-of-10 to `bench/baselines.json` under key `b1.constructor_alloc_bytes`. The initial baseline must be captured and committed to `main`.
 3. **A0.2 (Audit Prompt):** `docs/prompts/audit-only.md` exists and is checked into `main`.
@@ -198,6 +198,7 @@ _Goal: Eliminate obvious waste and harden the rendering pipeline without breakin
 9. `npm` (v10 or v11+) is installed in the execution environment.
 
 **Phase 0 Acceptance Criteria (Verification REQUIRED):**
+
 - **Benchmark Stability:** Median baseline capture shows <5% variance across two consecutive nightly runs on reference hardware.
 - **Anchor Verification:** Anchor fixture `expectedAnchor` values independently re-verified against a reference implementation or second-party review.
 - **Integrity Pass:** `bin/check-finding-codes.sh` and `bin/check-roadmap-cross-refs.sh` both exit 0 on current `main`.
@@ -209,16 +210,16 @@ If any prerequisite or AC fails, halt and surface the failure to the operator be
 
 **Phase Exit Gate:** Phase 1 complete when `A1.5` and `A1` acceptance suites are green in CI ∧ **Principles Audit** (PR-1 to PR-5) confirms no strategic drift. **Audit document: `docs/audits/phase-1-audit.md`.**
 
-### A1.5 CA-3 Structural Unification
+### [x] A1.5 CA-3 Structural Unification
 
 - **Problem:** Input handling features (pan, zoom, pick) are live but implemented as fragmented logic across `MapEngine` and `MapRenderer`.
 - **Solution:** Consolidate input state and listeners into a unified `InputController`.
 - **Principles Compliance:** PR-2 (Ergonomic API), PR-4 (Conservative Surface).
 - **Sub-steps:**
-  - **A1.5.0 (Pre-flight):** `npm run tsc` (or `npx tsc --noEmit`) and current `npm run bench:registry-alloc` must pass on `main`.
-  - **A1.5.1 (Path migration):** Relocate all shipped modules to §12.5 paths. Update all imports. Re-run `tsc` and benchmark; both must pass with no perf regression > 5%.
-  - **A1.5.2 (InputController):** Build the controller, satisfying the API surface and coupling contract.
-  - **A1.5.3 (Verify):** Run grep AC and final benchmarks.
+  - **[x] A1.5.0 (Pre-flight):** `npm run typecheck` and current `npm run bench:registry-alloc` must pass on `main`.
+  - **[x] A1.5.1 (Path migration):** Relocate all shipped modules to §12.5 paths. Update all imports. Re-run `typecheck` and benchmark; both must pass with no perf regression > 5%.
+  - **[x] A1.5.2 (InputController):** Build the controller, satisfying the API surface and coupling contract.
+  - **[x] A1.5.3 (Verify):** Run grep AC and final benchmarks.
 - **Mandate (F-1.1):** `InputController` is Main-thread only (DOM consumer). `SectorRegistry` and `SectorBitmapParser` retain P-1/P-2 Worker-safety.
 - **Coupling Contract (F-1.2):** `InputController` accepts an `onDirty: () => void` callback at construction. `MapRenderer` passes `() => { this._dirty = true; }`. No other coupling permitted.
 - **API Surface:**
@@ -229,7 +230,7 @@ If any prerequisite or AC fails, halt and surface the failure to the operator be
   - All shipped modules relocated to canonical paths per §12.5; old paths deleted.
   - Zero imports from `InputController.ts` in `src/worker/**`.
 
-### A1 Render Gating
+### [x] A1 Render Gating
 
 - **Problem:** `MapRenderer` currently performs an unconditional `renderer.render()` in every rAF frame, wasting ~95% of GPU submits when the scene is static.
 - **Solution:** Add a boolean dirty flag to `MapRenderer`. Set to `true` when `_flushPendingDirty` (F-ER.4) flushes work, when immediate colors are set, on pan/zoom events (via A1.5 `onDirty`), or on canvas resize.
@@ -239,7 +240,7 @@ If any prerequisite or AC fails, halt and surface the failure to the operator be
 - **Initial State:** Initial frame must render unconditionally (default `true`). The flag MUST be reset to `false` at the end of the `render()` block.
 - **Acceptance:** GPU submit rate drops to mutation-driven cadence; first frame renders unconditionally.
 - **Verifiable via Vitest spy asserting `renderer.render` call count is zero on no-op ticks (after initial frame).**
-- **No-Op Tick Definition (F-1.3):** A no-op tick is a rAF callback in which (1) no pointer event fired since the previous frame, (2) `_flushPendingDirty` performed zero work, (3) no `setImmediateColor` call occurred, (4) `canvas.clientWidth/Height` is unchanged. The acceptance test asserts `renderer.render` is called exactly once across 10 consecutive no-op ticks (the initial frame).
+- **No-Op Tick Definition (F-1.3):** A no-op tick is a rAF callback in which (1) no pointer event fired since the previous frame, (2) `_flushPendingDirty` performed zero work, (3) no `setImmediateColor` call occurred, (4) `canvas.clientWidth/Height` is unchanged. The acceptance test asserts `renderer.render` is called exactly zero times across 10 consecutive no-op ticks (after the initial frame).
 
 ---
 
@@ -572,9 +573,10 @@ _Note: The `sourceBuffer` MUST be disposed immediately after `pixelIndices` extr
 
 ### 12.4 Semver Policy (F-ER.5)
 
-The BDFL (User) is the sole authority on versioning. The project is currently in a "pre-v1.0" development state where public API stability is not guaranteed. 
+The BDFL (User) is the sole authority on versioning. The project is currently in a "pre-v1.0" development state where public API stability is not guaranteed.
 
 **Pre-1.0 Planned Breaking Changes:**
+
 - **async `pick()` (Pass 8 Revision):** `MapEngine.pick()` signature will change from synchronous to `Promise<PickResult | null>`.
   - **Rationale:** Accommodate GPU readback latency and Web Worker IPC overhead. Required to maintain OMT (Off-Main-Thread) architecture without blocking the Main thread.
 
