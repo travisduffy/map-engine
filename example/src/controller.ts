@@ -45,7 +45,7 @@ export class AppController {
     this.engine = new MapEngine()
     this.engine.on('sectorHover', this.onHover)
     this.engine.on('sectorClick', this.onClick)
-    setStatus('Loading map…')
+    setStatus('Loading map… (this may take a moment)')
 
     try {
       await this.engine.loadMap({
@@ -70,7 +70,7 @@ export class AppController {
       setClockSpeed(this.gameClock!.speed)
     })
 
-    setStatus('Ready — scroll to zoom, drag to pan')
+    setStatus('Ready — scroll to zoom, middle-mouse drag to pan')
     const keys = this.engine.getSectorKeys()
     renderSectorList(keys, key => this.engine!.getSector(key))
 

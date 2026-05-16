@@ -168,7 +168,6 @@ export class SectorRegistry {
     // Convert pixel index arrays to sorted Uint32Arrays
     const pixelIndicesMap = new Map<string, Uint32Array>()
     for (const [key, indices] of pixelIndexArrays) {
-      indices.sort((a, b) => a - b)
       pixelIndicesMap.set(key, new Uint32Array(indices))
     }
     this.pixelIndices = pixelIndicesMap

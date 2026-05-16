@@ -1,50 +1,110 @@
 {
-  "8b0000": {
-    "name": "Northern Reach",
-    "population": 312000,
-    "capital": "Frostmark",
-    "climate": "subarctic"
+  "ff0000": {
+    "name": "Halifax, NS"
   },
-  "004d99": {
-    "name": "Coastal Basin",
-    "population": 890000,
-    "capital": "Harborgate",
-    "climate": "temperate"
+  "b300ff": {
+    "name": "Lunenburg, NS"
   },
-  "5c3d99": {
-    "name": "Violet Uplands",
-    "population": 214000,
-    "capital": "Highspire",
-    "climate": "highland"
+  "00ff44": {
+    "name": "Queens, NS"
   },
-  "2d6a4f": {
-    "name": "Verdant March",
-    "population": 530000,
-    "capital": "Greenhollow",
-    "climate": "temperate"
+  "001aff": {
+    "name": "Shelburne, NS"
   },
-  "e07b00": {
-    "name": "Amber Steppe",
-    "population": 178000,
-    "capital": "Dustridge",
-    "climate": "semi-arid"
+  "ffa600": {
+    "name": "Yarmouth, NS"
   },
-  "b5451b": {
-    "name": "Crimson Expanse",
-    "population": 405000,
-    "capital": "Emberfeld",
-    "climate": "arid"
+  "00bfff": {
+    "name": "Digby, NS"
   },
-  "1a6b8a": {
-    "name": "Azure Tidewater",
-    "population": 623000,
-    "capital": "Saltmere",
-    "climate": "maritime"
+  "ddff00": {
+    "name": "Annapolis, NS"
   },
-  "7a6b00": {
-    "name": "Gilded Plain",
-    "population": 291000,
-    "capital": "Wheatholm",
-    "climate": "continental"
+  "ff007b": {
+    "name": "Kings, NS"
+  },
+  "00ff99": {
+    "name": "Hants, NS"
+  },
+  "6200ff": {
+    "name": "Colchester, NS"
+  },
+  "fff700": {
+    "name": "Cumberland, NS"
+  },
+  "0099ff": {
+    "name": "Pictou, NS"
+  },
+  "ff00d0": {
+    "name": "Antigonish, NS"
+  },
+  "88ff00": {
+    "name": "Guysborough, NS"
+  },
+  "3700ff": {
+    "name": "Inverness, NS"
+  },
+  "ff7b00": {
+    "name": "Victoria, NS"
+  },
+  "00ff1a": {
+    "name": "Cape Breton, NS"
+  },
+  "00ffea": {
+    "name": "Richmond, NS"
+  },
+  "62ff00": {
+    "name": "Kings, PEI"
+  },
+  "ff5100": {
+    "name": "Queens, PEI"
+  },
+  "00eaff": {
+    "name": "Prince, PEI"
+  },
+  "0044ff": {
+    "name": "Westmorland, NB"
+  },
+  "0dff00": {
+    "name": "Albert, NB"
+  },
+  "8800ff": {
+    "name": "St. John, NB"
+  },
+  "ff0051": {
+    "name": "Charlotte, NB"
+  },
+  "ff00a6": {
+    "name": "Kings, NB"
+  },
+  "ffd000": {
+    "name": "Queens, NB"
+  },
+  "00ffbf": {
+    "name": "Sunbury, NB"
+  },
+  "006eff": {
+    "name": "York, NB"
+  },
+  "00ff6e": {
+    "name": "Carleton, NB"
+  },
+  "ff2a00": {
+    "name": "Victoria, NB"
+  },
+  "37ff00": {
+    "name": "Madawaska, NB"
+  },
+  "0d00ff": {
+    "name": "Restigouche, NB"
+  },
+  "ff00f7": {
+    "name": "Gloucester, NB"
+  },
+  "b3ff00": {
+    "name": "Northumberland, NB"
+  },
+  "dd00ff": {
+    "name": "Kent, NB"
   }
 }
