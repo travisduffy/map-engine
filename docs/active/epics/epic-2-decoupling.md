@@ -42,8 +42,9 @@ Create a no-op backend for use in unit tests and logic verification.
 - Implement all `IThreeRenderBackend` methods as no-ops.
 - **Mandate (F-2.8):** `uploadTexture` MUST retain a reference to the source typed-array via `.slice()` to support Main-thread `pick()` lookups during unit tests.
 - **Mandate (F-2.8):** `updateUniforms`, `render`, `uploadBorderEdges`, and `dispose` must be explicitly implemented as no-ops.
+- **Disposal Mandate:** Ensure `dispose()` explicitly clears the sliced texture reference to prevent memory accumulation during long-running test sessions (Vitest watch mode).
 
-**Done when:** `NullRenderBackend` is implemented and can be instantiated without errors.
+**Done when:** `NullRenderBackend` is implemented and can be instantiated without errors; `dispose()` clears internal references.
 
 ---
 

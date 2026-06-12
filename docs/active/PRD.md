@@ -50,9 +50,9 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
 - `borderEdges`: `Float32Array` (4 * totalGeometricPerimeterSegments) - Pre-allocated border pool (B1.c).
 - `borderEdgeCount`: `Uint32Array` (1) - 1-element buffer for transferable handoff (B1.c).
 
-**Memory Mandate (P-9, §12.3):** The `sourceBuffer` (Uint8Array) MUST be disposed of immediately after `pixelIndices` extraction to stay under the 256MB heap cap.
+**Memory Mandate (P-9, §12.3):** The `sourceBuffer` (Uint8Array) MUST be disposed of immediately after `pixelIndices` extraction to stay under the 256MB heap cap. **Buffer Sequence:** 1. Populate `pixelIndices` (Uint32); 2. Dispose `sourceBuffer`; 3. Populate `pixelIndicesMirror` (Uint16) from `pixelIndices`.
 
-**Sentinels (§12.3):** The ID `0xFFFF` (65535) is the canonical 'no sector' sentinel for `pixelIndices` and future mapping arrays.
+**Sentinels (§12.3):** The ID `0xFFFF` (65535) is the canonical 'no sector' sentinel for `pixelIndices` and `pixelIndicesMirror`. To prevent sentinel collision, the engine enforces a **Hard Sector Limit of 65,534 sectors**. Attempts to load maps exceeding this limit must throw an error.
 
 ### Principles Compliance (Mandate §3)
 - **PR-1 (Hobbyist Deployability):** `sourceBuffer` disposal and `pixelIndicesMirror` (Uint16) optimization ensure peak heap usage ≤ 256MB on mobile.

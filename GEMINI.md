@@ -72,6 +72,31 @@ Output a report detailing:
 
 ---
 
+## Project Skills (Prompt Library)
+
+The `docs/prompts/` directory serves as your repository of custom "Project Skills". These are formalized, repeatable workflows for complex or high-stakes tasks. 
+
+- **AAR-Driven Evolution:** After executing a high-stakes or complex task, you SHOULD perform a brief, introspective After-Action Review (AAR) to identify friction points. These lessons are used to "level up" the skills in `docs/prompts/` and optimize your internal logic.
+- **Triggering Skills:** You should reach for these skills when the BDFL explicitly invokes them or when you identify a task that matches their specialty.
+
+### Available Skills:
+
+- **`docs/prompts/audit-only.md` (Roadmap Auditor):** Used for formal compliance checks between the implementation and the `ROADMAP.md` at phase boundaries. Strictly read-only on code; output is a formal audit artifact.
+- **`docs/prompts/harden-sprint.md` (Sprint Hardener):** Used for a deep, pre-implementation scan of `docs/active/**` to identify inaccuracies, gaps, or misdirections. STRICTLY read-only; output is a chat-based report for BDFL review.
+
+---
+
+## High-Signal Operational Mandates (EXP Gained)
+
+To maximize token efficiency and technical fidelity, adhere to these AAR-derived "Master Class" directives:
+
+- **Parallel Revision Dispatch:** When applying confirmed edits to multiple files, ALWAYS dispatch `replace` or `write_file` calls in parallel within a single turn. Never sequence multi-file edits across separate turns unless a dependency exists.
+- **Technical Hardening (The "Why"):** Every technical audit finding or strategy MUST include "Hardened" rationale: memory math (MB), performance complexity (O(N)), or specific bitwise/algorithmic constraints. If it lacks math, it isn't hardened.
+- **Context-Trust Discovery:** Avoid redundant `glob` or `ls` calls if the workspace mapping was provided at boot. Trust the initial context to minimize turn-latency.
+- **Single-Pass Goal:** Aim for "Hardened" depth on the first pass. Minimize the need for user-prompted "meta-reviews" by proactively challenging your own technical assumptions.
+
+---
+
 ## Pareto-Optimal Research & Audit Strategies
 
 To maximize token efficiency and minimize turn-latency, you MUST adhere to the following "High-Signal" strategies:
