@@ -1,4 +1,4 @@
-# Project Progress
+# Project Progress: Phase 2 — The Structural Pivot
 
 > **This file is the single source of truth for implementation state.**
 > Every AI session working on this project must read this file first and update it before closing the session. It is the handoff document between sessions.
@@ -40,60 +40,99 @@
 
 ## Current Status
 
-**Phase:** NO ACTIVE SPRINT — awaiting next development cycle
-**Active version:** None
-**Next task:** None — Task Registry is empty; populate `docs/active/PRD.md` and `docs/active/epics/` to begin the next cycle
+**Phase:** Phase 2 (The Structural Pivot)
+**Active version:** v0.0.3-phase-2
+**Next task:** 1.0 (Capture Baseline)
 **Blocking issues:** None
 
 ---
 
 ## Task Registry
 
-<!-- TODO: Populate with epics and tasks when a new development cycle begins. -->
-<!-- Format each epic as shown below:
+### Epic 1: SectorRegistry Flattening (B1.a-e)
 
-### Epic N: [Epic Title]
+> Full spec: `docs/active/epics/epic-1-flattening.md`
 
-> Full spec: `docs/active/epics/epic-N-[slug].md`
+| Status | Task    | Description                                      |
+| ------ | ------- | ------------------------------------------------ |
+| `[ ]`  | **1.0** | Capture Baseline Performance (F-2.1)             |
+| `[ ]`  | **1.1** | Dense SoA: Mirror, SoA Lookup, pixelIndices (B1.a)|
+| `[ ]`  | **1.2** | CSR Adjacency Implementation (B1.b)              |
+| `[ ]`  | **1.3** | Contour Extraction & Perimeter Segments (B1.e)   |
+| `[ ]`  | **1.4** | Border Edge Allocator (B1.c)                     |
+| `[ ]`  | **1.5** | ISpatialRegistry Contract & Proxy Prep (B1.d)    |
 
-| Status | Task    | Description |
-| ------ | ------- | ----------- |
-| `[ ]`  | **N.1** | ...         |
+### Epic 2: Rendering Decoupling (B1.5)
 
--->
+> Full spec: `docs/active/epics/epic-2-decoupling.md`
 
-_(No active tasks. Populate when the next development cycle begins.)_
+| Status | Task    | Description                                      |
+| ------ | ------- | ------------------------------------------------ |
+| `[ ]`  | **2.1** | Define IThreeRenderBackend Interface             |
+| `[ ]`  | **2.2** | Implement NullRenderBackend & Logic Tests        |
+| `[ ]`  | **2.3** | Decouple MapRenderer from Three.js               |
 
 ---
 
 ## Session Log
 
-> Entries are prepended (newest first). Each entry records the date, what was attempted, what was completed, and any decisions made that aren't captured elsewhere.
+### 2026-06-11 — Master Audit & Alignment (Strict Compliance)
 
-<!-- SESSION ENTRY TEMPLATE — copy and fill in:
-
-### YYYY-MM-DD — [brief title]
-
-**Tasks touched:** X.Y, X.Z
-**Outcome:** completed / partial / blocked
+**Tasks touched:** PRD.md, epic-1-flattening.md, PROGRESS.md
+**Outcome:** completed
 
 **What happened:**
-[What was done, in plain language. Include any approaches tried that didn't work.]
+Conducted a Master Audit of all Phase 2 plans against the Roadmap and Traceability Matrix. Identified a strategic inconsistency regarding the `pick()` API. Per BDFL directive, shifted to "Strict Matrix Compliance" mode.
 
 **Decisions made:**
-[Any implementation choices not fully specified by the PRD, or PRD ambiguities resolved.]
+- **API Stability:** Reverted the `pick()` async transition; it is now strictly deferred to Phase 3 (B3.c) per Matrix #308.
+- **Goal Alignment:** Scrubbed PRD.md of the `pick()` exception; Phase 2 is now a "Zero API Break" release.
+- **Technical Correction:** Verified `SectorData` types in `src/types.ts`. Confirmed `hexColors`/`sectorIds` must be Main-thread generated during Task 1.1 to resolve Roadmap §4 hallucinations.
 
 **Left off at:**
-[Exact task and step where the session ended, so the next session can resume without re-reading everything.]
+Task 1.0 (Capture Baseline) is the entry point for implementation. Phase 2 plans are now fully hardened and aligned with the tactical Matrix authority.
 
--->
+---
 
-_(No sessions logged yet.)_
+### 2026-06-11 — Iterative Audit & Refinement (Pass 2)
+
+### 2026-06-11 — Roadmap Audit & Technical Hardening
+
+**Tasks touched:** PRD.md, epic-1-flattening.md, epic-2-decoupling.md, PROGRESS.md
+**Outcome:** completed
+
+**What happened:**
+Performed a deep audit of the Phase 2 planning documents against `ROADMAP.md`. Identified and resolved several technical gaps including missing recovery buffers (`pixelIndicesMirror`), SoA lookup arrays (`hexColors`/`sectorIds`), and documentation standard violations (Principles Compliance fields).
+
+**Decisions made:**
+- Injected `pixelIndicesMirror` (Uint16) into Task 1.1 to satisfy F-3.3 context loss recovery.
+- Transitioned hex-to-numeric lookup from JS objects to SoA TypedArrays (`hexColors`, `sectorIds`) to satisfy F-3.1 Transferable Discipline.
+- Standardized all tasks with mandatory "Principles Compliance" fields per §3 mandate.
+- Reconciled Task 1.4 dependencies to consume both B1.e and B1.b metrics.
+
+**Left off at:**
+Task 1.0 (Capture Baseline) remains the entry point for implementation. All planning documents are now hardened and synchronized with the Roadmap authority.
+
+---
+
+### 2026-06-11 — Sprint Initialization
+
+**Tasks touched:** None (Setup only)
+**Outcome:** completed
+
+**What happened:**
+Initialized `docs/active/PRD.md` and `docs/active/PROGRESS.md` for Phase 2. Extracted requirements from `ROADMAP.md` §7. Established the scope for two epics: Flattening (B1.a-e) and Rendering Decoupling (B1.5).
+
+**Decisions made:**
+- Grouped B1.a-e into a single serial Epic (Flattening).
+- Kept B1.5 (Decoupling) as a parallel Epic.
+- Explicitly stated that actual Worker move (B3) is out of scope for this sprint.
+
+**Left off at:**
+Task 1.0 (Capture Baseline) is the entry point for the next session.
 
 ---
 
 ## Lessons Learned
-
-> Non-obvious things discovered during implementation that future sessions should know. Append entries; do not delete old ones.
 
 _(None yet — populated as implementation proceeds.)_

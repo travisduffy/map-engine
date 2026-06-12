@@ -76,11 +76,20 @@ Output a report detailing:
 
 To maximize token efficiency and minimize turn-latency, you MUST adhere to the following "High-Signal" strategies:
 
-### 1. The "Total Truth" Turn
+### 1. Hardened Operational Workflows (HOW)
 
-- **Strategy:** In Turn 1 of any audit, execute a single parallelized shell command to establish the project's foundational "Truth."
-  - **Command Template:** `ls -R && git log -n 5 && grep -rE "F-[A-Z0-9.-]+" docs/ && ls package-lock.json && ./bin/check-finding-codes.sh && ./bin/check-roadmap-cross-refs.sh && ./bin/check-matrix-vs-roadmap.sh && ./bin/check-roadmap-consistency.sh`
-- **Rationale:** Immediately identifies missing directories (bin, bench), hallucinated SHAs, orphaned finding codes, and verifies the package-lock.json while simultaneously running the full mechanical consistency suite.
+To ensure technical fidelity and zero-drift execution, adhere to these compressed directives:
+
+- **HIERARCHY_OF_TRUTH_LOAD:** Turn 1 MUST execute parallel `read_file` on `ROADMAP.md`, Target Doc, and Target `src/` modules. Code-Truth precedes Doc-Truth.
+- **MAP_PHASE_FIRST:** `grep -n [PHASE]` in `ROADMAP.md` + `read` `ROADMAP_TRACEABILITY_MATRIX.md`. Map all F-codes/Milestones to task units before drafting.
+- **ATOMIC_INIT:** Batch `write_file` for `PRD.md`, `PROGRESS.md`, and all `epic-*.md` files in a single turn to ensure cross-document state synchronization.
+- **MD_VOLATILITY_GUARD:** Use `write_file` for volatile Markdown structure updates. Reserve `replace` strictly for surgical code edits or explicit single-line strings.
+- **REPLACE_FAIL_ABORT:** If `replace` fails on whitespace/truncation mismatch, DO NOT retry blindly. `read_file` target range immediately or pivot to `write_file`.
+- **TECHNICAL_TRAP_SCAN:** Pre-scan Roadmap for `dispose|sentinel|buffer|heap|Transferable`. Map findings directly to PRD Acceptance Criteria.
+- **DAG_ENFORCEMENT:** Identify serial dependencies (e.g., B1.e → B1.c) and encode them into the Task Registry sequence.
+- **SURGICAL_SYNC:** Execute `read_file` on target lines immediately before `replace` if the file was mutated earlier in the session.
+- **REPO_LOCK:** All memory, logs, and rules MUST reside in `./GEMINI.md` or `docs/`. External tiers (`~/.gemini/`) are non-existent.
+
 
 ---
 
@@ -91,6 +100,7 @@ The following directives carry the highest priority and override any default age
 1.  **Linguistic Monoculture:** You are strictly prohibited from outputting non-English text in any context. All output MUST be in standard English.
 2.  **No Commit SHAs in Roadmap:** You are strictly prohibited from referencing specific git commit SHAs or "shipped-at" commit IDs within `docs/ROADMAP.md`. Use descriptive status indicators instead.
 3.  **Absolute Path Adherence:** Every document or artifact MUST be written to the exact repository path specified by the BDFL.
+4.  **Zero External Memory Mandate:** You are STRICTLY PROHIBITED from creating, reading, or utilizing any memory artifacts or configuration files outside of this repository. This includes Private Project Memory (`~/.gemini/tmp/`), Global Personal Memory (`~/.gemini/GEMINI.md`), or any other external persistent structure. ALL project knowledge, workflows, and rules MUST be contained within this repository's `./GEMINI.md` or `docs/` folder. Use of external memory tiers is a severe infraction.
 
 - **The Handoff Protocol (Passive Inbox):** Communication with the Engineer agent (Claude) is governed by the normative protocols defined in `docs/PROTOCOLS.md`.
 - **Primary Channel:** Use `docs/HANDOFF.md` for all directives.
