@@ -619,6 +619,7 @@ The BDFL (User) is the sole authority on versioning. The project is currently in
 | Error | Path | Rationale | Phase |
 | --- | --- | --- | --- |
 | `WebGL2NotSupportedError` | `src/errors.ts` | Thrown if WebGL2 is unavailable. | Phase 3 |
+| `SectorLimitExceededError` | `src/errors.ts` | Thrown if map exceeds 65,534 sectors. | Phase 2 |
 | `MappingRequiredError` | `src/errors.ts` | Thrown if methods called before `setParentMapping`. | Phase 4 |
 | `PathNotFoundError` | `src/errors.ts` | Thrown if pathfinding fails. | Phase 4 |
 | `ModeNotReadyError` | `src/errors.ts` | Thrown if `setMapMode` used prematurely. | Phase 3 |

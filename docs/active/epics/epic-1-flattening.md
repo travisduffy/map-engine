@@ -48,12 +48,13 @@ Convert the core sector properties into TypedArrays.
   - **Buffer Sequence Mandate (PR-1):** 1. Populate `pixelIndices` from `sourceBuffer`; 2. Set `sourceBuffer` to `null` (dispose); 3. Populate `pixelIndicesMirror` from `pixelIndices`.
   - **Recovery Mirror (F-3.3):** Create an immutable `pixelIndicesMirror`: `Uint16Array` downcast from `pixelIndices`.
   - **Binary Search Lookup (F-3.1):** Implement `hexColors: Uint32Array(sectorCount)` (packed RGB) and `sectorIds: Uint16Array(sectorCount)` (numeric IDs). **Mandate:** `hexColors` must be sorted by packed RGB value, with `sectorIds` storing the corresponding Numeric ID at the same index, forming a binary-searchable table for color -> ID resolution.
+  - **Reverse Lookup Mandate (PR-2):** Implement `idToHex: string[]` (Main-thread only) to provide O(1) resolution from Numeric ID to Hex-string for public synchronous APIs.
 - **Sentinel Mandate:** Use `0xFFFF` as the 'no sector' sentinel in `pixelIndices` and `pixelIndicesMirror`.
 - Implement internal lookup table (Map or Object) to map Hex-IDs to Numeric IDs.
 - **Mandate:** Ensure public methods (`pick`, `getNeighbors`, `getCentroid`, `getBBox`) continue to accept and return Hex-IDs (strings) synchronously, using the lookup table for internal TypedArray access. `pick()` MUST NOT be transitioned to async in this phase.
 - **packRgb (F-2.4):** Implement `@internal` helper `packRgb(r, g, b) => (r<<16)|(g<<8)|b` for use in pixel processing.
 
-**Done when:** `bboxes`, `centroids`, `pixelIndices`, `pixelIndicesMirror`, `hexColors`, and `sectorIds` heap usage is within 5% of theoretical minimum; `sourceBuffer` is null/dereferenced; `SectorLimitExceededError` thrown if `sectorCount > 65534`; public API (including `pick`) remains unchanged and passing tests.
+**Done when:** `bboxes`, `centroids`, `pixelIndices`, `pixelIndicesMirror`, `hexColors`, `idToHex`, and `sectorIds` heap usage is within 5% of theoretical minimum; `sourceBuffer` is null/dereferenced; `SectorLimitExceededError` thrown if `sectorCount > 65534`; public API (including `pick`) remains unchanged and passing tests.
 
 ---
 
@@ -65,14 +66,14 @@ Convert the core sector properties into TypedArrays.
 Replace the neighbor sets with a Compressed Sparse Row (CSR) structure.
 
 **Work:**
-- **Double-Pass Adjacency Mandate (PR-3):** To maintain the "Single Scan" of pixel data (Task 1.3) while avoiding GC pressure from temporary Sets, implement a two-pass edge builder.
-  1. **Pass 1 (Discovery):** **Integrated into the primary O(W×H) pixel scan (Task 1.1).** Populate a raw "Edge Pool" (e.g., a large `Uint32Array` containing packed `[idA, idB]` pairs).
-  2. **Pass 2 (Flattening):** Sort the Edge Pool and flatten into CSR arrays.
+- **Double-Pass Adjacency Mandate (PR-3):** To maintain the "Single Scan" of pixel data (Task 1.3) while avoiding GC pressure from temporary objects, implement a two-pass edge builder.
+  1. **Pass 1 (Discovery):** **Integrated into the primary O(W×H) pixel scan (Task 1.1).** Use a `Set<number>` to store unique edge pairs, where each pair is a 32-bit packed integer: `(idA << 16) | idB` (where `idA < idB` to ensure symmetry).
+  2. **Pass 2 (Flattening):** Flatten the `Set` into an intermediate `Uint32Array`, sort it to group by `idA`, and then populate the CSR arrays.
 - Implement `adjacencyPointers: Uint32Array(sectorCount + 1)`.
 - Implement `adjacencyNeighbors: Uint16Array(totalEdges)`.
 - Update `getNeighbors(id)` to slice from `adjacencyNeighbors` using the pointers.
 
-**Done when:** Adjacency results match the legacy implementation; `adjacencyPointers + adjacencyNeighbors` heap size is exactly `(sectorCount+1)*4 + totalEdges*2` bytes ± 5%; implementation avoids high-frequency object allocation (Sets/Arrays) during neighbor collection.
+**Done when:** Adjacency results match the legacy implementation; `adjacencyPointers + adjacencyNeighbors` heap size is exactly `(sectorCount+1)*4 + totalEdges*2` bytes ± 5%; implementation avoids high-frequency object allocation during neighbor collection.
 
 ---
 

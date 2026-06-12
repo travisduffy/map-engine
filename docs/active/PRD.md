@@ -44,6 +44,7 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
 - `hexColors`: `Uint32Array` (sectorCount) - Packed RGB lookup (F-3.1).
 - `sectorIds`: `Uint16Array` (sectorCount) - Numeric IDs for binary search (F-3.1).
   - **Binary Search Lookup Mandate:** `hexColors` must be sorted by packed RGB value, with `sectorIds` storing the corresponding Numeric ID, to enable O(log N) color -> ID resolution in `pick()`.
+- `idToHex`: `string[]` (sectorCount) - Reverse lookup from Numeric ID to Hex-string (PR-2).
 - `adjacencyPointers`: `Uint32Array` (sectorCount + 1) - CSR Row Pointers.
 - `adjacencyNeighbors`: `Uint16Array` (totalEdges) - CSR Column Indices.
 - `contourPointers`: `Uint32Array` (sectorCount + 1) - CSR Row Pointers for rings.

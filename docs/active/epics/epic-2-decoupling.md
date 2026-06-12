@@ -41,6 +41,7 @@ Create a no-op backend for use in unit tests and logic verification.
 - Create `src/render/NullRenderBackend.ts`.
 - Implement all `IThreeRenderBackend` methods as no-ops.
 - **Mandate (F-2.8):** `uploadTexture` MUST retain a reference to the source typed-array via `.slice()` to support Main-thread `pick()` lookups during unit tests. **Note:** This satisfies the requirement for the backend to remain the "source of visual truth" in integration tests, ensuring consistency even when the registry maintains a mirror for performance.
+- **Mandate (F-2.8):** `readSectorIdAt(x, y)` in `NullRenderBackend` MUST perform a bounds-checked lookup into the sliced index array retained during `uploadTexture`.
 - **Mandate (F-2.8):** `updateUniforms`, `render`, `uploadBorderEdges`, and `dispose` must be explicitly implemented as no-ops.
 - **Disposal Mandate:** Ensure `dispose()` explicitly clears the sliced texture reference to prevent memory accumulation during long-running test sessions (Vitest watch mode).
 

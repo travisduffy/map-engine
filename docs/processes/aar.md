@@ -9,9 +9,11 @@ The AAR is a **USER-TRIGGERED** sub-routine. You MUST NOT execute an AAR autonom
 ## EXECUTION PROTOCOL (The Report)
 When explicitly commanded to execute an AAR, generate a highly detailed, unvarnished analytical report detailing specific lessons learned. The report MUST include:
 
-1. **Algorithmic Assumptions vs. Concrete Reality:** A definitive 'what I assumed vs. what actually happened' breakdown.
+1. **Logic Delta:** List specific steps where [Assumption] ≠ [Reality] using `[Step] -> [Failure] -> [Correction]` format.
 2. **Friction Points & Logical Snags:** Aggressive identification of any friction points, logical snags, or missteps during execution.
-3. **Strategic Optimizations (EXP):** Precise, concrete optimizations required to execute the task flawlessly and with minimal computational overhead in the future. (e.g., "Use parallel `read_file` instead of sequential," "Use `start_line`/`end_line` before replacing").
+3. **Token ROI:** State exact token savings for future sessions (e.g., "Grep vs Read-All").
+4. **Strategic Optimizations (EXP):** Precise, concrete optimizations required to execute the task flawlessly and with minimal computational overhead in the future.
+5. **Immediate Patch:** Propose the exact file paths and `replace` strings for the EXP encoding turn.
 
 ## THE EXP PRESERVATION MANDATE (CRITICAL)
 You are STRICTLY PROHIBITED from "internalizing" discovered optimizations or deciding that no process updates are required. Precious project "EXP" must never be thrown away.

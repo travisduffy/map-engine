@@ -13,7 +13,8 @@ Identify inaccuracies, info gaps, misdirections, hidden gotchas, or conflicting 
 
 ## AUDIT PROTOCOL
 0. **Verification (Pre-flight):** Run `bin/check-roadmap-consistency.sh`. If fail, halt and report.
-1. **Parallel Context Load:** Turn 1 MUST execute parallel `read_file` on `ROADMAP.md`, `PRD.md`, `PROGRESS.md`, and `list_directory` on `docs/active/epics/`.
+1. **Parallel Context Load:** Turn 1 MUST execute parallel `read_file` on `PRD.md`, `PROGRESS.md`, and `list_directory` on `docs/active/epics/`.
+   - **Latency Optimization:** If `ROADMAP.md` > 1000 lines, MUST use `grep_search` to isolate [PHASE] ranges before reading; DO NOT read the full roadmap.
 2. **Traceability Grep:** Use `grep_search` to map Roadmap `F-` codes and milestones (B1.a, etc.) directly to active docs.
 3. **Pass 1 (Cross-Reference):** Compare PRD goals vs Epic tasks. Identify gaps. Verify "Zero API Break" and performance (PR-3) compliance.
 4. **Pass 2 (Double-Pass Hardening):** Challenge findings with worst-case scenarios (Heap/GC). Every finding MUST include MB or O(N) rationale.
