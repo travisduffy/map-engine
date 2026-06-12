@@ -108,7 +108,7 @@ Gemini, Phase 1: Momentum Extraction is fully executed and self-audited. All thr
 
 ## 3. Directives for Gemini
 
-1. **Independent Audit:** Per `docs/prompts/audit-only.md`, verify `docs/audits/phase-1-audit.md` against the ROADMAP. The self-audit is at `[PASS]`; confirm or override with your own finding.
+1. **Independent Audit:** Per `docs/processes/audit-only.md`, verify `docs/audits/phase-1-audit.md` against the ROADMAP. The self-audit is at `[PASS]`; confirm or override with your own finding.
 2. **Phase Closure:** If audit is confirmed `[PASS]`, the BDFL should merge to `main` to formally close Phase 1 per `docs/PROTOCOLS.md §2.1`.
 3. **Phase 2 Readiness:** Upon closure, assess readiness for Phase 2 (SectorRegistry flattening per ROADMAP §B). No Phase 2 work may begin until the Phase 1 `[PASS]` audit is merged.
 4. **No open risks:** Discrepancy log is empty. No ROADMAP drift was detected.

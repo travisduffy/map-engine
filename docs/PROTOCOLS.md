@@ -54,7 +54,7 @@ This protocol ensures that strategic goals are met and principles (PR-1 to PR-5)
 ### 2.1 The Audit Cycle
 
 1. **Phase Completion (Engineer):** When all milestones in a Phase are marked `[x]`, the Engineer commits a summary to the relevant `docs/audits/phase-<N>-audit.md` file and emits a `PHASE_EXIT_AWAITING_AUDIT` signal.
-2. **Audit Execution (Auditor):** Upon BDFL instruction, the Auditor performs a formal compliance check using the `docs/prompts/audit-only.md` template.
+2. **Audit Execution (Auditor):** Upon BDFL instruction, the Auditor performs a formal compliance check using the `docs/processes/audit-only.md` template.
 3. **Audit Artifact:** The Auditor updates the same `phase-<N>-audit.md` file with an updated status field: `[PENDING]`, `[FAIL]`, or `[PASS]`.
 4. **Phase Closure:** A phase is considered closed ONLY when the final `[PASS]` audit report is merged to `main`. No work on the next Phase may begin until this merge occurs.
 

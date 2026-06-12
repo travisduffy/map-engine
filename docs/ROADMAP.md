@@ -85,8 +85,8 @@ To ensure PR-1 through PR-5 remain active constraints rather than passive ideals
 2.  **Phase Exit Gates:** A phase does not officially close until a dedicated principles audit confirms no PR has been silently violated by the cumulative work in that phase.
     - **Protocol:** On milestone completion, the executing agent commits a summary of its work to the relevant `phase-<N>-audit.md` file (see below) and emits a `PHASE_EXIT_AWAITING_AUDIT` signal to the operator.
     - **Resume Protocol:** After emitting `PHASE_EXIT_AWAITING_AUDIT`, the agent terminates its session entirely. Resume is not in-process. A new agent invocation begins by reading the `docs/audits/phase-<N>-audit.md` file. If the internal status field is `[PASS]`, the new invocation proceeds to the next phase. If it is `[FAIL]`, the new invocation reads the failure report and re-executes the failed milestone. Iterations and rework are tracked purely via git commit history on the single audit file.
-    - **Orchestration (F-ER.3):** Audits are out-of-band; the executing agent never produces them. The audit is performed using `docs/prompts/audit-only.md` by a human reviewer or by a separate agent invocation with an audit-only prompt that does not have execution authority.
-    - **Audit Prompt (docs/prompts/audit-only.md):**
+    - **Orchestration (F-ER.3):** Audits are out-of-band; the executing agent never produces them. The audit is performed using `docs/processes/audit-only.md` by a human reviewer or by a separate agent invocation with an audit-only prompt that does not have execution authority.
+    - **Audit Prompt (docs/processes/audit-only.md):**
       - **Role:** Read-only auditor.
       - **Input:** `docs/ROADMAP.md`, `docs/audits/phase-<N>-audit.md` (for current status).
       - **Rubric:** Evaluate all completed milestones against PR-1 through PR-5. Check for strategic drift, redundant exports, or unverified performance claims.
@@ -189,7 +189,7 @@ _Goal: Eliminate obvious waste and harden the rendering pipeline without breakin
 1. `npm run typecheck` (or `npx tsc --noEmit`) exits 0 on `main`.
 2. **A0.1 (Benchmark Infrastructure):** `npm run bench:registry-alloc <fixture-path>` is implemented.
    - **bench/SPEC.md:** Script must run `npx playwright test bench/registry-alloc.spec.ts` against fixture at `<fixture-path>`, measure `performance.measureUserAgentSpecificMemory()` before and after `new SectorRegistry(bitmap)`, and write median-of-10 to `bench/baselines.json` under key `b1.constructor_alloc_bytes`. The initial baseline must be captured and committed to `main`.
-3. **A0.2 (Audit Prompt):** `docs/prompts/audit-only.md` exists and is checked into `main`.
+3. **A0.2 (Audit Prompt):** `docs/processes/audit-only.md` exists and is checked into `main`.
 4. **A0.3 (Anchor Fixtures):** `test/fixtures/anchor-shapes.json` exists with ≥20 fixtures, ≥2 of each of 7 shape classes (convex, concave, annulus, spiral, off-centroid, narrow corridor, multi-pole), each with a hand-verified `expectedAnchor` at `tolerancePx ≤ 1.0`.
 5. **A0.4 (Finding Code Integrity):** `bin/check-finding-codes.sh` exists and is executable.
 6. **A0.5 (Roadmap Cross-Refs):** `bin/check-roadmap-cross-refs.sh` exists and is executable.
