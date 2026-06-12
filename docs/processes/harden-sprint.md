@@ -12,16 +12,12 @@ MISSION: Audit active sprint documentation for bulletproof pre-implementation st
 Identify inaccuracies, info gaps, misdirections, hidden gotchas, or conflicting instructions in `docs/active/**` preventing North Star alignment.
 
 ## AUDIT PROTOCOL
-1. **Context Loading:** Read `docs/active/` (PRD, PROGRESS, Epics). Trust session context; use `glob` only if list is unknown.
-2. **Pass 1 (Cross-Reference):**
-   - Compare PRD goals vs Epic tasks. Identify gaps.
-   - Check technical feasibility (TypedArrays, CSR) against performance mandates.
-   - Verify "Zero API Break" boundary.
-3. **Pass 2 (Double-Pass Technical Hardening):**
-   - Silent meta-review of Pass 1 findings.
-   - Challenge findings with worst-case scenarios (Heap spikes in MB, GC thrashing).
-   - MANDATE: Every finding MUST include mathematical (MB) or algorithmic (O(N)) rationale.
-4. **Risk Assessment:** Identify underspecified gotchas (disposal timing, bitwise ops, index offsets).
+0. **Verification (Pre-flight):** Run `bin/check-roadmap-consistency.sh`. If fail, halt and report.
+1. **Parallel Context Load:** Turn 1 MUST execute parallel `read_file` on `ROADMAP.md`, `PRD.md`, `PROGRESS.md`, and `list_directory` on `docs/active/epics/`.
+2. **Traceability Grep:** Use `grep_search` to map Roadmap `F-` codes and milestones (B1.a, etc.) directly to active docs.
+3. **Pass 1 (Cross-Reference):** Compare PRD goals vs Epic tasks. Identify gaps. Verify "Zero API Break" and performance (PR-3) compliance.
+4. **Pass 2 (Double-Pass Hardening):** Challenge findings with worst-case scenarios (Heap/GC). Every finding MUST include MB or O(N) rationale.
+5. **Risk Assessment:** Identify underspecified gotchas (disposal, bitwise, offsets).
 
 ## OUTPUT: COMPREHENSIVE REPORT
 Order by severity: [Critical, High, Medium, Low].
@@ -31,5 +27,6 @@ Order by severity: [Critical, High, Medium, Low].
 - **HOW TO FIX:** Actionable alignment recommendation.
 
 ## EFFICIENCY MANDATE
-- **Parallelism:** Prepare revisions for multi-file parallel execution.
-- **Latency:** Minimize tool calls; rely on Hierarchy of Truth.
+- **Parallelism:** Batch all read/list calls in Turn 1.
+- **Replace-Guard:** Before applying multi-line `replace` revisions, execute a surgical `read_file` (start/end) on the target range in the preceding turn to prevent whitespace/truncation failure.
+- **Latency:** Minimize tool calls via surgical `grep_search` instead of full-file reads where traceability mapping suffices.

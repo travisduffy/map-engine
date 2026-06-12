@@ -43,6 +43,7 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
 - `pixelIndicesMirror`: `Uint16Array` (width * height) - Immutable downcast for recovery (F-3.3).
 - `hexColors`: `Uint32Array` (sectorCount) - Packed RGB lookup (F-3.1).
 - `sectorIds`: `Uint16Array` (sectorCount) - Numeric IDs for binary search (F-3.1).
+  - **Binary Search Lookup Mandate:** `hexColors` must be sorted by packed RGB value, with `sectorIds` storing the corresponding Numeric ID, to enable O(log N) color -> ID resolution in `pick()`.
 - `adjacencyPointers`: `Uint32Array` (sectorCount + 1) - CSR Row Pointers.
 - `adjacencyNeighbors`: `Uint16Array` (totalEdges) - CSR Column Indices.
 - `contourPointers`: `Uint32Array` (sectorCount + 1) - CSR Row Pointers for rings.
@@ -52,7 +53,7 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
 
 **Memory Mandate (P-9, §12.3):** The `sourceBuffer` (Uint8Array) MUST be disposed of immediately after `pixelIndices` extraction to stay under the 256MB heap cap. **Buffer Sequence:** 1. Populate `pixelIndices` (Uint32); 2. Dispose `sourceBuffer`; 3. Populate `pixelIndicesMirror` (Uint16) from `pixelIndices`.
 
-**Sentinels (§12.3):** The ID `0xFFFF` (65535) is the canonical 'no sector' sentinel for `pixelIndices` and `pixelIndicesMirror`. To prevent sentinel collision, the engine enforces a **Hard Sector Limit of 65,534 sectors**. Attempts to load maps exceeding this limit must throw an error.
+**Sentinels (§12.3):** The ID `0xFFFF` (65535) is the canonical 'no sector' sentinel for `pixelIndices` and `pixelIndicesMirror`. To prevent sentinel collision, the engine enforces a **Hard Sector Limit of 65,534 sectors**. Attempts to load maps exceeding this limit must throw a `SectorLimitExceededError`.
 
 ### Principles Compliance (Mandate §3)
 - **PR-1 (Hobbyist Deployability):** `sourceBuffer` disposal and `pixelIndicesMirror` (Uint16) optimization ensure peak heap usage ≤ 256MB on mobile.
@@ -65,9 +66,12 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
 - **ISpatialRegistry (B1.d, F-2.3):** Defines the contract for both the base registry and future hierarchical proxies.
   ```ts
   interface ISpatialRegistry {
-    getBBox(id: string | number): [number, number, number, number];
-    getNeighbors(id: string | number): (string | number)[];
-    getCentroid(id: string | number): [number, number];
+    getBBox(id: string): [number, number, number, number];
+    getBBox(id: number): [number, number, number, number];
+    getNeighbors(id: string): string[];
+    getNeighbors(id: number): number[];
+    getCentroid(id: string): [number, number];
+    getCentroid(id: number): [number, number];
   }
   ```
 

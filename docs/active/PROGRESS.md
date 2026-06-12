@@ -76,6 +76,26 @@
 
 ## Session Log
 
+### 2026-06-12 — Sprint Hardening & Technical Refinement
+
+**Tasks touched:** PRD.md, epic-1-flattening.md, epic-2-decoupling.md, PROGRESS.md
+**Outcome:** completed
+
+**What happened:**
+Executed the Sprint Hardening revision pass to resolve findings from the Master Auditor. Hardened the implementation plan against technical gaps in adjacency discovery, interface typing, and memory lookup strategies.
+
+**Decisions made:**
+- **CSR Adjacency:** Explicitly integrated "Pass 1 (Discovery)" into the primary O(W×H) pixel scan to uphold P-5 (Single Scan) mandate.
+- **Interface Typing:** Hardened `ISpatialRegistry` with TypeScript overloads to ensure strict return-type consistency (`string[]` for `string` input, etc.).
+- **Binary Search Lookup:** Specified that `hexColors` must be sorted to enable O(log N) lookup in `pick()`, satisfying Phase 3 Worker requirements.
+- **Error Handling:** Standardized on `SectorLimitExceededError` for the hard sector limit (65,534 sectors).
+- **Backend Alignment:** Clarified `NullRenderBackend` slicing mandate as a "Source of Visual Truth" requirement for integration tests.
+
+**Left off at:**
+Task 1.0 (Capture Baseline) is ready for execution. All documentation is now bulletproof and aligned with the Roadmap.
+
+---
+
 ### 2026-06-11 — Master Audit & Alignment (Strict Compliance)
 
 **Tasks touched:** PRD.md, epic-1-flattening.md, PROGRESS.md

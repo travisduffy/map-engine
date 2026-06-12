@@ -28,17 +28,13 @@ The `docs/processes/` directory contains first-class executable sub-routines. Th
 
 - **`docs/processes/audit-only.md` (Roadmap Auditor):** Formal compliance check (Code-vs-Roadmap). Strictly read-only on code.
 - **`docs/processes/harden-sprint.md` (Sprint Hardener):** Deep pre-implementation scan of `docs/active/**` for technical gaps/inaccuracies.
+- **`docs/processes/aar.md` (AAR Protocol):** The ultimate review/revise system for preserving project EXP.
 
 ---
 
 ## [AAR_PROTOCOL] — User-Triggered EXP Loop
 
-The After-Action Review (AAR) is a **USER-TRIGGERED** sub-routine. You MUST NOT execute an AAR autonomously. You are authorized to proactively suggest an AAR only after high-stakes or complex architectural tasks, and you MUST do so with extreme brevity (e.g., "Ready for AAR?").
-
-**The AAR Procedure (When Explicitly Triggered):**
-> "Execute a comprehensive, deeply introspective After-Action Review (AAR) of your entire operational performance from the initial prompt to the final output. Meticulously audit your own step-by-step logic, explicitly contrasting your initial algorithmic assumptions against the concrete reality of the execution, while aggressively identifying any friction points, logical snags, or missteps. Generate a highly detailed, unvarnished analytical report detailing specific lessons learned, focusing heavily on exactly how you could have maximized token efficiency, minimized unnecessary tool calls, and streamlined the overall workflow, ultimately providing a definitive 'what I assumed vs. what actually happened' breakdown and the precise strategic optimizations required to execute this task flawlessly and with minimal computational overhead if you had to do it again."
-
-**Strategic Revision:** Post-AAR, you are authorized to apply the discovered optimizations to the relevant `docs/processes/*.md` or `GEMINI.md` sections using Lossless Kolmogorov compression.
+The After-Action Review (AAR) is a **USER-TRIGGERED** sub-routine. You MUST NOT execute an AAR autonomously. For full execution details and the EXP Preservation Mandate, see `docs/processes/aar.md`.
 
 ---
 

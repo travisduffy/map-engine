@@ -40,20 +40,20 @@ Convert the core sector properties into TypedArrays.
 
 **Work:**
 - Assign dense 0..N-1 integer IDs to sectors during the initial discovery pass.
-- **Hard Sector Limit Mandate:** Throw an error if `sectorCount > 65534` during the discovery pass to prevent sentinel (`0xFFFF`) collision in the `Uint16Array` mirror.
+- **Hard Sector Limit Mandate:** Throw a `SectorLimitExceededError` (to be defined in `src/types.ts`) if `sectorCount > 65534` during the discovery pass to prevent sentinel (`0xFFFF`) collision in the `Uint16Array` mirror.
 - Replace `Map<string, Sector>` properties with:
   - `bboxes`: `Int16Array(sectorCount * 4)`
   - `centroids`: `Int16Array(sectorCount * 2)`
   - `pixelIndices`: `Uint32Array(width * height)`
   - **Buffer Sequence Mandate (PR-1):** 1. Populate `pixelIndices` from `sourceBuffer`; 2. Set `sourceBuffer` to `null` (dispose); 3. Populate `pixelIndicesMirror` from `pixelIndices`.
   - **Recovery Mirror (F-3.3):** Create an immutable `pixelIndicesMirror`: `Uint16Array` downcast from `pixelIndices`.
-  - **SoA Lookup (F-3.1):** Implement `hexColors: Uint32Array(sectorCount)` (packed RGB) and `sectorIds: Uint16Array(sectorCount)` (numeric IDs) for Worker-safe lookup.
+  - **Binary Search Lookup (F-3.1):** Implement `hexColors: Uint32Array(sectorCount)` (packed RGB) and `sectorIds: Uint16Array(sectorCount)` (numeric IDs). **Mandate:** `hexColors` must be sorted by packed RGB value, with `sectorIds` storing the corresponding Numeric ID at the same index, forming a binary-searchable table for color -> ID resolution.
 - **Sentinel Mandate:** Use `0xFFFF` as the 'no sector' sentinel in `pixelIndices` and `pixelIndicesMirror`.
 - Implement internal lookup table (Map or Object) to map Hex-IDs to Numeric IDs.
 - **Mandate:** Ensure public methods (`pick`, `getNeighbors`, `getCentroid`, `getBBox`) continue to accept and return Hex-IDs (strings) synchronously, using the lookup table for internal TypedArray access. `pick()` MUST NOT be transitioned to async in this phase.
 - **packRgb (F-2.4):** Implement `@internal` helper `packRgb(r, g, b) => (r<<16)|(g<<8)|b` for use in pixel processing.
 
-**Done when:** `bboxes`, `centroids`, `pixelIndices`, `pixelIndicesMirror`, `hexColors`, and `sectorIds` heap usage is within 5% of theoretical minimum; `sourceBuffer` is null/dereferenced; error thrown if `sectorCount > 65534`; public API (including `pick`) remains unchanged and passing tests.
+**Done when:** `bboxes`, `centroids`, `pixelIndices`, `pixelIndicesMirror`, `hexColors`, and `sectorIds` heap usage is within 5% of theoretical minimum; `sourceBuffer` is null/dereferenced; `SectorLimitExceededError` thrown if `sectorCount > 65534`; public API (including `pick`) remains unchanged and passing tests.
 
 ---
 
@@ -66,8 +66,8 @@ Replace the neighbor sets with a Compressed Sparse Row (CSR) structure.
 
 **Work:**
 - **Double-Pass Adjacency Mandate (PR-3):** To maintain the "Single Scan" of pixel data (Task 1.3) while avoiding GC pressure from temporary Sets, implement a two-pass edge builder.
-  1. **Pass 1:** During the bitmap scan, populate a raw "Edge Pool" (e.g., a large `Uint32Array` containing packed `[idA, idB]` pairs).
-  2. **Pass 2:** Sort the Edge Pool and flatten into CSR arrays.
+  1. **Pass 1 (Discovery):** **Integrated into the primary O(W×H) pixel scan (Task 1.1).** Populate a raw "Edge Pool" (e.g., a large `Uint32Array` containing packed `[idA, idB]` pairs).
+  2. **Pass 2 (Flattening):** Sort the Edge Pool and flatten into CSR arrays.
 - Implement `adjacencyPointers: Uint32Array(sectorCount + 1)`.
 - Implement `adjacencyNeighbors: Uint16Array(totalEdges)`.
 - Update `getNeighbors(id)` to slice from `adjacencyNeighbors` using the pointers.
@@ -84,7 +84,7 @@ Replace the neighbor sets with a Compressed Sparse Row (CSR) structure.
 Extract polygon rings during the single O(W×H) scan.
 
 **Work:**
-- Implement ordered ring extraction during pixel iteration.
+- Implement ordered ring extraction during the primary O(W×H) pixel scan iteration (Task 1.1).
 - Populate `contourPointers: Uint32Array(sectorCount + 1)`.
 - Populate `contourPoints: Int16Array(totalPoints * 2)`.
 - Track `totalGeometricPerimeterSegments` for use in Task 1.4.
@@ -119,7 +119,8 @@ Finalize the interface to support future hierarchical proxies.
 
 **Work:**
 - Define `ISpatialRegistry` interface in `src/types.ts`.
-- Ensure it supports both `string` (public hex) and `number` (internal dense) IDs for `getBBox`, `getNeighbors`, and `getCentroid`.
+- **Interface Mandate:** Support both `string` (public hex) and `number` (internal dense) IDs.
+- **Return Type Overload Mandate:** Use TypeScript overloads or generics to ensure return type consistency (e.g., `getNeighbors(string) => string[]`, `getNeighbors(number) => number[]`).
 - Ensure `SectorRegistry` implements it.
 
-**Done when:** TypeScript interface compiles; `SectorRegistry` implements it without errors; all three mandated methods are present.
+**Done when:** TypeScript interface compiles; `SectorRegistry` implements it without errors; all three mandated methods are present with correct overloads.
