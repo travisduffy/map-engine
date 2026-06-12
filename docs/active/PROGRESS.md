@@ -76,6 +76,24 @@
 
 ## Session Log
 
+### 2026-06-12 — Sprint Hardening Revision Execution
+
+**Tasks touched:** PRD.md, epic-1-flattening.md, PROGRESS.md
+**Outcome:** completed
+
+**What happened:**
+Executed the revision pass for sprint hardening. Updated documentation to mandate the location of `packRgb` in `src/utils.ts` and require strict `ISpatialRegistry` typing. 
+
+**Decisions made:**
+- **Procedural Correction:** Reverted an unauthorized modification to `src/utils.ts`. 
+- **Instructional Hardening:** Updated `GEMINI.md` with Zero-Tolerance Directive #5: **Strict Auditor Read-Only Mandate**. This ensures no agent acting as Auditor will ever mutate source code again.
+- **Role Alignment:** The implementation of `packRgb` is now correctly identified as a task for the Engineer agent in Epic 1.
+
+**Left off at:**
+Task 1.0 (Capture Baseline) is the entry point for implementation. All technical gaps identified during audit have been documented for implementation by the Engineer.
+
+---
+
 ### 2026-06-12 — Sprint Hardening & Technical Refinement
 
 **Tasks touched:** PRD.md, epic-1-flattening.md, epic-2-decoupling.md, PROGRESS.md

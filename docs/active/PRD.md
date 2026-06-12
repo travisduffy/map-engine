@@ -97,7 +97,7 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
     readSectorIdAt(x: number, y: number): number;
   }
   ```
-- **packRgb Utility:** A internal utility `packRgb(r, g, b): number` must be implemented to produce `(r<<16)|(g<<8)|b`. This is tagged `@internal`.
+- **packRgb Utility:** A internal utility `packRgb(r, g, b): number` must be implemented in `src/utils.ts` to produce `(r<<16)|(g<<8)|b`. This is tagged `@internal` and must remain Worker-safe (zero DOM/Canvas dependencies).
 
 ---
 
@@ -106,6 +106,17 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
 ### Epic 1: SectorRegistry Flattening (B1.a-e)
 - **B1.a (Dense SoA):** Sector IDs are 0..N-1. `bboxes`, `centroids`, and `pixelIndices` use TypedArrays. Constructor heap for `large.png` is within 5% of theoretical minimum.
 - **Zero API Break Boundary:** The public methods `getNeighbors`, `getCentroid`, and `getBBox` MUST remain synchronous and continue to use hex-string IDs. Internal translation maps handle the 0..N-1 conversion.
+- **ISpatialRegistry Overloads:** The interface MUST use strict overloads to ensure type safety:
+  ```ts
+  interface ISpatialRegistry {
+    getBBox(id: string): [number, number, number, number];
+    getBBox(id: number): [number, number, number, number];
+    getNeighbors(id: string): string[];
+    getNeighbors(id: number): number[];
+    getCentroid(id: string): [number, number];
+    getCentroid(id: number): [number, number];
+  }
+  ```
 - **B1.b (CSR Adjacency):** Neighbors are resolved via `adjacencyPointers` and `adjacencyNeighbors`.
 - **B1.e (Contour Extraction):** `contourPointers` and `contourPoints` are populated. Total scan loop runs exactly once per `loadMap`.
 - **B1.c (Border Edge Allocator):** `borderEdges` (Float32Array) is allocated with length `4 * totalGeometricPerimeterSegments`.

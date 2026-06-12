@@ -52,14 +52,13 @@ Convert the core sector properties into TypedArrays.
 - **Sentinel Mandate:** Use `0xFFFF` as the 'no sector' sentinel in `pixelIndices` and `pixelIndicesMirror`.
 - Implement internal lookup table (Map or Object) to map Hex-IDs to Numeric IDs.
 - **Mandate:** Ensure public methods (`pick`, `getNeighbors`, `getCentroid`, `getBBox`) continue to accept and return Hex-IDs (strings) synchronously, using the lookup table for internal TypedArray access. `pick()` MUST NOT be transitioned to async in this phase.
-- **packRgb (F-2.4):** Implement `@internal` helper `packRgb(r, g, b) => (r<<16)|(g<<8)|b` for use in pixel processing.
+- **packRgb (F-2.4):** Implement `@internal` helper `packRgb(r, g, b) => (r<<16)|(g<<8)|b` in `src/utils.ts` for use in pixel processing. Ensure it remains Worker-safe.
 
 **Done when:** `bboxes`, `centroids`, `pixelIndices`, `pixelIndicesMirror`, `hexColors`, `idToHex`, and `sectorIds` heap usage is within 5% of theoretical minimum; `sourceBuffer` is null/dereferenced; `SectorLimitExceededError` thrown if `sectorCount > 65534`; public API (including `pick`) remains unchanged and passing tests.
 
 ---
 
 ### Task 1.2 — CSR Adjacency Implementation (B1.b)
-
 **PRD Reference:** §Architecture — SectorRegistry (Flattened)
 **Principles Compliance:** PR-3 (Performance ROI).
 
@@ -125,3 +124,4 @@ Finalize the interface to support future hierarchical proxies.
 - Ensure `SectorRegistry` implements it.
 
 **Done when:** TypeScript interface compiles; `SectorRegistry` implements it without errors; all three mandated methods are present with correct overloads.
+ds are present with correct overloads.
