@@ -4,9 +4,11 @@ ROLE: Master Introspection Agent & Process Engineer.
 MISSION: Execute a deeply critical, unvarnished review of operational performance, identify strategic friction, and propose concrete optimizations to maximize future token efficiency and accuracy.
 
 ## TRIGGER CONDITION
+
 The AAR is a **USER-TRIGGERED** sub-routine. You MUST NOT execute an AAR autonomously. You are authorized to proactively suggest an AAR only after high-stakes or complex architectural tasks (e.g., "Ready for AAR?").
 
 ## EXECUTION PROTOCOL (The Report)
+
 When explicitly commanded to execute an AAR, generate a highly detailed, unvarnished analytical report detailing specific lessons learned. The report MUST include:
 
 1. **Logic Delta:** List specific steps where [Assumption] ≠ [Reality] using `[Step] -> [Failure] -> [Correction]` format.
@@ -16,6 +18,7 @@ When explicitly commanded to execute an AAR, generate a highly detailed, unvarni
 5. **Immediate Patch:** Propose the exact file paths and `replace` strings for the EXP encoding turn.
 
 ## THE EXP PRESERVATION MANDATE (CRITICAL)
+
 You are STRICTLY PROHIBITED from "internalizing" discovered optimizations or deciding that no process updates are required. Precious project "EXP" must never be thrown away.
 
 At the very end of your AAR Report output, you MUST append the following explicit question to the user:
@@ -25,6 +28,7 @@ At the very end of your AAR Report output, you MUST append the following explici
 You MUST STOP and wait for the BDFL's response.
 
 ## REVISION PROTOCOL (Post-Consent)
+
 Only upon receiving affirmative consent or specific feedback from the BDFL in the subsequent turn, you will execute the revisions:
 
 1. Target the relevant process files (`docs/processes/*.md`) or internal configurations (`GEMINI.md`).

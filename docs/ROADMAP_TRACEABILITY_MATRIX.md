@@ -125,7 +125,7 @@ This document maps the findings from past audits to the specific sections and mi
 | 118 | Sync vs async API contradiction                | Phase 3 (B3.c) / Section 7      | Enumerate sync (getters) vs async (mutators) and updated Zero API Break Boundary.                         |
 | 119 | CA-8 missing API and algorithm                 | Phase 4 (CA-8)                  | Added `computeAnchors`/`getAnchor` and specified Polylabel algorithm.                                     |
 | 120 | CA-6 missing trigger and integration           | Phase 4 (CA-6)                  | Triggered by `aggregateGroups`; added `ThreeRenderBackendInternalAccess` linkage.                         |
-| 121 | Phase Exit Gate orchestration                  | Section 3 / docs/processes/       | Created `audit-only.md` prompt and specified audit document naming.                                       |
+| 121 | Phase Exit Gate orchestration                  | Section 3 / docs/processes/     | Created `audit-only.md` prompt and specified audit document naming.                                       |
 | 122 | CA-9 path conflict / layout                    | Section 5 / Phase 1 (A1.5)      | Standardized to PascalCase; added path migration setup to A1.5.                                           |
 | 123 | Parallel execution mandate                     | Phase 2 Header                  | Replaced parallel mandate with "Recommended Order" for single agents.                                     |
 | 124 | A1.5 git-grep circumvention                    | Phase 1 (A1.5 AC)               | Expanded regex to cover all mouse/touch/key/wheel events and Event type.                                  |
@@ -184,7 +184,7 @@ This document maps the findings from past audits to the specific sections and mi
 | 177 | CA-9 "v1" suffix stale                         | Phase 3 (Setup)                 | Dropped "v1" suffix from GameClock setup task.                                                            |
 | 178 | tsc --noEmit pre-existing errors               | Phase 1 (Setup)                 | Added Phase 0 chore for clean `main` TSC state.                                                           |
 | 179 | CA-5 fixture images                            | Phase 4 (CA-5)                  | Specified location and 8-bit indexed PNG format for fixture maps.                                         |
-| 180 | audit-only.md reference                        | Section 3                       | Added explicit reference to `docs/processes/audit-only.md` in orchestration.                                |
+| 180 | audit-only.md reference                        | Section 3                       | Added explicit reference to `docs/processes/audit-only.md` in orchestration.                              |
 | 181 | Restored B3.a transfer list (Pass 5 #1)        | Phase 3 (F-3.1)                 | Restored detailed transfer list in BOOTSTRAP protocol.                                                    |
 | 182 | CA-6 pre-condition (Pass 5 #2)                 | Phase 4 (CA-6)                  | Added MappingRequiredError if called before setParentMapping.                                             |
 | 183 | Sync setMapMode vs Async registry (Pass 5 #3)  | Phase 3 (F-3.4)                 | Hardened sync/async boundaries for palette management.                                                    |

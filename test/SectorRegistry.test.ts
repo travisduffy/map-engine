@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { SectorRegistry } from '../src/SectorRegistry'
+import { SectorLimitExceededError } from '../src/types'
 import type { SectorDefinitionFile } from '../src/types'
 
 // 4×4 RGBA buffer matching the test fixture layout:
@@ -41,141 +42,241 @@ describe('SectorRegistry', () => {
         'SectorRegistry'
       )
     })
+
+    it('throws SectorLimitExceededError when sectorCount > 65534', () => {
+      // Build a definition with 65535 entries
+      const bigDef: SectorDefinitionFile = {}
+      for (let i = 0; i <= 65534; i++) {
+        bigDef[i.toString().padStart(6, '0')] = { name: `s${i}` }
+      }
+      const buf = new Uint8ClampedArray(4) // 1×1 pixel, minimal
+      expect(() => new SectorRegistry(buf, 1, 1, bigDef)).toThrow(
+        SectorLimitExceededError
+      )
+    })
   })
 
-  describe('spatial structures — test-4x4.json', () => {
+  describe('sourceBuffer disposal (PR-1)', () => {
+    it('sourceBuffer is null after construction', () => {
+      const reg = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
+      expect(reg.sourceBuffer).toBeNull()
+    })
+  })
+
+  describe('flat pixelIndices map', () => {
     let registry: SectorRegistry
 
     beforeEach(() => {
       registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
     })
 
-    it('sector map contains exactly 4 hex keys', () => {
-      expect(registry.getSectorKeys()).toHaveLength(4)
-      expect(registry.getSectorKeys()).toContain('ff0000')
-      expect(registry.getSectorKeys()).toContain('00ff00')
-      expect(registry.getSectorKeys()).toContain('0000ff')
-      expect(registry.getSectorKeys()).toContain('ffff00')
+    it('pixelIndices is Uint32Array of length width*height', () => {
+      expect(registry.pixelIndices).toBeInstanceOf(Uint32Array)
+      expect(registry.pixelIndices.length).toBe(16)
     })
 
-    it('sourceBuffer is the same reference as the buffer passed in', () => {
-      const buf = make4x4Buffer()
-      const reg = new SectorRegistry(buf, 4, 4, definition)
-      expect(reg.sourceBuffer).toBe(buf)
+    it('pixelIndicesMirror is Uint16Array of same length', () => {
+      expect(registry.pixelIndicesMirror).toBeInstanceOf(Uint16Array)
+      expect(registry.pixelIndicesMirror.length).toBe(16)
     })
 
-    it('bboxes["ff0000"] is correct', () => {
-      expect(registry.bboxes.get('ff0000')).toEqual({
-        minX: 0,
-        minY: 0,
-        maxX: 1,
-        maxY: 1,
-      })
+    it('pixelIndices maps red sector pixels to id 0', () => {
+      // ff0000 is first in definition → id 0
+      expect(registry.pixelIndices[0]).toBe(0) // (0,0)
+      expect(registry.pixelIndices[1]).toBe(0) // (1,0)
+      expect(registry.pixelIndices[4]).toBe(0) // (0,1)
+      expect(registry.pixelIndices[5]).toBe(0) // (1,1)
     })
 
-    it('bboxes["00ff00"] is correct', () => {
-      expect(registry.bboxes.get('00ff00')).toEqual({
-        minX: 2,
-        minY: 0,
-        maxX: 3,
-        maxY: 1,
-      })
+    it('pixelIndices maps green sector pixels to id 1', () => {
+      expect(registry.pixelIndices[2]).toBe(1) // (2,0)
+      expect(registry.pixelIndices[3]).toBe(1) // (3,0)
     })
 
-    it('bboxes["0000ff"] is correct', () => {
-      expect(registry.bboxes.get('0000ff')).toEqual({
-        minX: 0,
-        minY: 2,
-        maxX: 1,
-        maxY: 3,
-      })
+    it('pixelIndicesMirror matches pixelIndices values', () => {
+      for (let i = 0; i < 16; i++) {
+        expect(registry.pixelIndicesMirror[i]).toBe(
+          registry.pixelIndices[i] & 0xffff
+        )
+      }
+    })
+  })
+
+  describe('getSectorPixels', () => {
+    let registry: SectorRegistry
+
+    beforeEach(() => {
+      registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
     })
 
-    it('bboxes["ffff00"] is correct', () => {
-      expect(registry.bboxes.get('ffff00')).toEqual({
-        minX: 2,
-        minY: 2,
-        maxX: 3,
-        maxY: 3,
-      })
-    })
-
-    it('centroids["ff0000"] is correct', () => {
-      expect(registry.centroids.get('ff0000')).toEqual({ x: 0.5, y: 0.5 })
-    })
-
-    it('centroids["00ff00"] is correct', () => {
-      expect(registry.centroids.get('00ff00')).toEqual({ x: 2.5, y: 0.5 })
-    })
-
-    it('pixelIndices["ff0000"] is sorted Uint32Array [0,1,4,5]', () => {
-      expect(registry.pixelIndices.get('ff0000')).toEqual(
+    it('getSectorPixels("ff0000") returns Uint32Array [0,1,4,5]', () => {
+      expect(registry.getSectorPixels('ff0000')).toEqual(
         new Uint32Array([0, 1, 4, 5])
       )
     })
 
-    it('pixelIndices["00ff00"] is sorted Uint32Array [2,3,6,7]', () => {
-      expect(registry.pixelIndices.get('00ff00')).toEqual(
+    it('getSectorPixels("00ff00") returns Uint32Array [2,3,6,7]', () => {
+      expect(registry.getSectorPixels('00ff00')).toEqual(
         new Uint32Array([2, 3, 6, 7])
       )
     })
 
-    it('pixelIndices["0000ff"] is sorted Uint32Array [8,9,12,13]', () => {
-      expect(registry.pixelIndices.get('0000ff')).toEqual(
+    it('getSectorPixels("0000ff") returns Uint32Array [8,9,12,13]', () => {
+      expect(registry.getSectorPixels('0000ff')).toEqual(
         new Uint32Array([8, 9, 12, 13])
       )
     })
 
-    it('pixelIndices["ffff00"] is sorted Uint32Array [10,11,14,15]', () => {
-      expect(registry.pixelIndices.get('ffff00')).toEqual(
+    it('getSectorPixels("ffff00") returns Uint32Array [10,11,14,15]', () => {
+      expect(registry.getSectorPixels('ffff00')).toEqual(
         new Uint32Array([10, 11, 14, 15])
       )
     })
+
+    it('getSectorPixels for unknown key returns undefined', () => {
+      expect(registry.getSectorPixels('aabbcc')).toBeUndefined()
+    })
   })
 
-  describe('borderEdges — test-4x4.json', () => {
+  describe('getBBox — test-4x4.json', () => {
     let registry: SectorRegistry
 
     beforeEach(() => {
       registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
     })
 
-    it('has exactly 8 border edges', () => {
-      expect(registry.borderEdges).toHaveLength(8)
+    it('getBBox("ff0000") returns [0, 0, 1, 1]', () => {
+      expect(registry.getBBox('ff0000')).toEqual([0, 0, 1, 1])
     })
 
-    it('no edge has sectorA === sectorB', () => {
-      for (const edge of registry.borderEdges) {
-        expect(edge.sectorA).not.toBe(edge.sectorB)
+    it('getBBox("00ff00") returns [2, 0, 3, 1]', () => {
+      expect(registry.getBBox('00ff00')).toEqual([2, 0, 3, 1])
+    })
+
+    it('getBBox("0000ff") returns [0, 2, 1, 3]', () => {
+      expect(registry.getBBox('0000ff')).toEqual([0, 2, 1, 3])
+    })
+
+    it('getBBox("ffff00") returns [2, 2, 3, 3]', () => {
+      expect(registry.getBBox('ffff00')).toEqual([2, 2, 3, 3])
+    })
+
+    it('getBBox via numeric id works', () => {
+      expect(registry.getBBox(0)).toEqual([0, 0, 1, 1])
+    })
+
+    it('getBBox for unknown key throws', () => {
+      expect(() => registry.getBBox('aabbcc')).toThrow('SectorRegistry')
+    })
+  })
+
+  describe('getCentroid — test-4x4.json', () => {
+    let registry: SectorRegistry
+
+    beforeEach(() => {
+      registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
+    })
+
+    it('getCentroid("ff0000") returns integer coords [1, 1] (mean 0.5 rounds up)', () => {
+      expect(registry.getCentroid('ff0000')).toEqual([1, 1])
+    })
+
+    it('getCentroid("00ff00") returns [3, 1]', () => {
+      expect(registry.getCentroid('00ff00')).toEqual([3, 1])
+    })
+
+    it('getCentroid via numeric id works', () => {
+      expect(registry.getCentroid(0)).toEqual([1, 1])
+    })
+  })
+
+  describe('new Phase 2 structures — border edges and contour', () => {
+    let registry: SectorRegistry
+
+    beforeEach(() => {
+      registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
+    })
+
+    it('borderEdges is a zero-initialized Float32Array (4 * 8 border segments)', () => {
+      expect(registry.borderEdges).toBeInstanceOf(Float32Array)
+      expect(registry.borderEdges.length).toBe(32)
+      expect(Array.from(registry.borderEdges).every(v => v === 0)).toBe(true)
+    })
+
+    it('borderEdgeCount[0] is 0 (zero-initialized)', () => {
+      expect(registry.borderEdgeCount).toBeInstanceOf(Uint32Array)
+      expect(registry.borderEdgeCount[0]).toBe(0)
+    })
+
+    it('each sector has 4 contour segments (2 borders with adjacent sectors, each edge shared)', () => {
+      // R↔G (2h edges), R↔B (2v edges) → R has 4 segs
+      expect(registry.contourPointers[1] - registry.contourPointers[0]).toBe(4) // R
+      expect(registry.contourPointers[2] - registry.contourPointers[1]).toBe(4) // G
+      expect(registry.contourPointers[3] - registry.contourPointers[2]).toBe(4) // B
+      expect(registry.contourPointers[4] - registry.contourPointers[3]).toBe(4) // Y
+    })
+
+    it('contourPoints contains segment endpoints for the first border', () => {
+      // First H border: (1,0)-(1,1) emitted when scanning (1,0) rightward to (2,0)
+      // R sector (id=0) gets this segment at contourPointers[0]=0
+      const base = registry.contourPointers[0] * 4
+      // Segment endpoints should be (1,0)-(1,1) in some order
+      const x1 = registry.contourPoints[base]
+      const y1 = registry.contourPoints[base + 1]
+      const x2 = registry.contourPoints[base + 2]
+      const y2 = registry.contourPoints[base + 3]
+      expect(x1).toBe(2) // h border between col1 and col2: geometric x = 2
+      expect(y1).toBe(0)
+      expect(x2).toBe(2)
+      expect(y2).toBe(1)
+    })
+  })
+
+  describe('CSR adjacency (getNeighbors)', () => {
+    let registry: SectorRegistry
+
+    beforeEach(() => {
+      registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
+    })
+
+    it('ff0000 is adjacent to 00ff00 and 0000ff', () => {
+      const n = registry.getNeighbors('ff0000')
+      expect(n).toContain('00ff00')
+      expect(n).toContain('0000ff')
+      expect(n).not.toContain('ffff00')
+    })
+
+    it('adjacency is bidirectional', () => {
+      expect(registry.getNeighbors('00ff00')).toContain('ff0000')
+      expect(registry.getNeighbors('0000ff')).toContain('ff0000')
+    })
+
+    it('getNeighbors returns empty array for unknown key', () => {
+      expect(registry.getNeighbors('aabbcc')).toEqual([])
+    })
+
+    it('getNeighbors(number) returns numeric neighbor IDs', () => {
+      const n = registry.getNeighbors(0) // ff0000=0 → neighbors are 1(G) and 2(B)
+      expect(n).toContain(1)
+      expect(n).toContain(2)
+    })
+  })
+
+  describe('hexColors / sectorIds (sorted binary-search table)', () => {
+    it('hexColors and sectorIds are correctly sorted by packed RGB', () => {
+      const registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
+      for (let i = 1; i < registry.hexColors.length; i++) {
+        expect(registry.hexColors[i]).toBeGreaterThanOrEqual(
+          registry.hexColors[i - 1]
+        )
       }
+      // sectorIds[i] corresponds to hexColors[i]
+      expect(registry.sectorIds.length).toBe(registry.hexColors.length)
     })
 
-    it('contains horizontal edge at (x=1, y=0)', () => {
-      expect(registry.borderEdges).toContainEqual(
-        expect.objectContaining({ x: 1, y: 0, direction: 'h' })
-      )
-    })
-
-    it('contains vertical edge at (x=0, y=1)', () => {
-      expect(registry.borderEdges).toContainEqual(
-        expect.objectContaining({ x: 0, y: 1, direction: 'v' })
-      )
-    })
-
-    it('has 4 horizontal-scan edges all at x=1', () => {
-      const hEdges = registry.borderEdges.filter(e => e.direction === 'h')
-      expect(hEdges).toHaveLength(4)
-      for (const e of hEdges) {
-        expect(e.x).toBe(1)
-      }
-    })
-
-    it('has 4 vertical-scan edges all at y=1', () => {
-      const vEdges = registry.borderEdges.filter(e => e.direction === 'v')
-      expect(vEdges).toHaveLength(4)
-      for (const e of vEdges) {
-        expect(e.y).toBe(1)
-      }
+    it('idToPackedRgb[0] == packRgb(255,0,0) for ff0000', () => {
+      const registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
+      expect(registry.idToPackedRgb[0]).toBe((255 << 16) | 0) // 0xFF0000
     })
   })
 
@@ -231,6 +332,17 @@ describe('SectorRegistry', () => {
     })
   })
 
+  describe('sector map', () => {
+    it('getSectorKeys contains exactly 4 hex keys', () => {
+      const registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
+      expect(registry.getSectorKeys()).toHaveLength(4)
+      expect(registry.getSectorKeys()).toContain('ff0000')
+      expect(registry.getSectorKeys()).toContain('00ff00')
+      expect(registry.getSectorKeys()).toContain('0000ff')
+      expect(registry.getSectorKeys()).toContain('ffff00')
+    })
+  })
+
   describe('load-time validation — mismatch fixture', () => {
     let warnSpy: ReturnType<typeof vi.spyOn>
 
@@ -282,17 +394,19 @@ describe('SectorRegistry', () => {
       })
     })
 
-    it('borderEdges contains an entry with sectorA or sectorB equal to "ffff00"', () => {
+    it('getBBox for zero-pixel sector has sentinel values (minX > maxX)', () => {
       const reg = new SectorRegistry(make4x4Buffer(), 4, 4, mismatchDefinition)
-      const hasYellow = reg.borderEdges.some(
-        e => e.sectorA === 'ffff00' || e.sectorB === 'ffff00'
-      )
-      expect(hasYellow).toBe(true)
+      const bbox = reg.getBBox('ffffff')
+      expect(bbox[0]).toBeGreaterThan(bbox[2]) // minX > maxX indicates no pixels
     })
 
-    it('bboxes does not contain "ffffff" (zero-pixel sector excluded)', () => {
+    it('sectors bordering void (ffff00) have non-zero contour segments', () => {
       const reg = new SectorRegistry(make4x4Buffer(), 4, 4, mismatchDefinition)
-      expect(reg.bboxes.has('ffffff')).toBe(false)
+      // mismatch IDs: ff0000=0, 00ff00=1, 0000ff=2, ffffff=3
+      const blueSegs = reg.contourPointers[3] - reg.contourPointers[2] // 0000ff
+      const greenSegs = reg.contourPointers[2] - reg.contourPointers[1] // 00ff00
+      expect(blueSegs).toBeGreaterThan(0)
+      expect(greenSegs).toBeGreaterThan(0)
     })
   })
 

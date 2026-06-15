@@ -169,10 +169,10 @@ export class AppController {
       this.pulsePhase = 0
       this.selectedHex = result.hexKey
       const reg: SelectedRegistryData = {
-        bbox: this.engine!.registry.bboxes.get(result.hexKey),
-        centroid: this.engine!.registry.centroids.get(result.hexKey),
+        bbox: this.engine!.registry.getBBox(result.hexKey),
+        centroid: this.engine!.registry.getCentroid(result.hexKey),
         pixelCount:
-          this.engine!.registry.pixelIndices.get(result.hexKey)?.length ?? 0,
+          this.engine!.registry.getSectorPixels(result.hexKey)?.length ?? 0,
       }
       renderSelectedPanel(result, reg)
       this.applyNeighborHighlights(result.hexKey)

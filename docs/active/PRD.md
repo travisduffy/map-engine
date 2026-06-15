@@ -28,7 +28,7 @@ Phase 2 transforms the `SectorRegistry` into a memory-efficient, Worker-safe dat
 - **Web Worker Relocation:** The actual move to a Web Worker is deferred to Phase 3.
 - **Palette Shaders:** GPU-based recoloring is deferred to Phase 3.
 - **Dynamic Borders:** Populating border geometry is deferred to Phase 4; Phase 2 only allocates the buffers.
-- **API Breaking Changes:** None. The public `MapEngine` API must remain strictly stable for all existing synchronous lookups (`pick`, `getNeighbors`, `getCentroid`, `getBBox`). 
+- **API Breaking Changes:** None. The public `MapEngine` API must remain strictly stable for all existing synchronous lookups (`pick`, `getNeighbors`, `getCentroid`, `getBBox`).
   - **Note:** The `pick()` transition to an asynchronous `Promise` based signature is deferred to Phase 3 (B3.c) to align with Matrix #308.
 
 ---
@@ -36,11 +36,13 @@ Phase 2 transforms the `SectorRegistry` into a memory-efficient, Worker-safe dat
 ## Architecture
 
 ### SectorRegistry (Flattened)
+
 The `SectorRegistry` will no longer store `Sector` objects. Instead, it will manage the following TypedArrays:
-- `bboxes`: `Int16Array` (sectorCount * 4) [minX, minY, maxX, maxY]
-- `centroids`: `Int16Array` (sectorCount * 2) [x, y]
-- `pixelIndices`: `Uint32Array` (width * height) - Flat index map.
-- `pixelIndicesMirror`: `Uint16Array` (width * height) - Immutable downcast for recovery (F-3.3).
+
+- `bboxes`: `Int16Array` (sectorCount \* 4) [minX, minY, maxX, maxY]
+- `centroids`: `Int16Array` (sectorCount \* 2) [x, y]
+- `pixelIndices`: `Uint32Array` (width \* height) - Flat index map.
+- `pixelIndicesMirror`: `Uint16Array` (width \* height) - Immutable downcast for recovery (F-3.3).
 - `hexColors`: `Uint32Array` (sectorCount) - Packed RGB lookup (F-3.1).
 - `sectorIds`: `Uint16Array` (sectorCount) - Numeric IDs for binary search (F-3.1).
   - **Binary Search Lookup Mandate:** `hexColors` must be sorted by packed RGB value, with `sectorIds` storing the corresponding Numeric ID, to enable O(log N) color -> ID resolution in `pick()`.
@@ -48,8 +50,8 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
 - `adjacencyPointers`: `Uint32Array` (sectorCount + 1) - CSR Row Pointers.
 - `adjacencyNeighbors`: `Uint16Array` (totalEdges) - CSR Column Indices.
 - `contourPointers`: `Uint32Array` (sectorCount + 1) - CSR Row Pointers for rings.
-- `contourPoints`: `Int16Array` (totalPoints * 2) - Flattened ring segments.
-- `borderEdges`: `Float32Array` (4 * totalGeometricPerimeterSegments) - Pre-allocated border pool (B1.c).
+- `contourPoints`: `Int16Array` (totalPoints \* 2) - Flattened ring segments.
+- `borderEdges`: `Float32Array` (4 \* totalGeometricPerimeterSegments) - Pre-allocated border pool (B1.c).
 - `borderEdgeCount`: `Uint32Array` (1) - 1-element buffer for transferable handoff (B1.c).
 
 **Memory Mandate (P-9, §12.3):** The `sourceBuffer` (Uint8Array) MUST be disposed of immediately after `pixelIndices` extraction to stay under the 256MB heap cap. **Buffer Sequence:** 1. Populate `pixelIndices` (Uint32); 2. Dispose `sourceBuffer`; 3. Populate `pixelIndicesMirror` (Uint16) from `pixelIndices`.
@@ -57,6 +59,7 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
 **Sentinels (§12.3):** The ID `0xFFFF` (65535) is the canonical 'no sector' sentinel for `pixelIndices` and `pixelIndicesMirror`. To prevent sentinel collision, the engine enforces a **Hard Sector Limit of 65,534 sectors**. Attempts to load maps exceeding this limit must throw a `SectorLimitExceededError`.
 
 ### Principles Compliance (Mandate §3)
+
 - **PR-1 (Hobbyist Deployability):** `sourceBuffer` disposal and `pixelIndicesMirror` (Uint16) optimization ensure peak heap usage ≤ 256MB on mobile.
 - **PR-2 (Ergonomic API):** Sync methods (`getNeighbors`, etc.) remain synchronous via hex-string lookups against internal TypedArrays.
 - **PR-3 (Performance ROI):** SoA and CSR eliminate O(N) object overhead; >80% reduction in constructor heap.
@@ -64,15 +67,17 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
 - **PR-5 (Reversibility):** Interface-based rendering allows easy swapping of backends without logic changes.
 
 ### Interfaces
+
 - **ISpatialRegistry (B1.d, F-2.3):** Defines the contract for both the base registry and future hierarchical proxies.
+
   ```ts
   interface ISpatialRegistry {
-    getBBox(id: string): [number, number, number, number];
-    getBBox(id: number): [number, number, number, number];
-    getNeighbors(id: string): string[];
-    getNeighbors(id: number): number[];
-    getCentroid(id: string): [number, number];
-    getCentroid(id: number): [number, number];
+    getBBox(id: string): [number, number, number, number]
+    getBBox(id: number): [number, number, number, number]
+    getNeighbors(id: string): string[]
+    getNeighbors(id: number): number[]
+    getCentroid(id: string): [number, number]
+    getCentroid(id: number): [number, number]
   }
   ```
 
@@ -89,12 +94,13 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
   **Note (F-2.8):** `uploadTexture` implementations in test-doubles (NullBackend) MUST retain a reference to the source typed-array via `.slice()` to support Main-thread `pick()` lookups.
 
 ### Internal Access & Utility (F-2.4, F-2.6)
+
 - **ThreeRenderBackendInternalAccess:** Implementations of `IThreeRenderBackend` (specifically `ThreeRenderBackend`) may also implement an internal access interface for picking and advanced debugging:
   ```ts
   interface ThreeRenderBackendInternalAccess {
-    getThreeScene(): THREE.Scene;
-    getThreeRenderer(): THREE.WebGLRenderer;
-    readSectorIdAt(x: number, y: number): number;
+    getThreeScene(): THREE.Scene
+    getThreeRenderer(): THREE.WebGLRenderer
+    readSectorIdAt(x: number, y: number): number
   }
   ```
 - **packRgb Utility:** A internal utility `packRgb(r, g, b): number` must be implemented in `src/utils.ts` to produce `(r<<16)|(g<<8)|b`. This is tagged `@internal` and must remain Worker-safe (zero DOM/Canvas dependencies).
@@ -104,17 +110,18 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
 ## Acceptance Criteria
 
 ### Epic 1: SectorRegistry Flattening (B1.a-e)
+
 - **B1.a (Dense SoA):** Sector IDs are 0..N-1. `bboxes`, `centroids`, and `pixelIndices` use TypedArrays. Constructor heap for `large.png` is within 5% of theoretical minimum.
 - **Zero API Break Boundary:** The public methods `getNeighbors`, `getCentroid`, and `getBBox` MUST remain synchronous and continue to use hex-string IDs. Internal translation maps handle the 0..N-1 conversion.
 - **ISpatialRegistry Overloads:** The interface MUST use strict overloads to ensure type safety:
   ```ts
   interface ISpatialRegistry {
-    getBBox(id: string): [number, number, number, number];
-    getBBox(id: number): [number, number, number, number];
-    getNeighbors(id: string): string[];
-    getNeighbors(id: number): number[];
-    getCentroid(id: string): [number, number];
-    getCentroid(id: number): [number, number];
+    getBBox(id: string): [number, number, number, number]
+    getBBox(id: number): [number, number, number, number]
+    getNeighbors(id: string): string[]
+    getNeighbors(id: number): number[]
+    getCentroid(id: string): [number, number]
+    getCentroid(id: number): [number, number]
   }
   ```
 - **B1.b (CSR Adjacency):** Neighbors are resolved via `adjacencyPointers` and `adjacencyNeighbors`.
@@ -124,6 +131,7 @@ The `SectorRegistry` will no longer store `Sector` objects. Instead, it will man
 - **Efficiency:** Heap allocation for `large.png` constructor is ≤ 0.2x the pre-Phase 2 baseline.
 
 ### Epic 2: IThreeRenderBackend Contract (B1.5)
+
 - **Decoupling:** `MapRenderer.ts` contains zero non-type imports from `'three'`.
 - **Internal Access:** `ThreeRenderBackend` implements `ThreeRenderBackendInternalAccess`.
 - **NullBackend:** Logic tests run successfully against `NullRenderBackend` in Vitest.

@@ -109,16 +109,27 @@ export class MapRenderer {
     this.camera.zoom = 1.0
     this.camera.updateProjectionMatrix()
 
-    // Display canvas and displayImageData
-    const displayCanvas = new OffscreenCanvas(registry.width, registry.height)
-    this.displayCtx = displayCanvas.getContext('2d')!
+    // Build displayImageData from pixelIndices + idToPackedRgb.
+    // sourceBuffer is null after SectorRegistry construction (disposed for memory — PR-1).
+    const w = registry.width,
+      h = registry.height
+    const rawData = new Uint8ClampedArray(w * h * 4)
+    const idToPackedRgb = registry.idToPackedRgb
+    const pixelIndices = registry.pixelIndices
+    for (let i = 0, n = w * h; i < n; i++) {
+      const id = pixelIndices[i]
+      if (id !== 0xffff) {
+        const packed = idToPackedRgb[id]
+        rawData[i * 4] = (packed >>> 16) & 0xff
+        rawData[i * 4 + 1] = (packed >>> 8) & 0xff
+        rawData[i * 4 + 2] = packed & 0xff
+      }
+      rawData[i * 4 + 3] = 255
+    }
 
-    // Mandatory .slice() — keeps displayImageData.data independent from registry.sourceBuffer
-    this.displayImageData = new ImageData(
-      registry.sourceBuffer.slice(),
-      registry.width,
-      registry.height
-    )
+    const displayCanvas = new OffscreenCanvas(w, h)
+    this.displayCtx = displayCanvas.getContext('2d')!
+    this.displayImageData = new ImageData(rawData, w, h)
     this.displayCtx.putImageData(this.displayImageData, 0, 0)
 
     // CanvasTexture wired to the display OffscreenCanvas
@@ -144,14 +155,14 @@ export class MapRenderer {
     const loop = () => {
       this._animFrameId = requestAnimationFrame(loop)
       if (this._preRenderHook) this._preRenderHook()
-      const w = this._canvas.clientWidth
-      const h = this._canvas.clientHeight
-      if (w !== this._currentW || h !== this._currentH) {
-        this._currentW = w
-        this._currentH = h
-        this.renderer.setSize(w, h, false)
-        const fhw = (w * this._worldUnitsPerPixel) / 2
-        const fhh = (h * this._worldUnitsPerPixel) / 2
+      const cw = this._canvas.clientWidth
+      const ch = this._canvas.clientHeight
+      if (cw !== this._currentW || ch !== this._currentH) {
+        this._currentW = cw
+        this._currentH = ch
+        this.renderer.setSize(cw, ch, false)
+        const fhw = (cw * this._worldUnitsPerPixel) / 2
+        const fhh = (ch * this._worldUnitsPerPixel) / 2
         this._frustumHalfW = fhw
         this._frustumHalfH = fhh
         this.camera.left = -fhw
@@ -216,32 +227,31 @@ export class MapRenderer {
   }
 
   setSectorColor(hexKey: string, color: string): void {
-    if (!this._registry.pixelIndices.has(hexKey)) {
+    const pixels = this._registry.getSectorPixels(hexKey)
+    if (!pixels) {
       console.warn('[MapEngine] setSectorColor: sector has no pixel data')
       return
     }
 
     const { r, g, b } = parseColorToRgb(color)
-
-    const indices = this._registry.pixelIndices.get(hexKey)!
     const data = this.displayImageData.data
-    for (let n = 0; n < indices.length; n++) {
-      const offset = indices[n] * 4
+    for (let n = 0; n < pixels.length; n++) {
+      const offset = pixels[n] * 4
       data[offset] = r
       data[offset + 1] = g
       data[offset + 2] = b
       data[offset + 3] = 255
     }
 
-    const bbox = this._registry.bboxes.get(hexKey)!
+    const [minX, minY, maxX, maxY] = this._registry.getBBox(hexKey)
     this.displayCtx.putImageData(
       this.displayImageData,
       0,
       0,
-      bbox.minX,
-      bbox.minY,
-      bbox.maxX - bbox.minX + 1,
-      bbox.maxY - bbox.minY + 1
+      minX,
+      minY,
+      maxX - minX + 1,
+      maxY - minY + 1
     )
 
     this._dirty = true
@@ -255,70 +265,50 @@ export class MapRenderer {
     g: number,
     b: number
   ): void {
-    if (!this._registry.pixelIndices.has(hexKey)) return
-    const arr = this._registry.pixelIndices.get(hexKey)!
+    const pixels = this._registry.getSectorPixels(hexKey)
+    if (!pixels) return
     const data = this.displayImageData.data
-    for (let i = 0; i < arr.length; i++) {
-      const byteOffset = arr[i] * 4
-      data[byteOffset] = r
-      data[byteOffset + 1] = g
-      data[byteOffset + 2] = b
+    for (let i = 0; i < pixels.length; i++) {
+      const offset = pixels[i] * 4
+      data[offset] = r
+      data[offset + 1] = g
+      data[offset + 2] = b
     }
-    const bbox = this._registry.bboxes.get(hexKey)!
+    const [minX, minY, maxX, maxY] = this._registry.getBBox(hexKey)
     if (this._pendingDirtyRect === null) {
-      this._pendingDirtyRect = { ...bbox }
+      this._pendingDirtyRect = { minX, minY, maxX, maxY }
     } else {
-      this._pendingDirtyRect.minX = Math.min(
-        this._pendingDirtyRect.minX,
-        bbox.minX
-      )
-      this._pendingDirtyRect.minY = Math.min(
-        this._pendingDirtyRect.minY,
-        bbox.minY
-      )
-      this._pendingDirtyRect.maxX = Math.max(
-        this._pendingDirtyRect.maxX,
-        bbox.maxX
-      )
-      this._pendingDirtyRect.maxY = Math.max(
-        this._pendingDirtyRect.maxY,
-        bbox.maxY
-      )
+      this._pendingDirtyRect.minX = Math.min(this._pendingDirtyRect.minX, minX)
+      this._pendingDirtyRect.minY = Math.min(this._pendingDirtyRect.minY, minY)
+      this._pendingDirtyRect.maxX = Math.max(this._pendingDirtyRect.maxX, maxX)
+      this._pendingDirtyRect.maxY = Math.max(this._pendingDirtyRect.maxY, maxY)
     }
   }
 
   /** @internal */
   public _patchSectorPixelsFromSource(hexKey: string): void {
-    if (!this._registry.pixelIndices.has(hexKey)) return
-    const arr = this._registry.pixelIndices.get(hexKey)!
+    const pixels = this._registry.getSectorPixels(hexKey)
+    if (!pixels) return
+    const numId = this._registry.getNumericId(hexKey)!
+    const packed = this._registry.idToPackedRgb[numId]
+    const r = (packed >>> 16) & 0xff
+    const g = (packed >>> 8) & 0xff
+    const b = packed & 0xff
     const data = this.displayImageData.data
-    const src = this._registry.sourceBuffer
-    for (let i = 0; i < arr.length; i++) {
-      const byteOffset = arr[i] * 4
-      data[byteOffset] = src[byteOffset]
-      data[byteOffset + 1] = src[byteOffset + 1]
-      data[byteOffset + 2] = src[byteOffset + 2]
+    for (let i = 0; i < pixels.length; i++) {
+      const offset = pixels[i] * 4
+      data[offset] = r
+      data[offset + 1] = g
+      data[offset + 2] = b
     }
-    const bbox = this._registry.bboxes.get(hexKey)!
+    const [minX, minY, maxX, maxY] = this._registry.getBBox(hexKey)
     if (this._pendingDirtyRect === null) {
-      this._pendingDirtyRect = { ...bbox }
+      this._pendingDirtyRect = { minX, minY, maxX, maxY }
     } else {
-      this._pendingDirtyRect.minX = Math.min(
-        this._pendingDirtyRect.minX,
-        bbox.minX
-      )
-      this._pendingDirtyRect.minY = Math.min(
-        this._pendingDirtyRect.minY,
-        bbox.minY
-      )
-      this._pendingDirtyRect.maxX = Math.max(
-        this._pendingDirtyRect.maxX,
-        bbox.maxX
-      )
-      this._pendingDirtyRect.maxY = Math.max(
-        this._pendingDirtyRect.maxY,
-        bbox.maxY
-      )
+      this._pendingDirtyRect.minX = Math.min(this._pendingDirtyRect.minX, minX)
+      this._pendingDirtyRect.minY = Math.min(this._pendingDirtyRect.minY, minY)
+      this._pendingDirtyRect.maxX = Math.max(this._pendingDirtyRect.maxX, maxX)
+      this._pendingDirtyRect.maxY = Math.max(this._pendingDirtyRect.maxY, maxY)
     }
   }
 
@@ -341,31 +331,35 @@ export class MapRenderer {
   }
 
   resetSectorColor(hexKey: string): void {
-    if (!this._registry.pixelIndices.has(hexKey)) {
+    const pixels = this._registry.getSectorPixels(hexKey)
+    if (!pixels) {
       console.warn('[MapEngine] resetSectorColor: sector has no pixel data')
       return
     }
 
-    const indices = this._registry.pixelIndices.get(hexKey)!
-    const src = this._registry.sourceBuffer
+    const numId = this._registry.getNumericId(hexKey)!
+    const packed = this._registry.idToPackedRgb[numId]
+    const r = (packed >>> 16) & 0xff
+    const g = (packed >>> 8) & 0xff
+    const b = packed & 0xff
     const data = this.displayImageData.data
-    for (let n = 0; n < indices.length; n++) {
-      const offset = indices[n] * 4
-      data[offset] = src[offset]
-      data[offset + 1] = src[offset + 1]
-      data[offset + 2] = src[offset + 2]
+    for (let n = 0; n < pixels.length; n++) {
+      const offset = pixels[n] * 4
+      data[offset] = r
+      data[offset + 1] = g
+      data[offset + 2] = b
       data[offset + 3] = 255
     }
 
-    const bbox = this._registry.bboxes.get(hexKey)!
+    const [minX, minY, maxX, maxY] = this._registry.getBBox(hexKey)
     this.displayCtx.putImageData(
       this.displayImageData,
       0,
       0,
-      bbox.minX,
-      bbox.minY,
-      bbox.maxX - bbox.minX + 1,
-      bbox.maxY - bbox.minY + 1
+      minX,
+      minY,
+      maxX - minX + 1,
+      maxY - minY + 1
     )
 
     this._dirty = true

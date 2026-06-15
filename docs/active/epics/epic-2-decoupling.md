@@ -21,6 +21,7 @@
 Create the normative interface for all rendering operations.
 
 **Work:**
+
 - Create `src/render/IThreeRenderBackend.ts`.
 - Define `IThreeRenderBackend` with `uploadTexture`, `uploadBorderEdges`, `updateUniforms`, `render`, and `dispose`.
 - Define `ThreeRenderBackendInternalAccess` (F-2.6) with `getThreeScene`, `getThreeRenderer`, and `readSectorIdAt`.
@@ -38,6 +39,7 @@ Create the normative interface for all rendering operations.
 Create a no-op backend for use in unit tests and logic verification.
 
 **Work:**
+
 - Create `src/render/NullRenderBackend.ts`.
 - Implement all `IThreeRenderBackend` methods as no-ops.
 - **Mandate (F-2.8):** `uploadTexture` MUST retain a reference to the source typed-array via `.slice()` to support Main-thread `pick()` lookups during unit tests. **Note:** This satisfies the requirement for the backend to remain the "source of visual truth" in integration tests, ensuring consistency even when the registry maintains a mirror for performance.
@@ -57,6 +59,7 @@ Create a no-op backend for use in unit tests and logic verification.
 Refactor `MapRenderer` to use the backend interface.
 
 **Work:**
+
 - Update `MapRenderer` constructor to accept an `IThreeRenderBackend`.
 - Replace direct `THREE.WebGLRenderer` calls with calls to the backend.
 - Move existing Three.js-specific rendering logic from `MapRenderer.ts` to a new `src/render/ThreeRenderBackend.ts`.

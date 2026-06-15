@@ -40,8 +40,9 @@ The After-Action Review (AAR) is a **USER-TRIGGERED** sub-routine. You MUST NOT 
 
 ## [LOSSLESS_COMPRESSION_MANDATE]
 
-**DATA AND CONTEXT FIDELITY IS A FIRST-CLASS CITIZEN GLOBALLY.** 
+**DATA AND CONTEXT FIDELITY IS A FIRST-CLASS CITIZEN GLOBALLY.**
 When applying Kolmogorov compression to internal config, agent-facing files, or machine-facing content:
+
 - **STRICTLY LOSSLESS:** Compression MUST be 100% lossless. Strip conversational filler and linguistic padding aggressively, but **STRICTLY PROHIBITED** from summarizing away operational nuance, edge-case handling, mathematical constraints, or technical rationales.
 - **FIDELITY OVER EFFICIENCY:** Instruction and meaning preservation takes absolute precedence over token count. If nuance requires tokens, spend them. Meaning must survive 100% intact.
 
@@ -73,7 +74,6 @@ To ensure technical fidelity and zero-drift execution, adhere to these compresse
 - **DAG_ENFORCEMENT:** Identify serial dependencies (e.g., B1.e → B1.c) and encode them into the Task Registry sequence.
 - **SURGICAL_SYNC:** Execute `read_file` on target lines immediately before `replace` if the file was mutated earlier in the session.
 - **REPO_LOCK:** All memory, logs, and rules MUST reside in `./GEMINI.md` or `docs/`. External tiers (`~/.gemini/`) are non-existent.
-
 
 ---
 

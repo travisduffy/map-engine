@@ -11,3 +11,8 @@ const _HEX = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) =>
 export function toHexKey(r: number, g: number, b: number): string {
   return _HEX[r] + _HEX[g] + _HEX[b]
 }
+
+/** @internal Packs R, G, B into a single 24-bit integer: (r<<16)|(g<<8)|b. Worker-safe. */
+export function packRgb(r: number, g: number, b: number): number {
+  return (r << 16) | (g << 8) | b
+}

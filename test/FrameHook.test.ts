@@ -69,7 +69,7 @@ describe('FrameHook — Epic 1', () => {
   it('AC 1.3: two setSectorColor in one frame = one putImageData with bbox union and correct pixels', () => {
     const registry = engine['_registry']!
     // B-4: guard for inclusive-bounds assumption underlying every +1 in dirty-rect formula
-    expect(registry.bboxes.get('ff0000')!.maxX).toBe(1)
+    expect(registry.getBBox('ff0000')[2]).toBe(1) // maxX
 
     const spy = vi.spyOn(renderer['displayCtx'], 'putImageData')
     // Three.js Texture.needsUpdate is a write-only setter that increments .version;
@@ -99,12 +99,12 @@ describe('FrameHook — Epic 1', () => {
     const { r: rr, g: rg, b: rb } = parseColorToRgb('red')
     const data = renderer['displayImageData'].data
 
-    const ffOffset = registry.pixelIndices.get('ff0000')![0] * 4
+    const ffOffset = registry.getSectorPixels('ff0000')![0] * 4
     expect(data[ffOffset]).toBe(br)
     expect(data[ffOffset + 1]).toBe(bg)
     expect(data[ffOffset + 2]).toBe(bb)
 
-    const gfOffset = registry.pixelIndices.get('00ff00')![0] * 4
+    const gfOffset = registry.getSectorPixels('00ff00')![0] * 4
     expect(data[gfOffset]).toBe(rr)
     expect(data[gfOffset + 1]).toBe(rg)
     expect(data[gfOffset + 2]).toBe(rb)
@@ -119,7 +119,7 @@ describe('FrameHook — Epic 1', () => {
 
     const { r, g, b } = parseColorToRgb('blue')
     const registry = engine['_registry']!
-    const offset = registry.pixelIndices.get('ff0000')![0] * 4
+    const offset = registry.getSectorPixels('ff0000')![0] * 4
     const data = renderer['displayImageData'].data
     expect(data[offset]).toBe(r)
     expect(data[offset + 1]).toBe(g)
@@ -189,7 +189,7 @@ describe('FrameHook — Epic 1', () => {
     expect(() =>
       engine.setSectorColor('ff0000', '###not-valid###')
     ).not.toThrow()
-    const ffOffset = registry.pixelIndices.get('ff0000')![0] * 4
+    const ffOffset = registry.getSectorPixels('ff0000')![0] * 4
     expect(data[ffOffset]).toBe(0)
     expect(data[ffOffset + 1]).toBe(0)
     expect(data[ffOffset + 2]).toBe(0)
@@ -205,7 +205,7 @@ describe('FrameHook — Epic 1', () => {
     })
     advanceFrame(renderer, 16)
     expect(threw).toBe(false)
-    const blOffset = registry.pixelIndices.get('0000ff')![0] * 4
+    const blOffset = registry.getSectorPixels('0000ff')![0] * 4
     expect(data[blOffset]).toBe(0)
     expect(data[blOffset + 1]).toBe(0)
     expect(data[blOffset + 2]).toBe(0)
@@ -258,11 +258,11 @@ describe('FrameHook — Epic 1', () => {
 
     expect(spy).toHaveBeenCalledTimes(1)
 
-    // Pixels must match sourceBuffer (original ff0000 color)
-    const ffOffset = registry.pixelIndices.get('ff0000')![0] * 4
-    const src = registry.sourceBuffer
-    expect(data[ffOffset]).toBe(src[ffOffset])
-    expect(data[ffOffset + 1]).toBe(src[ffOffset + 1])
-    expect(data[ffOffset + 2]).toBe(src[ffOffset + 2])
+    // Pixels must match original ff0000 color (sourceBuffer disposed — use idToPackedRgb)
+    const ffOffset = registry.getSectorPixels('ff0000')![0] * 4
+    const packed = registry.idToPackedRgb[registry.getNumericId('ff0000')!]
+    expect(data[ffOffset]).toBe((packed >>> 16) & 0xff) // R
+    expect(data[ffOffset + 1]).toBe((packed >>> 8) & 0xff) // G
+    expect(data[ffOffset + 2]).toBe(packed & 0xff) // B
   })
 })

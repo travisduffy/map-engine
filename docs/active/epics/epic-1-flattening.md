@@ -22,6 +22,7 @@
 Establish the "pre-flattening" memory footprint using browser-fidelity measurement. This is a hard prerequisite for all Phase 2 work.
 
 **Work:**
+
 - Execute `npm run bench:registry-alloc fixtures/maps/large.png`.
 - **Measurement Mandate (F-2.1):** Use `performance.measureUserAgentSpecificMemory()` via Playwright/Chrome. Fallback to `performance.memory.usedJSHeapSize` ONLY if MAVS is unavailable.
 - Ensure `bench/baselines.json` is updated with the median value under the key `b1.constructor_alloc_bytes`.
@@ -39,6 +40,7 @@ Establish the "pre-flattening" memory footprint using browser-fidelity measureme
 Convert the core sector properties into TypedArrays.
 
 **Work:**
+
 - Assign dense 0..N-1 integer IDs to sectors during the initial discovery pass.
 - **Hard Sector Limit Mandate:** Throw a `SectorLimitExceededError` (to be defined in `src/types.ts`) if `sectorCount > 65534` during the discovery pass to prevent sentinel (`0xFFFF`) collision in the `Uint16Array` mirror.
 - Replace `Map<string, Sector>` properties with:
@@ -59,12 +61,14 @@ Convert the core sector properties into TypedArrays.
 ---
 
 ### Task 1.2 — CSR Adjacency Implementation (B1.b)
+
 **PRD Reference:** §Architecture — SectorRegistry (Flattened)
 **Principles Compliance:** PR-3 (Performance ROI).
 
 Replace the neighbor sets with a Compressed Sparse Row (CSR) structure.
 
 **Work:**
+
 - **Double-Pass Adjacency Mandate (PR-3):** To maintain the "Single Scan" of pixel data (Task 1.3) while avoiding GC pressure from temporary objects, implement a two-pass edge builder.
   1. **Pass 1 (Discovery):** **Integrated into the primary O(W×H) pixel scan (Task 1.1).** Use a `Set<number>` to store unique edge pairs, where each pair is a 32-bit packed integer: `(idA << 16) | idB` (where `idA < idB` to ensure symmetry).
   2. **Pass 2 (Flattening):** Flatten the `Set` into an intermediate `Uint32Array`, sort it to group by `idA`, and then populate the CSR arrays.
@@ -84,6 +88,7 @@ Replace the neighbor sets with a Compressed Sparse Row (CSR) structure.
 Extract polygon rings during the single O(W×H) scan.
 
 **Work:**
+
 - Implement ordered ring extraction during the primary O(W×H) pixel scan iteration (Task 1.1).
 - Populate `contourPointers: Uint32Array(sectorCount + 1)`.
 - Populate `contourPoints: Int16Array(totalPoints * 2)`.
@@ -101,6 +106,7 @@ Extract polygon rings during the single O(W×H) scan.
 Allocate the buffers required for future dynamic border rendering.
 
 **Work:**
+
 - **Ordering Rule (F-2.0):** Consume metrics from B1.e (`totalGeometricPerimeterSegments`) and B1.b (`totalEdges`).
 - Allocate `borderEdges: Float32Array(4 * totalGeometricPerimeterSegments)`.
 - Allocate `borderEdgeCount: Uint32Array(1)` initialized to 0.
@@ -118,6 +124,7 @@ Allocate the buffers required for future dynamic border rendering.
 Finalize the interface to support future hierarchical proxies.
 
 **Work:**
+
 - Define `ISpatialRegistry` interface in `src/types.ts`.
 - **Interface Mandate:** Support both `string` (public hex) and `number` (internal dense) IDs.
 - **Return Type Overload Mandate:** Use TypeScript overloads or generics to ensure return type consistency (e.g., `getNeighbors(string) => string[]`, `getNeighbors(number) => number[]`).
