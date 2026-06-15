@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { MapEngine } from '../src/MapEngine'
 import type { MapRenderer } from '../src/MapRenderer'
+import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
 import { parseColorToRgb } from '../src/internal/color'
 import { makeCanvas, advanceFrame } from './testUtils'
 
@@ -74,7 +75,8 @@ describe('FrameHook — Epic 1', () => {
     const spy = vi.spyOn(renderer['displayCtx'], 'putImageData')
     // Three.js Texture.needsUpdate is a write-only setter that increments .version;
     // capture version before the frame and assert it grew after flush.
-    const versionBefore = renderer['_texture'].version
+    const versionBefore = (renderer['_backend'] as ThreeRenderBackend).texture
+      .version
 
     engine.onFrame(() => {
       engine.setSectorColor('ff0000', 'blue')
@@ -109,7 +111,9 @@ describe('FrameHook — Epic 1', () => {
     expect(data[gfOffset + 1]).toBe(rg)
     expect(data[gfOffset + 2]).toBe(rb)
 
-    expect(renderer['_texture'].version).toBeGreaterThan(versionBefore)
+    expect(
+      (renderer['_backend'] as ThreeRenderBackend).texture.version
+    ).toBeGreaterThan(versionBefore)
   })
 
   it('AC 1.4: setSectorColor outside frame flushes immediately', () => {

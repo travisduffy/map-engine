@@ -42,7 +42,7 @@
 
 **Phase:** Phase 2 (The Structural Pivot)
 **Active version:** v0.0.3-phase-2
-**Next task:** 2.1 (Define IThreeRenderBackend Interface)
+**Next task:** None — all epics complete
 **Blocking issues:** None
 
 ---
@@ -68,13 +68,48 @@
 
 | Status | Task    | Description                               |
 | ------ | ------- | ----------------------------------------- |
-| `[ ]`  | **2.1** | Define IThreeRenderBackend Interface      |
-| `[ ]`  | **2.2** | Implement NullRenderBackend & Logic Tests |
-| `[ ]`  | **2.3** | Decouple MapRenderer from Three.js        |
+| `[x]`  | **2.1** | Define IThreeRenderBackend Interface      |
+| `[x]`  | **2.2** | Implement NullRenderBackend & Logic Tests |
+| `[x]`  | **2.3** | Decouple MapRenderer from Three.js        |
 
 ---
 
 ## Session Log
+
+### 2026-06-14 — Epic 2 Implementation (Tasks 2.1–2.3)
+
+**Tasks touched:** 2.1, 2.2, 2.3
+**Outcome:** completed — all 217 tests pass, build 6.88 KB gzipped
+
+**What happened:**
+
+Implemented full rendering decoupling. `MapRenderer.ts` now has zero non-type imports from `'three'`; all Three.js construction lives in `ThreeRenderBackend`.
+
+**Files created:**
+
+- `src/render/IThreeRenderBackend.ts` — `IThreeRenderBackend` interface (`camera`, `scene`, `mesh`, `texture`, `uploadTexture`, `uploadBorderEdges`, `updateUniforms`, `render`, `setSize`, `dispose`) and `ThreeRenderBackendInternalAccess` interface (`getThreeScene`, `getThreeRenderer`, `readSectorIdAt`)
+- `src/render/ThreeRenderBackend.ts` — Concrete Three.js backend: owns `WebGLRenderer`, `Scene`, `Mesh`, `MeshBasicMaterial`, `CanvasTexture`, `OrthographicCamera`; implements both interfaces
+- `src/render/NullRenderBackend.ts` — Test backend: `uploadTexture` slices `ImageData` from OffscreenCanvas-backed textures; `readSectorIdAt` does bounds-checked packed-RGB lookup; `dispose()` clears slice; no `WebGLRenderer`
+- `test/NullRenderBackend.test.ts` — 8 tests: instantiation, interface compliance, uploadTexture slice, readSectorIdAt, disposal
+
+**Files modified:**
+
+- `src/MapRenderer.ts` — `import * as THREE` removed; `import type { ..., Vector2 }` for types only; `import { ThreeRenderBackend }` for default backend creation; `THREE.MathUtils.clamp` → `Math.max/min`; `renderer.dispose()/geometry.dispose()/material.dispose()/texture.dispose()` → `this._backend.dispose()`; `renderer.setSize()` → `this._backend.setSize()`; `renderer.render()` → `this._backend.render()`; `_texture.needsUpdate` → `this._backend.uploadTexture(this._texture)`; `renderer`, `material` fields removed (moved to `ThreeRenderBackend`); `scene`, `camera`, `mesh` sourced from backend
+- `test/MapRenderer.test.ts` — updated 3 assertions to access `ThreeRenderBackend` via `renderer['_backend']`
+- `test/FrameHook.test.ts` — updated 2 `_texture` accesses to use backend
+- `test/RenderGating.test.ts` — updated 8 `renderer.renderer` accesses to use backend's `getThreeRenderer()`
+
+**Decisions made:**
+
+- **`camera`, `scene`, `mesh`, `texture` on interface:** PRD spec lists `render(scene, camera)` as method params; adding these as interface properties is the only way MapRenderer can pass them without value-importing THREE.
+- **`setSize` added to interface:** resize logic in MapRenderer's rAF loop needs to call the renderer; not in PRD spec but necessary for the decoupling to be complete.
+- **`ThreeRenderBackend.material` public:** needed for test assertion `backend.material.map !== null`.
+- **Optional `_backend` param on MapRenderer:** MapRenderer still creates `ThreeRenderBackend` internally by default; injecting an `IThreeRenderBackend` via the 6th constructor arg enables testing without WebGL.
+- **`readSectorIdAt` returns packed RGB color (not sector ID) in NullRenderBackend:** color data (from OffscreenCanvas `getImageData`) is all that's available without the registry; Phase 3 Worker integration will align this with actual picking.
+
+**Left off at:**
+
+Epic 2 complete. Both Epic 1 and Epic 2 are done. Phase 2 implementation is complete.
 
 ### 2026-06-14 — Epic 1 Implementation (Tasks 1.0–1.5)
 

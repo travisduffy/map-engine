@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as THREE from 'three'
 import { MapRenderer } from '../src/MapRenderer'
+import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
 import { SectorRegistry } from '../src/SectorRegistry'
 import type { SectorDefinitionFile } from '../src/types'
 
@@ -135,7 +136,8 @@ describe('MapRenderer', () => {
     })
 
     it('renderer is a THREE.WebGLRenderer', () => {
-      expect(renderer.renderer).toBeInstanceOf(THREE.WebGLRenderer)
+      const backend = renderer['_backend'] as ThreeRenderBackend
+      expect(backend.getThreeRenderer()).toBeInstanceOf(THREE.WebGLRenderer)
     })
 
     it('PlaneGeometry UV at vertex 0 is u≈0.0, v≈1.0 (Three.js bottom-left UV origin)', () => {
@@ -159,7 +161,10 @@ describe('MapRenderer', () => {
 
     it('render loop fires at least one frame', async () => {
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
-      expect(renderer.renderer.info.render.frame).toBeGreaterThanOrEqual(1)
+      const backend = renderer['_backend'] as ThreeRenderBackend
+      expect(
+        backend.getThreeRenderer().info.render.frame
+      ).toBeGreaterThanOrEqual(1)
     })
 
     it('camera uses contain framing — 800×600 canvas with 4×4 bitmap (square) → frustum wider than tall', () => {
@@ -202,7 +207,8 @@ describe('MapRenderer', () => {
     })
 
     it('material.map is assigned (texture is wired into material)', () => {
-      expect(renderer.material.map).not.toBeNull()
+      const backend = renderer['_backend'] as ThreeRenderBackend
+      expect(backend.material.map).not.toBeNull()
     })
   })
 

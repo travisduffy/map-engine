@@ -1,20 +1,21 @@
-import * as THREE from 'three'
+import type { OrthographicCamera, Scene, Mesh, Texture, Vector2 } from 'three'
+import type { IThreeRenderBackend } from './render/IThreeRenderBackend'
+import { ThreeRenderBackend } from './render/ThreeRenderBackend'
 import type { SectorRegistry } from './SectorRegistry'
 import type { PickEvent, SectorBBox } from './types'
 import { parseColorToRgb } from './internal/color'
 import { InputController } from './input/InputController'
 
 export class MapRenderer {
-  readonly scene: THREE.Scene
-  readonly camera: THREE.OrthographicCamera
-  readonly mesh: THREE.Mesh
-  readonly renderer: THREE.WebGLRenderer
-
-  readonly material: THREE.MeshBasicMaterial
+  readonly scene: Scene
+  readonly camera: OrthographicCamera
+  readonly mesh: Mesh
 
   readonly displayCtx: OffscreenCanvasRenderingContext2D
   readonly displayImageData: ImageData
-  private readonly _texture: THREE.CanvasTexture<OffscreenCanvas>
+
+  private readonly _texture: Texture
+  private readonly _backend: IThreeRenderBackend
 
   protected readonly _canvas: HTMLCanvasElement
   protected readonly _registry: SectorRegistry
@@ -28,7 +29,6 @@ export class MapRenderer {
 
   private readonly _input: InputController
 
-  // Prep for Task 2.2 render gating — set by InputController onDirty callback.
   _dirty: boolean = true
 
   private _destroyed = false
@@ -45,7 +45,8 @@ export class MapRenderer {
     registry: SectorRegistry,
     preRenderHook?: () => void,
     onPointerMove?: (e: PickEvent) => void,
-    onClick?: (e: PickEvent) => void
+    onClick?: (e: PickEvent) => void,
+    _backend?: IThreeRenderBackend
   ) {
     if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
       throw new Error(
@@ -57,62 +58,10 @@ export class MapRenderer {
     this._registry = registry
     this._preRenderHook = preRenderHook ?? null
 
-    // WebGL renderer
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false })
-    this.renderer.setPixelRatio(window.devicePixelRatio)
-    this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false)
-
-    // Scene
-    this.scene = new THREE.Scene()
-
-    // Geometry: 1 world unit = 1 pixel, centered at origin
-    const geometry = new THREE.PlaneGeometry(registry.width, registry.height)
-
-    this.material = new THREE.MeshBasicMaterial({
-      map: null,
-      side: THREE.DoubleSide,
-    })
-
-    this.mesh = new THREE.Mesh(geometry, this.material)
-    this.scene.add(this.mesh)
-
-    // Orthographic camera — "contain" framing strategy
-    const canvasAspect = canvas.clientWidth / canvas.clientHeight
-    const bitmapAspect = registry.width / registry.height
-
-    let frustumHalfW: number
-    let frustumHalfH: number
-
-    if (canvasAspect >= bitmapAspect) {
-      frustumHalfH = registry.height / 2
-      frustumHalfW = frustumHalfH * canvasAspect
-    } else {
-      frustumHalfW = registry.width / 2
-      frustumHalfH = frustumHalfW / canvasAspect
-    }
-
-    this._frustumHalfW = frustumHalfW
-    this._frustumHalfH = frustumHalfH
-    this._worldUnitsPerPixel = (frustumHalfW * 2) / canvas.clientWidth
-    this._currentW = canvas.clientWidth
-    this._currentH = canvas.clientHeight
-
-    this.camera = new THREE.OrthographicCamera(
-      -frustumHalfW,
-      frustumHalfW,
-      frustumHalfH,
-      -frustumHalfH,
-      -1000,
-      1000
-    )
-    this.camera.position.set(0, 0, 1)
-    this.camera.zoom = 1.0
-    this.camera.updateProjectionMatrix()
-
     // Build displayImageData from pixelIndices + idToPackedRgb.
     // sourceBuffer is null after SectorRegistry construction (disposed for memory — PR-1).
-    const w = registry.width,
-      h = registry.height
+    const w = registry.width
+    const h = registry.height
     const rawData = new Uint8ClampedArray(w * h * 4)
     const idToPackedRgb = registry.idToPackedRgb
     const pixelIndices = registry.pixelIndices
@@ -132,13 +81,42 @@ export class MapRenderer {
     this.displayImageData = new ImageData(rawData, w, h)
     this.displayCtx.putImageData(this.displayImageData, 0, 0)
 
-    // CanvasTexture wired to the display OffscreenCanvas
-    this._texture = new THREE.CanvasTexture(displayCanvas)
-    this._texture.minFilter = THREE.NearestFilter
-    this._texture.magFilter = THREE.NearestFilter
-    this._texture.generateMipmaps = false
+    // Orthographic camera — "contain" framing strategy
+    const canvasAspect = canvas.clientWidth / canvas.clientHeight
+    const bitmapAspect = w / h
 
-    this.material.map = this._texture
+    let frustumHalfW: number
+    let frustumHalfH: number
+
+    if (canvasAspect >= bitmapAspect) {
+      frustumHalfH = h / 2
+      frustumHalfW = frustumHalfH * canvasAspect
+    } else {
+      frustumHalfW = w / 2
+      frustumHalfH = frustumHalfW / canvasAspect
+    }
+
+    this._frustumHalfW = frustumHalfW
+    this._frustumHalfH = frustumHalfH
+    this._worldUnitsPerPixel = (frustumHalfW * 2) / canvas.clientWidth
+    this._currentW = canvas.clientWidth
+    this._currentH = canvas.clientHeight
+
+    this._backend =
+      _backend ??
+      new ThreeRenderBackend(
+        canvas,
+        displayCanvas,
+        frustumHalfW,
+        frustumHalfH,
+        w,
+        h
+      )
+
+    this.scene = this._backend.scene
+    this.camera = this._backend.camera
+    this.mesh = this._backend.mesh
+    this._texture = this._backend.texture
 
     // InputController owns all DOM event listeners (CA-3)
     this._input = new InputController(canvas, {
@@ -160,7 +138,7 @@ export class MapRenderer {
       if (cw !== this._currentW || ch !== this._currentH) {
         this._currentW = cw
         this._currentH = ch
-        this.renderer.setSize(cw, ch, false)
+        this._backend.setSize(cw, ch)
         const fhw = (cw * this._worldUnitsPerPixel) / 2
         const fhh = (ch * this._worldUnitsPerPixel) / 2
         this._frustumHalfW = fhw
@@ -174,14 +152,14 @@ export class MapRenderer {
         this._dirty = true
       }
       if (this._dirty) {
-        this.renderer.render(this.scene, this.camera)
+        this._backend.render(this.scene, this.camera)
         this._dirty = false
       }
     }
     this._animFrameId = requestAnimationFrame(loop)
   }
 
-  private _applyPan(delta: THREE.Vector2): void {
+  private _applyPan(delta: Vector2): void {
     const scaleX = (this._frustumHalfW * 2) / this._canvas.clientWidth
     const scaleY = (this._frustumHalfH * 2) / this._canvas.clientHeight
     this.camera.position.x -= (delta.x * scaleX) / this.camera.zoom
@@ -189,9 +167,9 @@ export class MapRenderer {
     this.clampPan()
   }
 
-  private _applyZoom(factor: number, ndcPoint: THREE.Vector2): void {
+  private _applyZoom(factor: number, ndcPoint: Vector2): void {
     const zoomBefore = this.camera.zoom
-    const newZoom = THREE.MathUtils.clamp(zoomBefore * factor, 0.5, 20.0)
+    const newZoom = Math.max(0.5, Math.min(20.0, zoomBefore * factor))
     this.camera.zoom = newZoom
     this.camera.updateProjectionMatrix()
     this.camera.position.x +=
@@ -255,7 +233,7 @@ export class MapRenderer {
     )
 
     this._dirty = true
-    this._texture.needsUpdate = true
+    this._backend.uploadTexture(this._texture)
   }
 
   /** @internal */
@@ -326,7 +304,7 @@ export class MapRenderer {
       r.maxY - r.minY + 1
     )
     this._dirty = true
-    this._texture.needsUpdate = true
+    this._backend.uploadTexture(this._texture)
     this._pendingDirtyRect = null
   }
 
@@ -363,7 +341,7 @@ export class MapRenderer {
     )
 
     this._dirty = true
-    this._texture.needsUpdate = true
+    this._backend.uploadTexture(this._texture)
   }
 
   destroy(): void {
@@ -373,9 +351,6 @@ export class MapRenderer {
     this._preRenderHook = null
     this._pendingDirtyRect = null
     this._input.destroy()
-    this.renderer.dispose()
-    ;(this.mesh.geometry as THREE.BufferGeometry).dispose()
-    this.material.dispose()
-    this._texture.dispose()
+    this._backend.dispose()
   }
 }
