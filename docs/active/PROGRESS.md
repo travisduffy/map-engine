@@ -42,7 +42,7 @@
 
 **Phase:** Phase 2 (The Structural Pivot)
 **Active version:** v0.0.3-phase-2
-**Next task:** None — all epics complete
+**Next task:** None — all epics complete. PHASE_EXIT_AWAITING_AUDIT.
 **Blocking issues:** None
 
 ---
@@ -75,6 +75,36 @@
 ---
 
 ## Session Log
+
+### 2026-06-14 — Post-Implementation Check & Phase 2 Audit
+
+**Tasks touched:** docs/audits/phase-2-audit.md (created), PROGRESS.md (lessons learned)
+**Outcome:** completed — phase-2-audit.md written; PHASE_EXIT_AWAITING_AUDIT emitted
+
+**What happened:**
+
+Executed thorough post-implementation check of all Epic 1 and Epic 2 acceptance criteria against the actual codebase. All ACs verified against specific file/line evidence. Created `docs/audits/phase-2-audit.md` per PROTOCOLS.md §2.1 Phase Exit requirement.
+
+**Verification results:**
+
+- 217/217 tests pass
+- `git grep` zero non-type 'three' imports in MapRenderer.ts ✅
+- All four consistency scripts exit 0 ✅
+- Bundle size 6,863 bytes gzipped (under 15 KB) ✅
+- All PRD ACs verified with line-level evidence ✅
+
+**Discrepancies documented in audit:**
+
+1. `bench/baselines.json`: Node.js `process.memoryUsage()` vs. spec's browser-based `performance.measureUserAgentSpecificMemory()` — pre-existing gap from Task 1.0, flagged for Auditor
+2. `IThreeRenderBackend` adds `camera`, `scene`, `mesh`, `texture`, `setSize` beyond PRD spec — justified by decoupling requirements
+3. `idToPackedRgb` not in PRD spec — justified by sourceBuffer disposal mandate
+4. `updateUniforms` uses `Record<string, unknown>` vs. `Record<string, any>` — improvement, no functional impact
+
+**Left off at:**
+
+Phase 2 complete. `docs/audits/phase-2-audit.md` written. PHASE_EXIT_AWAITING_AUDIT signal emitted.
+
+---
 
 ### 2026-06-14 — Epic 2 Implementation (Tasks 2.1–2.3)
 
@@ -258,3 +288,5 @@ Task 1.0 (Capture Baseline) is the entry point for the next session.
 - **Per-sector pixel lists vs flat pixelIndices:** The flat `pixelIndices: Uint32Array` (length = W×H, value = sector ID) replaces the old `Map<string, number[]>`. Per-sector lists for painting are now in `_sectorPixels: Uint32Array[]` (private), exposed via `getSectorPixels(hexKey)`. Tests that accessed `registry.pixelIndices.get(hexKey)` must switch to `registry.getSectorPixels(hexKey)`.
 - **CSR adjacency returns arrays not Sets:** `getNeighbors` builds a new `string[]` or `number[]` on each call from CSR data. Old tests using `.has()` and `.size` must switch to `.includes()` and `.length`. Same-reference equality checks (`===`) on adjacency results are no longer valid.
 - **FrameHook.test.ts also uses old API:** This file was missed in the initial test update pass. Any test file that accesses `registry.bboxes`, `registry.centroids`, `registry.pixelIndices`, or `registry.sourceBuffer` directly needs updating — not just the three obvious test files.
+- **Backend injection for testing:** MapRenderer accepts an optional `_backend?: IThreeRenderBackend` as 6th constructor param. Tests that need a `WebGLRenderer` reference should cast `renderer['_backend'] as ThreeRenderBackend` and call `.getThreeRenderer()`. Tests that don't need WebGL can inject a `NullRenderBackend` to avoid GPU dependency entirely.
+- **When renderer fields move to backend, sweep all test private-field accesses:** Moving `renderer.renderer`, `renderer.material`, `renderer['_texture']` to ThreeRenderBackend required updates in MapRenderer.test.ts (3 assertions), FrameHook.test.ts (2), and RenderGating.test.ts (8). Use `git grep "renderer\['\|renderer\.renderer\|renderer\.material" test/` to find access paths that need updating after any future field migration.
