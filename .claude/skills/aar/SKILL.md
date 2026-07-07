@@ -12,12 +12,12 @@ A single-invocation cycle that turns whatever just ran into durable, compounding
 
 ## Terminology (vendor-agnostic)
 
-| Term | Meaning |
-| --- | --- |
-| `AGENT_FILE` | The master always-loaded instruction file (e.g. CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, a system prompt). |
-| `SKILL_FILE` | A modular, on-demand capability file in the open SKILL.md format. |
-| `INSTRUCTION_FILES` | Every file in scope: the AGENT_FILE plus all SKILL_FILEs. |
-| `ARCHIVE` | A quarantine/deprecation area (a clearly marked section or a separate file) where retired-but-recoverable content lives. |
+| Term                | Meaning                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `AGENT_FILE`        | The master always-loaded instruction file (e.g. CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, a system prompt).         |
+| `SKILL_FILE`        | A modular, on-demand capability file in the open SKILL.md format.                                                        |
+| `INSTRUCTION_FILES` | Every file in scope: the AGENT_FILE plus all SKILL_FILEs.                                                                |
+| `ARCHIVE`           | A quarantine/deprecation area (a clearly marked section or a separate file) where retired-but-recoverable content lives. |
 
 Resolve these to the host tool's real paths at runtime. If unsure which files exist, list them before proceeding.
 
@@ -65,13 +65,13 @@ Output the ledger in two halves:
 
 **IMPROVES (candidates only).** For each candidate:
 
-| Field | Meaning |
-| --- | --- |
-| `signal` | The evidence that triggered it — no signal, discard the candidate. |
-| `type` | ADD, EDIT, or QUARANTINE (never DELETE at this stage). |
+| Field       | Meaning                                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| `signal`    | The evidence that triggered it — no signal, discard the candidate.                       |
+| `type`      | ADD, EDIT, or QUARANTINE (never DELETE at this stage).                                   |
 | `objective` | COVERAGE, CONTEXT-ECONOMY, or RUNTIME-EFFICIENCY — name one primary; flag any trade-off. |
-| `target` | Likely file or section. |
-| `rationale` | The why, to be preserved with the change. |
+| `target`    | Likely file or section.                                                                  |
+| `rationale` | The why, to be preserved with the change.                                                |
 
 If the session was clean, output a full SUSTAINS and an empty IMPROVES. A clean session is a valid outcome — do not manufacture changes.
 

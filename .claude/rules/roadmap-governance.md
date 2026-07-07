@@ -21,10 +21,10 @@ A phase closes through this four-step cycle:
 
 `docs/processes/` holds the executable process definitions this file points to:
 
-| Process             | File                            | Used for                                                             |
-| -------------------- | -------------------------------- | --------------------------------------------------------------------- |
-| Roadmap Audit         | `docs/processes/audit-only.md`   | The read-only compliance pass in step 2 above                        |
-| Sprint Hardening      | `docs/processes/harden-sprint.md`| Pre-implementation scan of `docs/active/**` for technical gaps before a sprint starts |
+| Process          | File                              | Used for                                                                              |
+| ---------------- | --------------------------------- | ------------------------------------------------------------------------------------- |
+| Roadmap Audit    | `docs/processes/audit-only.md`    | The read-only compliance pass in step 2 above                                         |
+| Sprint Hardening | `docs/processes/harden-sprint.md` | Pre-implementation scan of `docs/active/**` for technical gaps before a sprint starts |
 
 ## Technical Rationale for Findings
 
