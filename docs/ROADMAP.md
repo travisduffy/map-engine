@@ -145,7 +145,9 @@ This graph maps the chronological flow of work. Refactors (A/B) unblock Capabili
  - CA-3 Input Pipeline (src/input/InputController.ts) (F-C.3)
  - CA-9 Game Clock (src/GameClock.ts) (F-C.1, F-C.10)
  - A1 Render Gating (src/MapRenderer.ts, _dirty flag) (F-1.2, F-1.3)
- - MapRenderer._preRenderHook(): void (F-C.11): Public hook (tagged @internal) called once per rAF frame before renderer.render(); default no-op; subclasses override (e.g., camera-following). Located at `src/MapRenderer.ts`.]
+ - MapRenderer._preRenderHook(): void (F-C.11): Public hook (tagged @internal) called once per rAF frame before renderer.render(); default no-op; subclasses override (e.g., camera-following). Located at `src/MapRenderer.ts`.
+ - B1.a-e: SectorRegistry SoA Flattening, Adjacency CSR, Contour Extraction, Border Allocation
+ - B1.5: Rendering Decoupling (IThreeRenderBackend)]
 
                     ┌──────────────────────────────────────────────────┐
     Phase 0         │ A0.1: bench:registry-alloc + initial baseline    │
@@ -162,6 +164,7 @@ This graph maps the chronological flow of work. Refactors (A/B) unblock Capabili
                     ┌───────────────────▼─────────────────────┐
     Phase 2         │ B1.5 -> B1.a -> B1.b -> B1.e -> B1.c    │
   (Structural)      │ B1.d: ISpatialRegistry Contract         │
+                    │ Status: [COMPLETE]                      │
                     └───────────────────┬─────────────────────┘
                                         │
                     ┌───────────────────▼─────────────────────┐
