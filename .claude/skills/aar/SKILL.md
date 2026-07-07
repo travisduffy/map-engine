@@ -1,3 +1,7 @@
+---
+description: Runs a single-invocation after-action review that turns a completed task or session into durable, compounding improvements to the agent's own instruction files (CLAUDE.md, rules, skills). Use when the user asks for an AAR, a retrospective, to capture lessons learned, or to update instruction files based on what just happened.
+---
+
 # After-Action Review (AAR) Skill
 
 A single-invocation cycle that turns whatever just ran into durable, compounding improvements to the agent's own instruction files. Each pass leaves the system equal or better — growth is additive; removal is rare, gated, and reversible.

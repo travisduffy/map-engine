@@ -73,6 +73,40 @@ describe('GPU palette pipeline — Epic 4 Task 4.1', () => {
     }
   })
 
+  it('renders correct sector colors even after the bootstrap transfer detaches registry.pixelIndices', async () => {
+    // Reproduces the MapEngine.loadMap ordering: the renderer is constructed
+    // and its rAF loop paused (so the index texture is NOT yet uploaded to the
+    // GPU), then registry.pixelIndices's buffer is transferred to the Worker —
+    // detaching it. The index texture's first upload happens on the *next*
+    // render, after the detach. If the texture were backed by the caller's
+    // buffer, it would upload a zero-length view → id 0 for every texel → the
+    // whole map painted sector 0's color (red). It must be backed by an
+    // independent Main-resident copy instead.
+    const registry = await buildRegistry()
+    const canvas = makeCanvas(400, 400)
+    let renderer: MapRenderer | undefined
+    try {
+      renderer = new MapRenderer(canvas, registry)
+      renderer._pauseLoop()
+
+      // Detach the source buffer, exactly as postMessage(..., [buffer]) would.
+      structuredClone(registry.pixelIndices.buffer, {
+        transfer: [registry.pixelIndices.buffer],
+      })
+      expect(registry.pixelIndices.byteLength).toBe(0) // confirm detached
+
+      const pixels = readAllPixels(renderer, canvas)
+      // All four fixture sectors must still be visible — not a uniform fill.
+      expect(countColor(pixels, 0xff, 0x00, 0x00)).toBeGreaterThan(0) // red
+      expect(countColor(pixels, 0x00, 0xff, 0x00)).toBeGreaterThan(0) // green
+      expect(countColor(pixels, 0x00, 0x00, 0xff)).toBeGreaterThan(0) // blue
+      expect(countColor(pixels, 0xff, 0xff, 0x00)).toBeGreaterThan(0) // yellow
+    } finally {
+      renderer?.destroy()
+      canvas.remove()
+    }
+  })
+
   it('palette swaps write only the palette LUT — zero index-texture re-uploads across 10 swaps', async () => {
     const registry = await buildRegistry()
     const canvas = makeCanvas(400, 400)

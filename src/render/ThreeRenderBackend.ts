@@ -96,8 +96,15 @@ export class ThreeRenderBackend
 
     this._indexTextureWidth = mapWidth
     this._indexTextureHeight = mapHeight
+    // Back the index texture with the Main-resident snapshot, NOT the caller's
+    // `pixelIndices`: the bootstrap transfer (MapEngine.loadMap) detaches that
+    // buffer, and the render loop is paused until after the transfer — so the
+    // texture is never uploaded to the GPU before the detach. Uploading the
+    // detached (zero-length) buffer would read id 0 for every texel and paint
+    // the whole map sector 0's color. The snapshot is an independent copy taken
+    // above (pre-transfer) and shared read-only with the picking pipeline.
     this._indexTexture = new THREE.DataTexture(
-      pixelIndices,
+      this._pixelIndicesSnapshot,
       mapWidth,
       mapHeight,
       THREE.RedIntegerFormat,

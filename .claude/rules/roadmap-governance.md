@@ -1,3 +1,12 @@
+---
+paths:
+  - 'docs/ROADMAP.md'
+  - 'docs/ROADMAP_TRACEABILITY_MATRIX.md'
+  - 'docs/audits/**/*.md'
+  - 'docs/processes/**/*.md'
+  - 'docs/active/**/*.md'
+---
+
 ## Hierarchy of Truth
 
 Code is the source of truth. When documentation and implementation conflict, trust the codebase over the docs. Treat documentation drift as a defect: cross-reference docs against the actual source to find inaccuracies, then fix the docs to match reality — never the reverse.
