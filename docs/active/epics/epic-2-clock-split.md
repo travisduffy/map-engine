@@ -18,14 +18,14 @@
 
 **PRD Reference:** §"New modules"; ROADMAP §8 B3.b ("Keep `RenderClock` on Main for rAF integration").
 
-Extract the Main-side timing surface from `GameClock` without breaking it. `MapEngine.onFrame`/`offFrame` migrate to `RenderClock` internally; `GameClock` stays exported and functional through the deprecation window.
+Extract the Main-side timing surface that `onFrame`/`offFrame` already use — today it is inlined as a `hook` closure inside `MapEngine.loadMap()` (raw per-frame `dt`, computed from a stored last-frame timestamp, dispatched to `_frameCallbacks` on every rAF tick — no tick-accumulation involved). `GameClock` is a separate, higher-level consumer built _on top of_ that raw dispatch (it calls `engine.onFrame(...)` and layers its own fixed-tick `_accumulator`/`MAX_TICKS_PER_FRAME` conversion). This task moves the raw dispatch into `RenderClock`; it does **not** touch `GameClock`'s own accumulator logic, which stays in `GameClock.ts` unmodified. `GameClock` stays exported and functional through the deprecation window (it keeps working unmodified because `onFrame`'s public contract is unchanged).
 
 **Work:**
 
-- Create `src/RenderClock.ts` with the float-accumulator pattern from `GameClock`, driven by the existing rAF loop in `MapRenderer`.
-- Point `MapEngine`'s frame-callback plumbing at `RenderClock`; mark `GameClock` `@deprecated` in TSDoc; export `RenderClock` from `src/index.ts`.
+- Create `src/RenderClock.ts` that owns the raw per-frame dt-dispatch logic currently inlined in `MapEngine.loadMap`'s `hook` closure: track the last-frame timestamp (first frame `dt === 0`), invoke the registered frame callbacks with `dt` each rAF tick, and preserve the existing `_inTick` guard plus the `renderer._flushPendingDirty()` call in a `finally` block — `_flushPendingDirty()` is currently only ever called from this closure (`src/MapEngine.ts`), so dropping it would silently break dirty-rect flushing for `setSectorColor` calls made from inside a frame callback.
+- Point `MapEngine`'s frame-callback plumbing (`onFrame`/`offFrame`, the `hook` passed into `MapRenderer`) at `RenderClock` internally; mark `GameClock` `@deprecated` in TSDoc; export `RenderClock` from `src/index.ts`.
 
-**Done when:** `test/FrameHook.test.ts` and `test/GameClock.test.ts` still pass unmodified; new `RenderClock` unit test covers accumulator behavior; typecheck passes.
+**Done when:** `test/FrameHook.test.ts` and `test/GameClock.test.ts` still pass unmodified; new `RenderClock` unit test covers its dt-tracking behavior (first-frame `dt === 0`, subsequent real `dt`, and the dirty-flush coupling); typecheck passes.
 
 ---
 
@@ -37,9 +37,9 @@ Used by every Phase 4 worker computation (CA-4/5/6/8 all mandate ≤ 8 ms yield 
 
 **Work:**
 
-- Create `src/worker/yield.ts` exporting `yieldIfNeeded(state): Promise<void>` — tracks `lastYield` (`performance.now()`); if < 8 ms elapsed, resolves synchronously (no microtask churn); otherwise awaits one `MessageChannel.postMessage(0)` round-trip and resets `lastYield`.
+- Create `src/worker/yield.ts` exporting `yieldIfNeeded(state): Promise<void>`, where `state` is a caller-owned `{ lastYield: number }`-shaped object (e.g. the Worker-side registry state object from Task 1.5) so every call site shares one yield clock: checks `state.lastYield` against `performance.now()`; if < 8 ms elapsed, returns without a `MessageChannel` round-trip; otherwise awaits one `MessageChannel.postMessage(0)` round-trip and sets `state.lastYield = performance.now()`.
 
-**Done when:** unit test (Node mode — no DOM deps) asserts: no yield under 8 ms; yield at ≥ 8 ms; a 50 ms busy-loop calling it allows an interleaved queued message to be processed.
+**Done when:** unit test asserts (no DOM API usage — `MessageChannel` and `performance.now()` are both available under this repo's existing Vitest/Playwright browser-mode config, so no separate Node test environment is required): no yield under 8 ms; yield at ≥ 8 ms; a 50 ms busy-loop calling it allows an interleaved queued message to be processed.
 
 ---
 
@@ -49,7 +49,7 @@ Used by every Phase 4 worker computation (CA-4/5/6/8 all mandate ≤ 8 ms yield 
 
 **Work:**
 
-- Create `src/worker/SimulationClock.ts`: accumulator-driven fixed-tick clock at `tickHz` (from the `BOOTSTRAP` payload, default 60), zero DOM dependencies, driven by a `setInterval`/self-scheduling loop inside the Worker.
+- Create `src/worker/SimulationClock.ts`: accumulator-driven fixed-tick clock at `tickHz` (from the `BOOTSTRAP` payload, default 60), zero DOM dependencies, driven by a `setInterval`/self-scheduling loop inside the Worker. The accumulator absorbs scheduling jitter regardless of which timer mechanism drives it, but must still cap per-iteration catch-up ticks the same way `GameClock` does (`MAX_TICKS_PER_FRAME = 10` in `src/GameClock.ts`), resetting the accumulator when the cap is hit — otherwise a long Worker-thread stall (e.g. unyielded heavy computation in a later epic) risks an unbounded tick-catch-up loop.
 - Instantiate it in `src/worker/index.ts` on `BOOTSTRAP`; expose tick telemetry (tick count + timestamps ring) retrievable via a `CALL` method for test assertions.
 
 **Done when:** worker integration test bootstraps a map, samples tick telemetry over ≥ 1 s, and asserts 60 Hz ± drift bound.
