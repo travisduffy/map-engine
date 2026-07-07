@@ -67,16 +67,10 @@ describe('FrameHook — Epic 1', () => {
     expect(lateDts[0]).toBe(1.0)
   })
 
-  it('AC 1.3: two setSectorColor in one frame = one putImageData with bbox union and correct pixels', () => {
+  it('AC 1.3 (Epic 4 B2): two setSectorColor in one frame each patch their sector LUT entry', () => {
     const registry = engine['_registry']!
-    // B-4: guard for inclusive-bounds assumption underlying every +1 in dirty-rect formula
-    expect(registry.getBBox('ff0000')[2]).toBe(1) // maxX
-
-    const spy = vi.spyOn(renderer['displayCtx'], 'putImageData')
-    // Three.js Texture.needsUpdate is a write-only setter that increments .version;
-    // capture version before the frame and assert it grew after flush.
-    const versionBefore = (renderer['_backend'] as ThreeRenderBackend).texture
-      .version
+    const backend = renderer['_backend'] as ThreeRenderBackend
+    const spy = vi.spyOn(backend, 'writePaletteEntry')
 
     engine.onFrame(() => {
       engine.setSectorColor('ff0000', 'blue')
@@ -85,49 +79,36 @@ describe('FrameHook — Epic 1', () => {
 
     advanceFrame(renderer, 16)
 
-    expect(spy).toHaveBeenCalledTimes(1)
-
-    // ff0000 bbox: {0,0,1,1}; 00ff00 bbox: {2,0,3,1} → union {0,0,3,1}
-    // putImageData(data, dx=0, dy=0, dirtyX=0, dirtyY=0, dirtyW=4, dirtyH=2)
-    const call = spy.mock.calls[0]
-    expect(call[1]).toBe(0) // dx
-    expect(call[2]).toBe(0) // dy
-    expect(call[3]).toBe(0) // dirtyX (minX)
-    expect(call[4]).toBe(0) // dirtyY (minY)
-    expect(call[5]).toBe(4) // dirtyWidth  (maxX - minX + 1 = 3 - 0 + 1)
-    expect(call[6]).toBe(2) // dirtyHeight (maxY - minY + 1 = 1 - 0 + 1)
+    expect(spy).toHaveBeenCalledTimes(2)
 
     const { r: br, g: bg, b: bb } = parseColorToRgb('blue')
     const { r: rr, g: rg, b: rb } = parseColorToRgb('red')
-    const data = renderer['displayImageData'].data
-
-    const ffOffset = registry.getSectorPixels('ff0000')![0] * 4
-    expect(data[ffOffset]).toBe(br)
-    expect(data[ffOffset + 1]).toBe(bg)
-    expect(data[ffOffset + 2]).toBe(bb)
-
-    const gfOffset = registry.getSectorPixels('00ff00')![0] * 4
-    expect(data[gfOffset]).toBe(rr)
-    expect(data[gfOffset + 1]).toBe(rg)
-    expect(data[gfOffset + 2]).toBe(rb)
-
-    expect(
-      (renderer['_backend'] as ThreeRenderBackend).texture.version
-    ).toBeGreaterThan(versionBefore)
+    expect(spy).toHaveBeenNthCalledWith(
+      1,
+      registry.getNumericId('ff0000'),
+      br,
+      bg,
+      bb
+    )
+    expect(spy).toHaveBeenNthCalledWith(
+      2,
+      registry.getNumericId('00ff00'),
+      rr,
+      rg,
+      rb
+    )
   })
 
-  it('AC 1.4: setSectorColor outside frame flushes immediately', () => {
-    const spy = vi.spyOn(renderer['displayCtx'], 'putImageData')
+  it('AC 1.4 (Epic 4 B2): setSectorColor outside a frame patches the LUT entry immediately', () => {
+    const registry = engine['_registry']!
+    const backend = renderer['_backend'] as ThreeRenderBackend
+    const spy = vi.spyOn(backend, 'writePaletteEntry')
+
     engine.setSectorColor('ff0000', 'blue')
-    expect(spy).toHaveBeenCalledTimes(1)
 
     const { r, g, b } = parseColorToRgb('blue')
-    const registry = engine['_registry']!
-    const offset = registry.getSectorPixels('ff0000')![0] * 4
-    const data = renderer['displayImageData'].data
-    expect(data[offset]).toBe(r)
-    expect(data[offset + 1]).toBe(g)
-    expect(data[offset + 2]).toBe(b)
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledWith(registry.getNumericId('ff0000'), r, g, b)
   })
 
   it('AC 1.5: onFrame/offFrame are no-ops after destroy', () => {
@@ -157,7 +138,7 @@ describe('FrameHook — Epic 1', () => {
     expect(calls).toEqual(['cb2'])
   })
 
-  it('AC 1.8: destroy inside callback — remaining callbacks fire; setSectorColor throws; flush is no-op', () => {
+  it('AC 1.8: destroy inside callback — remaining callbacks fire; setSectorColor throws', () => {
     const calls: string[] = []
 
     engine.onFrame(() => {
@@ -174,29 +155,30 @@ describe('FrameHook — Epic 1', () => {
       calls.push('cb3')
     })
 
-    const spy = vi.spyOn(renderer['displayCtx'], 'putImageData')
     advanceFrame(renderer, 16)
 
     expect(calls).toContain('cb1-done')
     expect(calls).toContain('cb2-before')
     expect(calls).not.toContain('cb2-after') // setSectorColor threw before this line
     expect(calls).toContain('cb3') // third callback still fired
-    expect(spy).not.toHaveBeenCalled() // _pendingDirtyRect nulled by destroy — flush is no-op
   })
 
-  it('AC 1.9: invalid color fills with black; clearRect resets singleton state', () => {
+  it('AC 1.9 (Epic 4 B2): invalid color patches the LUT entry with black', () => {
     const registry = engine['_registry']!
-    const data = renderer['displayImageData'].data
+    const backend = renderer['_backend'] as ThreeRenderBackend
+    const spy = vi.spyOn(backend, 'writePaletteEntry')
 
-    // Immediate path: set red then invalid → black (clearRect ensures singleton is reset)
+    // Immediate path: set red then invalid → black
     expect(() => engine.setSectorColor('ff0000', 'red')).not.toThrow()
     expect(() =>
       engine.setSectorColor('ff0000', '###not-valid###')
     ).not.toThrow()
-    const ffOffset = registry.getSectorPixels('ff0000')![0] * 4
-    expect(data[ffOffset]).toBe(0)
-    expect(data[ffOffset + 1]).toBe(0)
-    expect(data[ffOffset + 2]).toBe(0)
+    expect(spy).toHaveBeenLastCalledWith(
+      registry.getNumericId('ff0000'),
+      0,
+      0,
+      0
+    )
 
     // In-tick path
     let threw = false
@@ -209,10 +191,12 @@ describe('FrameHook — Epic 1', () => {
     })
     advanceFrame(renderer, 16)
     expect(threw).toBe(false)
-    const blOffset = registry.getSectorPixels('0000ff')![0] * 4
-    expect(data[blOffset]).toBe(0)
-    expect(data[blOffset + 1]).toBe(0)
-    expect(data[blOffset + 2]).toBe(0)
+    expect(spy).toHaveBeenLastCalledWith(
+      registry.getNumericId('0000ff'),
+      0,
+      0,
+      0
+    )
   })
 
   it('AC 1.10: color utility import isolation', async () => {
@@ -226,9 +210,11 @@ describe('FrameHook — Epic 1', () => {
     expect(colorText).not.toMatch(/SectorRegistry|SectorBitmapParser/)
   })
 
-  it('AC 1.11: error in callback does not stop subsequent callbacks; flush completes', () => {
+  it('AC 1.11 (Epic 4 B2): error in callback does not stop subsequent callbacks; LUT patch still applied', () => {
+    const registry = engine['_registry']!
+    const backend = renderer['_backend'] as ThreeRenderBackend
     const calls: string[] = []
-    const spy = vi.spyOn(renderer['displayCtx'], 'putImageData')
+    const spy = vi.spyOn(backend, 'writePaletteEntry')
 
     engine.onFrame(() => calls.push('cb1'))
     engine.onFrame(() => {
@@ -236,20 +222,21 @@ describe('FrameHook — Epic 1', () => {
     })
     engine.onFrame(() => {
       calls.push('cb3')
-      engine.setSectorColor('ff0000', 'red') // gives flush work to do
+      engine.setSectorColor('ff0000', 'red')
     })
 
     advanceFrame(renderer, 16)
     expect(calls).toEqual(['cb1', 'cb3'])
-    expect(spy).toHaveBeenCalledTimes(1)
+    const { r, g, b } = parseColorToRgb('red')
+    expect(spy).toHaveBeenCalledWith(registry.getNumericId('ff0000'), r, g, b)
   })
 
-  it('AC 1.12: immediate setSectorColor + in-frame resetSectorColor → pixels match sourceBuffer; one putImageData', () => {
+  it('AC 1.12 (Epic 4 B2): immediate setSectorColor + in-frame resetSectorColor → LUT entry matches idToPackedRgb', () => {
     const registry = engine['_registry']!
-    const data = renderer['displayImageData'].data
-    const spy = vi.spyOn(renderer['displayCtx'], 'putImageData')
+    const backend = renderer['_backend'] as ThreeRenderBackend
+    const spy = vi.spyOn(backend, 'writePaletteEntry')
 
-    // Immediate set (one putImageData)
+    // Immediate set
     engine.setSectorColor('ff0000', 'red')
     expect(spy).toHaveBeenCalledTimes(1)
     spy.mockClear()
@@ -262,11 +249,14 @@ describe('FrameHook — Epic 1', () => {
 
     expect(spy).toHaveBeenCalledTimes(1)
 
-    // Pixels must match original ff0000 color (sourceBuffer disposed — use idToPackedRgb)
-    const ffOffset = registry.getSectorPixels('ff0000')![0] * 4
-    const packed = registry.idToPackedRgb[registry.getNumericId('ff0000')!]
-    expect(data[ffOffset]).toBe((packed >>> 16) & 0xff) // R
-    expect(data[ffOffset + 1]).toBe((packed >>> 8) & 0xff) // G
-    expect(data[ffOffset + 2]).toBe(packed & 0xff) // B
+    // Must match original ff0000 color (sourceBuffer disposed — use idToPackedRgb)
+    const numId = registry.getNumericId('ff0000')!
+    const packed = registry.idToPackedRgb[numId]
+    expect(spy).toHaveBeenCalledWith(
+      numId,
+      (packed >>> 16) & 0xff,
+      (packed >>> 8) & 0xff,
+      packed & 0xff
+    )
   })
 })

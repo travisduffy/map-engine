@@ -51,16 +51,6 @@ export interface PickEvent {
   clientY: number
 }
 
-/** Thrown when a map exceeds the hard sector limit of 65,534 (sentinel 0xFFFF reserved). */
-export class SectorLimitExceededError extends Error {
-  constructor(count: number) {
-    super(
-      `SectorRegistry: sector count ${count} exceeds the hard limit of 65,534. Map cannot be loaded.`
-    )
-    this.name = 'SectorLimitExceededError'
-  }
-}
-
 /**
  * Contract for spatial registry implementations and future hierarchical proxies.
  * Overloaded signatures ensure strict return-type consistency per caller ID type.
@@ -81,3 +71,39 @@ export interface PickResult {
   pixelX: number
   pixelY: number
 }
+
+/** Main → Worker one-time Transferable bootstrap payload (F-3.1). */
+export interface BootstrapPayload {
+  pixelIndices: Uint32Array
+  bboxes: Int16Array
+  centroids: Int16Array
+  adjacencyPointers: Uint32Array
+  adjacencyNeighbors: Uint16Array
+  contourPointers: Uint32Array
+  contourPoints: Int16Array
+  borderEdges: Float32Array
+  borderEdgeCount: Uint32Array
+  width: number
+  height: number
+  sectorCount: number
+  tickHz: number
+}
+
+/** Worker → Main bootstrap round-trip verification scalars (F-3.1). */
+export interface BootstrapAckPayload {
+  sectorCount: number
+  totalEdges: number
+  firstSectorBBox: [number, number, number, number]
+  lastSectorBBox: [number, number, number, number]
+}
+
+/** Identifier for a registered map mode (CA-7). */
+export type MapModeId = string
+
+/** Main ↔ Worker message protocol (F-3.1). */
+export type WorkerMessage =
+  | { type: 'BOOTSTRAP'; payload: BootstrapPayload }
+  | { type: 'BOOTSTRAP_ACK'; payload: BootstrapAckPayload }
+  | { type: 'CALL'; id: number; method: string; params: unknown }
+  | { type: 'RESULT'; id: number; result: unknown; snapshot?: unknown }
+  | { type: 'ERROR'; id: number; errorName: string; message: string }

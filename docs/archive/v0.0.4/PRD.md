@@ -1,7 +1,7 @@
 # Product Requirements Document: Phase 2 — The Structural Pivot
 
 > **Status: ACTIVE**
-> **Active Version:** v0.0.3-phase-2
+> **Active Version:** v0.0.4
 > This PRD governs the "Structural Pivot" phase, where the engine's core registry is refactored from an object-oriented map to a high-performance Data Engine using Structure of Arrays (SoA).
 
 ---

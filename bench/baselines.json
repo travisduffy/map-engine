@@ -5,5 +5,15 @@
     "capturedAt": "2026-05-14T15:29:24Z",
     "hardware": "Linux x86_64",
     "measurementMethod": "process.memoryUsage().heapUsed (Node.js v8 heap, --expose-gc)"
+  },
+  "b2.palette_swap_median_ms": {
+    "value": 0.4,
+    "unit": "ms",
+    "capturedAt": "2026-07-07T02:51:21Z",
+    "hardware": "Linux x86_64 (containerized dev session — not reference hardware)",
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "measurementMethod": "performance.now() bracketing ThreeRenderBackend._setPaletteUniformDirect() + forced render(), median of 10 swaps, test/fixtures/maps/large.png (4096x4096, single-sector) rendered to a 1920x1080 canvas (test/PalettePerf.gl.spec.ts)",
+    "toleranceApplied": "5.0x software-rendering tolerance (ROADMAP §12.2) — SwiftShader (software) detected via WEBGL_debug_renderer_info; raw median (0.4ms) already passes the strict <1ms reference-hardware gate with margin",
+    "note": "Unverified against reference hardware (ROADMAP §12.2 F-C.5: i7-12700K / RTX 3060 / Chrome 124) — this session has no dedicated GPU. Re-run on reference hardware or a GPU CI runner recommended before treating this as authoritative."
   }
 }

@@ -41,7 +41,7 @@
 ## Current Status
 
 **Phase:** Phase 2 (The Structural Pivot)
-**Active version:** v0.0.3-phase-2
+**Active version:** v0.0.4
 **Next task:** None — all epics complete. PHASE_EXIT_AWAITING_AUDIT.
 **Blocking issues:** None
 
@@ -51,7 +51,7 @@
 
 ### Epic 1: SectorRegistry Flattening (B1.a-e)
 
-> Full spec: `docs/active/epics/epic-1-flattening.md`
+> Full spec: `docs/archive/v0.0.4/epics/epic-1-flattening.md`
 
 | Status | Task    | Description                                        |
 | ------ | ------- | -------------------------------------------------- |
@@ -64,7 +64,7 @@
 
 ### Epic 2: Rendering Decoupling (B1.5)
 
-> Full spec: `docs/active/epics/epic-2-decoupling.md`
+> Full spec: `docs/archive/v0.0.4/epics/epic-2-decoupling.md`
 
 | Status | Task    | Description                               |
 | ------ | ------- | ----------------------------------------- |

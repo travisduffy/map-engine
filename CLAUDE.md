@@ -179,6 +179,10 @@ all bump `v0.0.y` while this era is active.
    "the next patch release." The BDFL names the version number at release time.
 4. **The jump from v0.0.y to v0.1.0 is a BDFL-only decision.** Do not assume,
    suggest, or plan for it.
+5. **Each archived phase locks in its own version.** When a sprint's phase is split
+   out and archived mid-sprint, that archive gets a new, distinct SemVer patch
+   version — never a `-phase-N` suffix on a version already used elsewhere. See
+   `docs/processes/version-archive-split.md` for the full procedure.
 
 ## Operational Efficiency
 

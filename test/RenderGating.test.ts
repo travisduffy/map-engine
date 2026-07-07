@@ -143,10 +143,9 @@ describe('Render Gating (A1)', () => {
     expect(spy).toHaveBeenCalledTimes(1)
   })
 
-  it('renders after _flushPendingDirty sets dirty (in-tick patch path)', () => {
+  it('renders after a color mutation sets the dirty flag directly (Epic 4 LUT path)', () => {
     tick() // initial frame
-    renderer['_patchSectorPixels']('ff0000', 0, 0, 255)
-    renderer['_flushPendingDirty']()
+    renderer.setSectorColor('ff0000', '#0000ff')
     const spy = vi.spyOn(
       (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
       'render'

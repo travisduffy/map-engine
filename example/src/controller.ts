@@ -43,14 +43,18 @@ export class AppController {
 
   private async startEngine(): Promise<void> {
     this.engine = new MapEngine()
+    this.engine.setTickRate(60) // must be called before loadMap() resolves
     this.engine.on('sectorHover', this.onHover)
     this.engine.on('sectorClick', this.onClick)
     setStatus('Loading map… (this may take a moment)')
 
     try {
       await this.engine.loadMap({
-        bitmapUrl: '/map.png',
-        definitionUrl: '/sectors.json',
+        // Relative (not root-absolute) so these resolve correctly under a
+        // subpath deployment too (e.g. GH Pages project sites) — Epic 4
+        // Task 4.4.
+        bitmapUrl: 'map.png',
+        definitionUrl: 'sectors.json',
         canvas: this.canvas,
       })
     } catch (err) {
@@ -74,6 +78,8 @@ export class AppController {
     const keys = this.engine.getSectorKeys()
     renderSectorList(keys, key => this.engine!.getSector(key))
 
+    this.registerMapModes(keys)
+
     // Demonstrate toHexKey API: verify round-trip for first sector
     if (keys.length > 0) {
       const first = keys[0]
@@ -89,6 +95,25 @@ export class AppController {
         `[map-engine] toHexKey(${r}, ${g}, ${b}) === "${roundTripped}" ✓`
       )
     }
+  }
+
+  /** Registers the 'default' and 'grayscale' map modes (CA-7 Quickstart demo). */
+  private registerMapModes(keys: string[]): void {
+    if (!this.engine) return
+    const defaultColors = new Uint32Array(keys.length)
+    const grayscaleColors = new Uint32Array(keys.length)
+    for (let i = 0; i < keys.length; i++) {
+      const packed = parseInt(keys[i], 16)
+      defaultColors[i] = packed
+      const r = (packed >>> 16) & 0xff
+      const g = (packed >>> 8) & 0xff
+      const b = packed & 0xff
+      const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
+      grayscaleColors[i] = (gray << 16) | (gray << 8) | gray
+    }
+    this.engine.registerMapMode('default', defaultColors)
+    this.engine.registerMapMode('grayscale', grayscaleColors)
+    this.engine.setMapMode('default')
   }
 
   private stopEngine(): void {
@@ -169,10 +194,8 @@ export class AppController {
       this.pulsePhase = 0
       this.selectedHex = result.hexKey
       const reg: SelectedRegistryData = {
-        bbox: this.engine!.registry.getBBox(result.hexKey),
-        centroid: this.engine!.registry.getCentroid(result.hexKey),
-        pixelCount:
-          this.engine!.registry.getSectorPixels(result.hexKey)?.length ?? 0,
+        bbox: this.engine!.getBBox(result.hexKey),
+        centroid: this.engine!.getCentroid(result.hexKey),
       }
       renderSelectedPanel(result, reg)
       this.applyNeighborHighlights(result.hexKey)
@@ -219,6 +242,10 @@ export class AppController {
     const btnClockSpeed2 = document.getElementById('btn-clock-speed-2')!
     const btnClockSpeed5 = document.getElementById('btn-clock-speed-5')!
     const btnReload = document.getElementById('btn-reload')!
+    const btnMapModeDefault = document.getElementById('btn-mapmode-default')!
+    const btnMapModeGrayscale = document.getElementById(
+      'btn-mapmode-grayscale'
+    )!
 
     this.chkHover.addEventListener('change', () => {
       if (!this.engine) return
@@ -280,6 +307,14 @@ export class AppController {
       clearSectorList()
       setStatus('Reloading…')
       await this.startEngine()
+    })
+
+    btnMapModeDefault.addEventListener('click', () => {
+      this.engine?.setMapMode('default')
+    })
+
+    btnMapModeGrayscale.addEventListener('click', () => {
+      this.engine?.setMapMode('grayscale')
     })
   }
 }
