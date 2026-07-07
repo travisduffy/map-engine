@@ -81,11 +81,11 @@ Cold-path registry arrays already transferred once at bootstrap in Phase 3. Hot-
 
 **Zero API Break Boundary:** `getNeighbors`, `getCentroid`, `getBBox`, and (as of v0.0.5) `pick()` all remain stable; this sprint adds only new methods, no signature changes to anything shipped.
 
-**Canonical errors (`src/errors.ts`, already exist from Phase 3 — this sprint is their first real consumer):** `MappingRequiredError` (thrown by `aggregateGroups()` before `setParentMapping`, and by `getGroupBBox` before the first `aggregateGroups` resolution — widened trigger per ROADMAP §12.5), `PathNotFoundError` (unreachable `findPath` pairs), `CostsRequiredError` (`findPath` before `setTraversalCosts` has resolved at least once). The cross-cutting rule from Phase 3 still applies: `loadMap()` and `dispose()` reject **all** in-flight async Promises — including this sprint's `recomputeBorders`/`aggregateGroups`/`computeAnchors`/`findPath`/`setTraversalCosts`/`setParentMapping` — with `MapInvalidatedError`.
+**Canonical errors (`src/errors.ts`, already exist from Phase 3 — this sprint is their first real consumer):** `MappingRequiredError` (thrown by `aggregateGroups()` before `setParentMapping`, and by `getGroupBBox` before the first `aggregateGroups` resolution — widened trigger per ROADMAP §12.5), `PathNotFoundError` (unreachable `findPath` pairs), `CostsRequiredError` (`findPath` before `setTraversalCosts` has resolved at least once). `getAnchor` before the first `computeAnchors` resolution throws, matching `getGroupBBox`'s behavior but **not** its error class — no canonical class is assigned to that trigger (plain `Error` by default, pending BDFL ruling; see Epic 7 Task 7.2). The cross-cutting rule from Phase 3 still applies: `loadMap()` and `dispose()` reject **all** in-flight async Promises — including this sprint's `recomputeBorders`/`aggregateGroups`/`computeAnchors`/`findPath`/`setTraversalCosts`/`setParentMapping` — with `MapInvalidatedError`.
 
 ### Process constraints
 
-- Phase 4 recommended order: CA-4 → CA-5 → CA-8 → CA-6 (CA-8 and CA-6 are mutually independent, so this is a recommendation, not a hard serialization like Phase 3's).
+- Phase 4 recommended order: CA-4 → CA-5 → CA-8 → CA-6 (CA-8 and CA-6 are mutually independent, so this is a recommendation, not a hard serialization like Phase 3's). Note: this deliberately deviates from ROADMAP §9's recommended order (CA-4 → CA-5 → CA-6 → CA-8); F-4.1's dependency graph permits either, and the epic numbering here (Epic 7 = CA-8, Epic 8 = CA-6) follows this PRD's order.
 - Worker code paths that can exceed 8 ms must call `yieldIfNeeded` (`MessageChannel`-based, already shipped in `src/worker/yield.ts`).
 - Every epic's completion runs the CLAUDE.md post-task checklist; the phase exit additionally runs the four `bin/check-*.sh` scripts and follows the ROADMAP §3 audit protocol (write `docs/audits/phase-4-audit.md` summary, emit `PHASE_EXIT_AWAITING_AUDIT`, terminate the session; the audit itself is out-of-band).
 - Test split (F-2.7): logic tests in `*.spec.ts`/`*.test.ts` against `NullRenderBackend`; GL/visual/perf tests in `*.gl.spec.ts` under Playwright + real Chromium (F-3.5). Reference hardware: i7-12700K / RTX 3060 / Chrome 124 (F-C.5); CI tolerance 5.0× on software rendering.
@@ -117,7 +117,7 @@ Falsifiable, per epic. Epic files (`docs/active/epics/`) break these into per-ta
 
 ### Epic 7 — Anchoring (CA-8)
 
-- 100% pass on `test/fixtures/anchor-shapes.json` (all ≥ 20 fixtures, within a fixed 1.0 px tolerance — the fixture schema is `{id, type, points, expectedAnchor}` with no per-record `tolerancePx` field), using polylabel over B1.e contour segments (an unordered flat CSR segment list, not ordered rings — see Epic 7 Task 7.1) at default precision 1.0 px.
+- 100% pass on `test/fixtures/anchor-shapes.json` (all ≥ 20 fixtures, within a fixed 1.0 px tolerance — the fixture schema is `{id, type, points, expectedAnchor}` with no per-record `tolerancePx` field), using polylabel over B1.e contour segments (an unordered flat CSR segment list, not ordered rings — see Epic 7 Task 7.1) at default precision 1.0 px — **gated on regeneration of the fixture's `expectedAnchor` values**, which hardening found inconsistent with the polylabel definition for 13 of 20 records (see Epic 7 Task 7.3's fixture-data-defect note; regeneration method is a BDFL decision).
 - `getAnchor` is synchronous from the latest snapshot; `anchors` arrive via Transferable handoff; computation yields at ≤ 8 ms; drift ≤ ±2 ms.
 
 ### Epic 8 — Dynamic Borders + Finality (CA-6, F-4.10)
@@ -127,7 +127,7 @@ Falsifiable, per epic. Epic files (`docs/active/epics/`) break these into per-ta
 - After `recomputeBorders()` resolves: dirty flag is `true` and exactly one `renderer.render` occurs on the next rAF; `BufferAttribute` is bound to the managed GPU VBO, never the Transferable's array.
 - 1,000-frame perimeter-mutation soak test: zero `ArrayBuffer is detached` DOMExceptions.
 - F-4.10: with `WEBGL_lose_context`, the engine recovers (index texture re-uploaded, render resumes) within 100 ms of simulated context loss.
-- `src/GameClock.ts` deleted; zero remaining imports (`git grep GameClock src/ example/` → only historical docs); all consumers on `RenderClock`/`SimulationClock`.
+- `src/GameClock.ts` deleted; zero remaining references (`git grep GameClock src/ test/ example/` → empty; references under `docs/` are historical and remain); all consumers on `RenderClock`/`SimulationClock`.
 - Phase 4 exit: all four `bin/check-*.sh` scripts exit 0 ∧ `docs/audits/phase-4-audit.md` summary written ∧ `PHASE_EXIT_AWAITING_AUDIT` emitted.
 
 ---

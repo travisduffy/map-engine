@@ -171,6 +171,7 @@ This graph maps the chronological flow of work. Refactors (A/B) unblock Capabili
     Phase 3         │ B3.a -> B3.b -> B3.c: Worker Reloc      │
     (Kernel)        │ B2: GPU Map Modes (Palette Shaders)     │
                     │ CA-7: Palette API                       │
+                    │ Status: [COMPLETE]                      │
                     └───────────────────┬─────────────────────┘
                                         │
                     ┌───────────────────▼─────────────────────┐
@@ -249,7 +250,7 @@ If any prerequisite or AC fails, halt and surface the failure to the operator be
 
 ## 7. Phase 2: The Structural Pivot (Critical Path)
 
-**Status: [DOCUMENTATION FREEZE]** — This phase is frozen against architectural changes or new review passes during execution. `ROADMAP.md` and `ROADMAP_TRACEABILITY_MATRIX.md` may only be updated for typo fixes or internal consistency during this phase.
+**Status: [COMPLETE]** — Phase 2 was successfully audited (`docs/audits/phase-2-audit.md`, `[PASS]`) and closed on 2026-06-14, archived as `docs/archive/v0.0.4/`. The documentation freeze that was in effect during execution was lifted on 2026-07-07 (see `ROADMAP_TRACEABILITY_MATRIX.md` row 327+ for the post-freeze Hardening Sync pass).
 
 _Goal: Rip out the V8-idiomatic object graph and replace it with a high-performance Data Engine._
 
@@ -305,6 +306,8 @@ _Goal: Rip out the V8-idiomatic object graph and replace it with a high-performa
 ---
 
 ## 8. Phase 3: The Concurrent Kernel
+
+**Status: [COMPLETE]** — Phase 3 was successfully audited (`docs/audits/phase-3-audit.md`, `[FAIL] → [PASS]` after same-session remediation of two evidence gaps, §9–§10) and closed on 2026-07-07, archived as `docs/archive/v0.0.5/`. Epic 5 (Phase 4, Task 5.1) is unblocked.
 
 _Goal: Move the brain into a Worker and the eyes onto the GPU using Transferable Discipline._
 
@@ -643,6 +646,7 @@ The BDFL (User) is the sole authority on versioning. The project is currently in
 
 ## 13. Revision History
 
+- **2026-07-07-phase-3-close:** Documentation Sync (PR-5, Reversibility — keeping status markers truthful minimizes the cost of resuming or auditing work later). Marked Phase 3 `[COMPLETE]` in both the §5 dependency graph and the §8 prose header following the `phase-3-audit.md` `[PASS]` verdict and its merge to `main` as v0.0.5. Corrected the Phase 2 (§7) header, which still read `[DOCUMENTATION FREEZE]` after the freeze was already lifted per the traceability matrix's own closing note — a stale-status drift, not a new decision.
 - **2026-07-07-hardening-sync:** Code-Truth Synchronization (pre-implementation sprint hardening). Resolved 5 BDFL rulings and 6 doc/code drift defects surfaced by the per-epic hardening pass. Synchronized §4/F-3.1/B3.c to Main-resident `hexColors`/`sectorIds` — `BOOTSTRAP_ACK` carries verification scalars only (PR-3). Replaced the `pick()` binary-search mandate with the O(1) Main-resident `idToHex` table (PR-3). Rewrote F-3.6 as Registration Atomicity — removed unreachable `pendingMapMode` buffering and the `'mapModeRegistrationFailed'` event (PR-4). Added `CostsRequiredError` for the `findPath` precondition (P-4); widened `MappingRequiredError` to aggregation preconditions; scoped `ModeNotReadyError` to pre-`loadMap` guards (PR-2). Gated the deprecated `MapEngine.registry` getter post-transfer with snapshot-backed replacement surface (§12.4, PR-2). Corrected B1.e/CA-8/§4 contour descriptions to the shipped unordered segment list and fixed the `contourPoints` sizing row (Code-Truth). Specified the `yieldIfNeeded` signature (B3.b). Corrected A0.3 tolerance wording (test constant, not a fixture field). Added the CA-5 fixture `definition` field fixing the numeric-ID space.
 - **2026-05-07-pass-12:** Technical Hardening. Removed all specific git commit SHAs from the document to improve robustness and prevent agent confusion. Codified the "No Commit SHAs in Roadmap" standard in `GEMINI.md`.
 - **2026-05-07-pass-11:** Technical Hardening. Resolved 100% of Pass 10 findings. Synchronized Memory Contract (§4) with Pass 8.1 mandates (`pixelIndicesMirror`, `hexColors`, `sectorIds`). Hardened milestones with mandatory "Principles Compliance" fields (B1.5, B3.a-c). Relocated future errors and types to "Planned" status in §12.5. Corrected visibility of `_preRenderHook` to Public.

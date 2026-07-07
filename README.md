@@ -7,24 +7,24 @@ Inspired by the Clausewitz/Jomini engine pipeline (EU4, HOI4, CK3): a 24-bit RGB
 ## What it does
 
 1. Ingests a PNG bitmap where every pixel's RGB value encodes a **sector** identity
-2. Builds an in-memory spatial registry from the bitmap and a JSON definition file
-3. Renders the map via Three.js with pan/zoom, and emits typed `sectorClick` / `sectorHover` events
+2. Builds an in-memory spatial registry from the bitmap and a JSON definition file, then transfers it into a dedicated Web Worker (Off-Main-Thread architecture) so simulation-side work never blocks rendering
+3. Renders the map via Three.js using a GPU palette-shader pipeline (instant, zero-CPU-iteration recoloring), with pan/zoom and typed `sectorClick` / `sectorHover` events, plus async `pick()` for on-demand lookups
 
 **Bundle size:** < 15 KB gzipped (Three.js is a peer dependency — not bundled)
 
 ## Requirements
 
 - Browser only — no Node.js, no SSR
-- Required browser APIs: `OffscreenCanvas`, `createImageBitmap`, Fetch, `HTMLCanvasElement`, `requestAnimationFrame`
+- Required browser APIs: **WebGL2**, `OffscreenCanvas`, `createImageBitmap`, `Worker`, Fetch, `HTMLCanvasElement`, `requestAnimationFrame`
 - Peer dependency: `three@^0.160.0`
 
 ## Stability
 
-| Tier             | Exports                                                                                    | Contract                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| **Primary**      | `MapEngine`, `MapConfig`, `PickResult`, `SectorData`, `SectorBBox`, `SectorDefinitionFile` | Stable. Removals and signature changes are breaking.                                        |
-| **Advanced**     | `SectorRegistry`, `SectorBitmapParser`, `toHexKey`                                         | Stable.                                                                                     |
-| **Experimental** | Exports marked `@experimental` (currently: `BorderEdge`, `borderEdges`)                    | No stability guarantee. May change or be removed in any release without deprecation notice. |
+| Tier             | Exports                                                                                                                       | Contract                                                                                                                              |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Primary**      | `MapEngine`, `MapConfig`, `PickResult`, `SectorData`, `SectorBBox`, `SectorDefinitionFile`, `MapModeId`                       | Stable. Removals and signature changes are breaking.                                                                                  |
+| **Advanced**     | `SectorRegistry`, `SectorBitmapParser`, `toHexKey`, canonical errors (`MapInvalidatedError`, `WebGL2NotSupportedError`, etc.) | Stable.                                                                                                                               |
+| **Experimental** | Exports marked `@experimental` or `@deprecated` (currently: `BorderEdge` type, `SectorRegistry.borderEdges` raw buffer)       | No stability guarantee. `borderEdges` is reserved for a future border-rendering capability and is not yet populated with usable data. |
 
 The project is in early development (`v0.0.y`). All releases increment the patch version only.
 
@@ -61,19 +61,25 @@ engine.on('sectorClick', ({ hexKey, sectorData, pixelX, pixelY }) => {
   console.log(`Clicked: ${sectorData.name} at pixel (${pixelX}, ${pixelY})`)
 })
 
+// Optional: configure the Worker-side simulation tick rate before loadMap() resolves (default 60Hz)
+engine.setTickRate(60)
+
 await engine.loadMap({
   bitmapUrl: '/assets/sectors.png',
   definitionUrl: '/assets/sectors.json',
   canvas,
 })
 
-// Repaint a sector with any CSS color string
+// Repaint a sector with any CSS color string (O(1) GPU palette-LUT write)
 engine.setSectorColor('820030', '#3399ff')
 
 // Reset to original bitmap color
 engine.resetSectorColor('820030')
 
-// Cleanup (idempotent — safe to call multiple times)
+// Async pick — resolves the sector under an arbitrary point (e.g. for custom input handling)
+const hit = await engine.pick({ clientX: 400, clientY: 300 })
+
+// Cleanup (idempotent — safe to call multiple times). Also available as async dispose().
 engine.destroy()
 ```
 
@@ -99,7 +105,7 @@ The bitmap is the source of spatial truth. Every pixel's RGB value identifies th
 
 **Consequences of violations:**
 
-Anti-aliased edge pixels introduce intermediate RGB colors not present in `sectors.json`. When the pointer lands on such a pixel, `getSectorAt()` returns the intermediate hex key, `getSector()` returns `undefined`, and the picking pipeline emits `sectorHover` with `null`. This produces null hover flicker along sector borders. The only fix is to regenerate the bitmap without anti-aliasing.
+Anti-aliased edge pixels introduce intermediate RGB colors not present in `sectors.json`. When the pointer lands on such a pixel, the picking pipeline resolves to an unregistered color and emits `sectorHover` with `null` (or `pick()` resolves `null`). This produces null hover flicker along sector borders. The only fix is to regenerate the bitmap without anti-aliasing.
 
 **Validation warnings:**
 
@@ -152,7 +158,7 @@ engine.getSectorKeys().forEach(key => {
 
 ### `MapEngine`
 
-**Constructor:** Takes no arguments.
+**Constructor:** Takes no arguments. Spins up a dedicated Web Worker immediately (Off-Main-Thread architecture) — the Worker only becomes active once `loadMap()` bootstraps it.
 
 ```typescript
 const engine = new MapEngine()
@@ -162,15 +168,16 @@ const engine = new MapEngine()
 
 #### `loadMap(config: MapConfig): Promise<void>`
 
-Loads the bitmap and definition concurrently, then constructs the Three.js scene. Resolves when the map is fully loaded and interactive.
+Loads the bitmap and definition concurrently on the Main thread, builds the spatial registry, then transfers it to the Worker in a single `BOOTSTRAP` message (Transferable `ArrayBuffer`s — no `SharedArrayBuffer`, no special hosting headers required). Resolves when the Worker has acknowledged bootstrap and the map is fully loaded and interactive.
 
 **Guards (checked in this order):**
 
-1. Throws `"MapEngine: destroyed"` if `destroy()` was already called on a fully-loaded engine
-2. Throws `"MapEngine: already loaded — call destroy() before loading a new map"` on double-call
-3. Throws `"MapEngine: loadMap() is already in progress"` on concurrent calls
+1. Throws `"MapEngine: destroyed"` if `dispose()`/`destroy()` was already called on a fully-loaded engine
+2. Throws `"MapEngine: loadMap() is already in progress"` on concurrent calls
 
-**Rejection and retry:** If `loadMap()` rejects (network error, parse error, etc.), the engine is not permanently destroyed. Call `destroy()` to reset, then retry `loadMap()` with corrected inputs.
+**Reload:** Calling `loadMap()` again on an already-loaded engine is a supported reload — it invalidates the previous session (rejecting any in-flight async calls with `MapInvalidatedError`), tears down the old Worker/renderer, and re-bootstraps against the new map.
+
+**Rejection and retry:** If `loadMap()` rejects (network error, parse error, etc.) before ever completing, the engine is not permanently destroyed. Call `destroy()` to reset, then retry `loadMap()` with corrected inputs.
 
 ```typescript
 try {
@@ -180,6 +187,18 @@ try {
   await engine.loadMap(correctedConfig) // safe to retry
 }
 ```
+
+---
+
+#### `setTickRate(hz: number): void`
+
+Configures the Worker-side simulation tick rate (`1 ≤ hz ≤ 240`, default `60`). Synchronous; throws if called after `loadMap()` has resolved. Must be set before the first `loadMap()` call if a non-default rate is needed.
+
+---
+
+#### `pick(point: { clientX: number; clientY: number }): Promise<PickResult | null>`
+
+Resolves the sector under an arbitrary point via GPU index-texture readback — the sole sanctioned async signature break in the public API (needed because GPU readback and Worker coordination cannot be answered synchronously). Resolves `null` before a successful `loadMap()`, on a mesh-miss (point outside the map plane), or on a void/unregistered pixel.
 
 ---
 
@@ -201,9 +220,19 @@ Throws `"MapEngine: destroyed"` after destroy on a fully-loaded engine.
 
 ---
 
+#### `getBBox(id: string | number): [number, number, number, number]`
+
+#### `getCentroid(id: string | number): [number, number]`
+
+#### `getNeighbors(id: string): string[] | undefined` / `getNeighbors(id: number): number[]`
+
+Synchronous spatial accessors — hex-key and numeric-sector-ID overloads are both supported. Served from Main-resident snapshots taken at bootstrap, so they remain synchronous even though the live registry has been transferred to the Worker. `getNeighbors` returns `undefined` for an unrecognized hex key; the numeric overload returns an empty array instead.
+
+---
+
 #### `setSectorColor(hexKey: string, color: string): void`
 
-Overpaints all pixels of the sector with the given CSS color string (`"red"`, `"#3399ff"`, `"rgb(0,128,255)"`, etc.). Updates the WebGL texture immediately.
+Writes a single entry in the GPU palette LUT (O(1) — no CPU pixel iteration, no full-texture re-upload) with any CSS color string (`"red"`, `"#3399ff"`, `"rgb(0,128,255)"`, etc.).
 
 Emits `console.warn` and returns without throwing for unknown hex keys or zero-pixel sectors. Invalid CSS color strings do not throw.
 
@@ -214,9 +243,24 @@ Throws `"MapEngine: destroyed"` after destroy on a fully-loaded engine.
 
 #### `resetSectorColor(hexKey: string): void`
 
-Restores all pixels of the sector to their original bitmap colors. The original `sourceBuffer` is never mutated — `resetSectorColor` always has the original pixel values available.
+Restores a sector's palette entry to its original bitmap color.
 
 Same warn/guard behavior as `setSectorColor`.
+
+---
+
+#### `registerMapMode(id: string, colors: Uint32Array): void`
+
+Registers a named full-map palette — `colors` is a packed-RGB `Uint32Array` with one entry per sector, indexed by numeric sector ID (`SectorRegistry.idToHex` gives the ID↔hex-key mapping order). Synchronous; throws on a duplicate `id`, a `colors.length` mismatch against the sector count, or if called before `loadMap()` resolves.
+
+#### `setMapMode(id: string): void`
+
+Activates a registered map mode — swaps the entire GPU palette in one render submit. Synchronous; throws `Unknown map mode: <id>` for an unregistered id. Re-activating the already-current mode is a no-op (zero uniform writes, zero render submits).
+
+```typescript
+engine.registerMapMode('grayscale', grayscaleColors) // Uint32Array, one packed-RGB entry per sector
+engine.setMapMode('grayscale')
+```
 
 ---
 
@@ -241,15 +285,23 @@ Same pre-load exemption and post-destroy guard as `on()`.
 
 ---
 
+#### `onFrame(callback: FrameCallback): void` / `offFrame(callback: FrameCallback): void`
+
+Registers/removes a callback fired at the top of every rendered frame with the frame's `dt` in milliseconds. Rendering is dirty-flag gated — frames only render (and these callbacks only fire) when something actually changed (pan/zoom, a color mutation, or a canvas resize).
+
+---
+
+#### `dispose(): Promise<void>`
+
+Rejects all in-flight async calls with `MapInvalidatedError`, then tears down the Worker, WebGL renderer/geometry/material, and all DOM event listeners, and clears all event handlers. Idempotent — safe to call multiple times.
+
 #### `destroy(): void`
 
-Cancels the `requestAnimationFrame` loop, disposes the WebGL renderer/geometry/material/texture, removes all DOM event listeners, and clears all event handlers.
+Synchronous convenience wrapper that calls `dispose()` fire-and-forget. Never throws.
 
-**Never throws.** Second and subsequent calls are silent no-ops.
+**After a fully-loaded engine is destroyed/disposed**, the engine is permanently unusable — all method calls throw `"MapEngine: destroyed"`.
 
-**After a fully-loaded engine is destroyed**, the engine is permanently unusable — all method calls throw `"MapEngine: destroyed"`.
-
-**After a partial failure** (i.e., `loadMap()` rejected before completing), `destroy()` resets the engine to pre-load state without permanently destroying it. `loadMap()` may be called again.
+**After a partial failure** (i.e., `loadMap()` rejected before completing), `destroy()`/`dispose()` resets the engine to pre-load state without permanently destroying it. `loadMap()` may be called again.
 
 ---
 
@@ -257,10 +309,12 @@ Cancels the `requestAnimationFrame` loop, disposes the WebGL renderer/geometry/m
 
 ```typescript
 engine.renderer // MapRenderer instance
-engine.registry // SectorRegistry instance
+engine.registry // SectorRegistry instance — @deprecated, see below
 ```
 
-Expose internal subsystems for advanced use. Both throw `"MapEngine: not loaded"` before load and `"MapEngine: destroyed"` after destroy.
+`renderer` exposes the `MapRenderer` for advanced use. Throws `"MapEngine: not loaded"` before load and `"MapEngine: destroyed"` after destroy.
+
+`registry` is **`@deprecated`**: once the Worker bootstrap transfer has detached the registry's buffers, this getter throws `MapInvalidatedError`. Use `getSector`/`getSectorKeys`/`getBBox`/`getCentroid`/`getNeighbors` instead — those remain synchronous and are served from pre-transfer snapshots.
 
 ---
 
@@ -284,6 +338,8 @@ type SectorData = {
   name: string
   [key: string]: unknown // your domain fields
 }
+
+type MapModeId = string
 ```
 
 ### Events
@@ -295,32 +351,15 @@ type SectorData = {
 
 `sectorHover` fires only on sector identity change, not on every `pointermove`. When the pointer moves from one sector to another, exactly one `sectorHover` is emitted. When the pointer leaves the map plane or enters an unregistered color, `sectorHover` emits `null`.
 
-### `borderEdges` (experimental)
+### Canonical errors
 
-```typescript
-engine.registry.borderEdges // BorderEdge[]
-```
-
-> **@experimental** — shape may change in a future version.
-
-Array of pixel-boundary edges between adjacent sectors. Each `BorderEdge` has:
-
-```typescript
-interface BorderEdge {
-  x: number
-  y: number
-  direction: 'h' | 'v'
-  sectorA: string // hex key
-  sectorB: string // hex key
-}
-```
-
-**Direction label semantics** (counter-intuitive vs. geometric convention, but internally consistent):
-
-- `'h'` — **horizontal scan** direction (the edge was found by looking at the right neighbor). This produces a **vertical boundary line** on screen.
-- `'v'` — **vertical scan** direction (the edge was found by looking at the bottom neighbor). This produces a **horizontal boundary line** on screen.
-
-The engine does not consume `borderEdges` internally — it is provided for consumers building their own border overlay rendering.
+| Error                                                             | Thrown when                                                                                                                                                                     |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MapInvalidatedError`                                             | An in-flight async call (`pick`, etc.) is invalidated by a concurrent `loadMap()` or `dispose()`, or a consumer reads the deprecated `registry` getter after bootstrap transfer |
+| `WebGL2NotSupportedError`                                         | The canvas's WebGL context does not support WebGL2 (required for the index-texture picking/palette pipeline)                                                                    |
+| `SectorLimitExceededError`                                        | The bitmap defines more than 65,534 distinct sectors                                                                                                                            |
+| `ModeNotReadyError`                                               | `registerMapMode`/`setMapMode` called before `loadMap()` resolves                                                                                                               |
+| `MappingRequiredError`, `PathNotFoundError`, `CostsRequiredError` | Reserved for hierarchical aggregation and pathfinding capabilities landing in a future release                                                                                  |
 
 ### Camera controls
 
@@ -348,6 +387,8 @@ await engine.loadMap({ bitmapUrl, definitionUrl, canvas })
 
 When bitmap or definition assets are hosted on a different origin, the asset server must send `Access-Control-Allow-Origin` headers. Standard `fetch` CORS semantics apply — the browser will block cross-origin requests without proper headers. In some browsers, `getImageData()` on a tainted canvas may throw a `SecurityError`. This is an operational deployment concern, not an engine bug.
 
+The engine requires no special cross-origin-isolation headers (no COOP/COEP) for its own operation — Worker communication uses Transferable `ArrayBuffer`s, never `SharedArrayBuffer`, so it runs on any zero-config static host (GitHub Pages, Netlify, itch.io, etc.).
+
 ## Canonical example
 
 The `example/` directory is a permanent part of the repository — a vanilla TypeScript Vite app that exercises every public API surface and serves as the primary browser-based development tool.
@@ -361,9 +402,9 @@ The example demonstrates:
 
 - `MapEngine` instantiation, `loadMap()`, and `destroy()` / reload
 - `sectorHover` — transient highlight with `setSectorColor` / `resetSectorColor`
-- `sectorClick` — persistent selection with toggle deselect
+- `sectorClick` — persistent selection, plus `getBBox`/`getCentroid`/`getNeighbors` in the Advanced panel
 - `getSectorKeys()` / `getSector()` — sector enumeration in the sidebar
-- `engine.registry.bboxes` / `.centroids` / `.pixelIndices` — spatial data display
+- `registerMapMode()` / `setMapMode()` — a Map Modes panel toggling between palettes
 - `on()` / `off()` — live unsubscribe toggle for the hover handler
 - `toHexKey()` — round-trip verification on load
 
@@ -387,45 +428,17 @@ npm run test              # run full test suite (vitest run)
 
 ## Architecture
 
-| Module               | Role                                                                                                                |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `SectorBitmapParser` | Loads PNG URL or Blob → raw RGBA pixel buffer. Worker-safe (zero DOM deps).                                         |
-| `SectorRegistry`     | Single O(W×H) scan → hex-key map, bboxes, centroids, pixel indices, border edges. Zero Three.js imports.            |
-| `MapRenderer`        | Three.js scene: `OrthographicCamera`, `PlaneGeometry` + `CanvasTexture`, pan/zoom, color overlay. Main-thread only. |
-| `MapEngine`          | Public facade wiring all modules.                                                                                   |
+| Module               | Role                                                                                                                         |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `SectorBitmapParser` | Loads PNG URL or Blob → raw RGBA pixel buffer. Worker-safe (zero DOM deps).                                                  |
+| `SectorRegistry`     | Single O(W×H) scan → hex-key map, SoA bboxes/centroids/CSR adjacency/contours. Zero Three.js imports.                        |
+| `InputController`    | Owns pan/zoom/pick pointer events. Main-thread only.                                                                         |
+| `MapRenderer`        | Three.js scene: `OrthographicCamera`, GPU fragment-LUT palette shader, pan/zoom, dirty-flag render gating. Main-thread only. |
+| `MapEngine`          | Public facade — owns the Worker lifecycle and wires all modules together.                                                    |
 
-ESM only. No UMD or CJS bundles. `SectorBitmapParser` and `SectorRegistry` have zero DOM global references and are safe to use inside a Web Worker.
+ESM only. No UMD or CJS bundles. `SectorBitmapParser` and `SectorRegistry` have zero DOM global references and are Worker-safe by construction — `MapEngine` relies on exactly this property to run the registry inside its own internal Worker after the initial Main-thread parse/scan.
 
-## Web Worker opt-in
-
-`SectorBitmapParser` and `SectorRegistry` have zero DOM global references by design and are safe to instantiate inside a Web Worker. This lets you offload the O(W×H) scan pass off the main thread for large bitmaps.
-
-```typescript
-// worker.ts
-import { SectorBitmapParser, SectorRegistry } from 'map-engine'
-
-self.onmessage = async ({ data }) => {
-  const { bitmapUrl, definition } = data
-  const parser = new SectorBitmapParser()
-  const { buffer, width, height } = await parser.parse(bitmapUrl)
-  const registry = new SectorRegistry(buffer, width, height, definition)
-  // Transfer the buffer back to avoid a copy
-  self.postMessage({ buffer, width, height }, [buffer.buffer])
-}
-```
-
-```typescript
-// main.ts
-const worker = new Worker(new URL('./worker.ts', import.meta.url), {
-  type: 'module',
-})
-worker.postMessage({ bitmapUrl: '/assets/sectors.png', definition })
-worker.onmessage = ({ data }) => {
-  // Construct MapRenderer on the main thread with the transferred buffer
-}
-```
-
-> **Note:** `MapRenderer` and `MapEngine` are main-thread only (they require `HTMLCanvasElement` and `requestAnimationFrame`). Worker wiring is not built into `MapEngine.loadMap()` — this is a manual integration pattern for advanced use cases.
+As of this release, `MapEngine.loadMap()` automatically transfers the registry into a dedicated Web Worker (Off-Main-Thread architecture) — no manual Worker wiring is required or possible; `loadMap()` only accepts `bitmapUrl`/`definitionUrl`, not a pre-built registry. `SectorBitmapParser`/`SectorRegistry` remain separately exported (Advanced tier) for consumers building their own custom pipelines outside `MapEngine`.
 
 ## UV coordinate system note
 
@@ -447,63 +460,50 @@ Omitting the `(1 - uv.y)` inversion causes the top and bottom halves of the map 
 
 These are documented constraints in the current version. See the Future work section below for planned mitigations.
 
-**Memory usage:**  
-Three full-resolution pixel buffer copies are held in memory simultaneously: `sourceBuffer` (original bitmap RGBA), `displayImageData` (mutable overlay copy), and `pixelIndices` flat arrays per sector (`Uint32Array`), plus the GPU texture copy and `Map`/object overhead. For an 8192×4096 bitmap (~134 MB per buffer), realistic total RAM usage is **400–500 MB**. Plan capacity accordingly.
+**Main-thread bitmap parse + registry construction:**
+`SectorBitmapParser.parse()` and the `SectorRegistry` O(W×H) scan both still run on the Main thread inside `loadMap()`, before the registry is transferred to the Worker. For an 8192×4096 bitmap, this can block the main thread for 200–500 ms. There is no built-in mitigation yet — the Worker relocation shipped in this release only covers post-construction state and computation, not the initial parse/scan.
 
-**Full texture re-upload on every `setSectorColor` call:**  
-`setSectorColor` sets `texture.needsUpdate = true`, which triggers a full `texImage2D` re-upload of the entire texture on the next render frame — not a partial `texSubImage2D` update. For frequent color changes across many sectors this is expensive. A future GPU palette approach (see ROADMAP CA-7) would eliminate this cost entirely.
+**Mobile heap budget:**
+At the 4096×4096 mobile size cap, total base heap (source buffer + `pixelIndices` + auxiliary buffers including the `pixelIndicesMirror` context-loss recovery copy) runs to roughly 192 MB — see `docs/ROADMAP.md` §12.3 for the full sizing table by map dimension. `sourceBuffer` is disposed immediately after `pixelIndices` extraction to keep this bounded; plan capacity accordingly for large maps.
 
-**`gl.MAX_TEXTURE_SIZE` hardware cap:**  
-WebGL textures cannot exceed the device's `gl.MAX_TEXTURE_SIZE` limit — commonly 4096 px on mobile GPUs and 8192 px on desktop. A bitmap exceeding this limit throws a fatal `INVALID_VALUE` WebGL error. The engine does not query or check this limit in v0.0.1. If targeting mobile, keep bitmaps within 4096×4096.
+**`gl.MAX_TEXTURE_SIZE` hardware cap (bitmap dimensions):**
+The main index texture cannot exceed the device's `gl.MAX_TEXTURE_SIZE` limit — commonly 4096 px on mobile GPUs and 8192 px on desktop. A bitmap exceeding this limit throws a fatal WebGL error. The engine does not query or tile around this limit for the index texture (the GPU palette LUT itself does 2D-wrap automatically past `MAX_TEXTURE_SIZE` sector counts — a separate, already-solved constraint). If targeting mobile, keep bitmaps within 4096×4096.
 
-**Main-thread scan pass:**  
-`SectorRegistry` performs a synchronous O(W×H) scan on construction. For an 8192×4096 bitmap, this blocks the main thread for 200–500 ms. Use the Web Worker opt-in pattern above to move this work off the main thread.
+**Sector count cap:**
+Maximum 65,534 distinct sectors per map (`SectorLimitExceededError` beyond that) — `0xFFFF` is reserved as the internal "no sector" sentinel.
 
-**Continuous render loop:**  
-The engine runs `requestAnimationFrame` continuously. Render-on-demand (only re-render when the scene is dirty) is future work.
+**Single map instance assumption:**
+Multiple simultaneous `MapEngine` instances sharing a canvas, or managing multiple canvases independently, are not a tested configuration.
 
-**Single map instance assumption:**  
-Multiple simultaneous `MapEngine` instances sharing a canvas, or managing multiple canvases independently, are not supported in v0.0.1.
+**No touch input:**
+Camera controls are mouse/wheel only (middle-click drag to pan, scroll wheel to zoom) — no tap or pinch-to-zoom handling.
 
-## What v0.0.1 does not include
+## What this version does not include
 
-The following features are explicitly out of scope for v0.0.1:
+The following are explicitly out of scope for the current release (see `docs/ROADMAP.md` for what's planned and when):
 
-- Adjacency graph (which sectors border which)
-- Area / region hierarchy (grouping sectors into provinces, countries, etc.)
+- Area / region hierarchy (grouping sectors into provinces, countries, etc.) — planned, not yet built
+- Dynamic/rendered border overlays (`SectorRegistry.borderEdges` is allocated but not yet populated with usable geometry)
+- Pathfinding primitives
+- Spatial anchor points for label placement
 - River layer or heightmap rendering
-- Shader-based political overlay (see ROADMAP CA-7)
 - CSV definition format — JSON only
 - Built-in UI controls, tooltips, or legend components
 - SSR / Node.js support
 - Multiple simultaneous map instances
 - Touch event support (tap, pinch-to-zoom)
-- Render-on-demand (engine always runs rAF)
 - UMD / CommonJS bundles — ESM only
 - React or any framework integration layer
-- Pre-fetched `ArrayBuffer` or `ImageBitmap` as `loadMap()` inputs — URL strings and `Blob` only
-- `gl.MAX_TEXTURE_SIZE` querying or texture tiling
-- Automatic Web Worker wiring in `loadMap()`
+- `gl.MAX_TEXTURE_SIZE` querying or texture tiling for the main index texture
 
 ## Future work
 
-| Limitation                                       | Planned approach                                                                                            |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Full `texImage2D` re-upload per `setSectorColor` | Shader-based sector color overlay using a palette texture — eliminates CPU pixel writes entirely            |
-| `texImage2D` → partial update                    | `texSubImage2D` dirty-rect upload                                                                           |
-| Main-thread O(W×H) scan                          | Move `SectorBitmapParser` + `SectorRegistry` construction into a Web Worker; transfer buffer to main thread |
-| Memory: three buffer copies                      | Explore sharing `sourceBuffer` and `displayImageData` via `SharedArrayBuffer`                               |
-| `gl.MAX_TEXTURE_SIZE` crash                      | Query limit at init; tile oversized bitmaps into multiple textures                                          |
-| No adjacency graph                               | Post-scan edge-list → adjacency `Map<hexKey, hexKey[]>`                                                     |
-| Continuous rAF loop                              | Render-on-demand — only call `renderer.render()` when the scene is dirty                                    |
-| River / heightmap layers                         | Additional `PlaneGeometry` layers with separate textures composited over the base map                       |
+See `docs/ROADMAP.md` for the full, versioned plan. At a glance, the next release targets pathfinding primitives, hierarchical (group-level) aggregation, dynamic border rendering, and spatial anchoring — all Worker-side capabilities building on this release's Off-Main-Thread kernel.
 
 ## Bundle size
-
-`dist/index.js` gzipped: **3.92 KB** (Three.js is external — not bundled).
 
 ```bash
 npm run build && npm run size
 ```
 
-If the size far exceeds 15 KB, verify that `rollupOptions.external: ['three']` is present in `vite.config.ts`. Omitting it bundles the entire Three.js library (~600 KB gzipped) and silently fails the size check.
+If the size far exceeds 15 KB gzipped, verify that `rollupOptions.external: ['three']` is present in `vite.config.ts`. Omitting it bundles the entire Three.js library (~600 KB gzipped) and silently fails the size check.

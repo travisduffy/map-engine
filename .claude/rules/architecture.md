@@ -5,45 +5,57 @@ paths:
   - 'test/**/*.ts'
 ---
 
-## The four modules (v0.0.1 — implemented)
+## Module layout
 
-| Module               | Role                                                                                                                                                                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SectorBitmapParser` | Loads PNG URL or Blob → raw RGBA pixel buffer + dimensions. Worker-safe (zero DOM deps).                                                                                                    |
-| `SectorRegistry`     | Single O(W×H) scan over pixel buffer + JSON definition → all spatial data (hex-key map, bboxes, centroids, pixelIndices, borderEdges). Immutable after construction. Zero Three.js imports. |
-| `MapRenderer`        | Three.js scene: OrthographicCamera, PlaneGeometry + CanvasTexture, pan/zoom, `setSectorColor`/`resetSectorColor`. Main-thread only.                                                         |
-| `MapEngine`          | Public facade wiring all modules. Zero-arg constructor; consumer calls `loadMap(bitmapUrl, definitionUrl, canvas)`.                                                                         |
+| Module                | Path                                | Role                                                                                                                                                          |
+| --------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SectorBitmapParser`  | `src/SectorBitmapParser.ts`         | Loads PNG URL or Blob → raw RGBA pixel buffer + dimensions. Worker-safe (zero DOM deps).                                                                      |
+| `SectorRegistry`      | `src/SectorRegistry.ts`             | Single O(W×H) scan over pixel buffer + JSON definition → SoA spatial data (bboxes, centroids, CSR adjacency/contours, `pixelIndices`). Zero Three.js imports. |
+| `InputController`     | `src/input/InputController.ts`      | Owns all pointer/wheel event listeners (pan, zoom, pick dispatch). Main-thread only (DOM consumer).                                                           |
+| `IThreeRenderBackend` | `src/render/IThreeRenderBackend.ts` | Interface isolating `MapRenderer` from Three.js internals (palette LUT writes, GPU border VBO upload, resize).                                                |
+| `ThreeRenderBackend`  | `src/render/ThreeRenderBackend.ts`  | Real WebGL2 implementation: `RawShaderMaterial` fragment-LUT shader, R32UI index texture, context-loss recovery.                                              |
+| `NullRenderBackend`   | `src/render/NullRenderBackend.ts`   | No-op test double for logic tests that don't need a real GPU context.                                                                                         |
+| `MapRenderer`         | `src/MapRenderer.ts`                | Three.js scene orchestration: camera, mesh, dirty-flag render gating, resize. Delegates GPU work to the injected backend. Main-thread only.                   |
+| `RenderClock`         | `src/RenderClock.ts`                | Main-thread rAF dt dispatch to registered frame callbacks.                                                                                                    |
+| `SimulationClock`     | `src/worker/SimulationClock.ts`     | Worker-side fixed-tick accumulator clock, decoupled from render frame rate.                                                                                   |
+| `SharedRegistryProxy` | `src/worker/SharedRegistryProxy.ts` | Main-thread proxy correlating `CALL`/`RESULT`/`ERROR` messages with the Worker; serves sync snapshot reads.                                                   |
+| Worker entry          | `src/worker/index.ts`               | Dispatches `BOOTSTRAP`/`CALL`/`RESULT`/`ERROR` messages; hosts the registry state store on the Worker side.                                                   |
+| `MapEngine`           | `src/MapEngine.ts`                  | Public facade wiring all of the above. Zero-arg constructor; spins up the Worker at construction time.                                                        |
 
 ## Key data flow
 
-1. `SectorBitmapParser.parse(source)` → `{ buffer: Uint8ClampedArray, width, height }`
-2. `SectorRegistry(buffer, width, height, definition)` → spatial lookup structure
-3. `MapRenderer(canvas, registry)` → Three.js scene with CanvasTexture initialized from `registry.sourceBuffer`
-4. `MapEngine.loadMap()` orchestrates 1–3; exposes `on('sectorHover'|'sectorClick', cb)` events
+1. `SectorBitmapParser.parse(source)` → `{ buffer, width, height }` — parsed on Main.
+2. `new SectorRegistry(buffer, width, height, definition)` — one O(W×H) scan on Main produces all SoA spatial buffers.
+3. `MapEngine.loadMap()` uploads `pixelIndices` as a GPU texture, then transfers all 9 bootstrap buffers to the Worker via a single `BOOTSTRAP` `postMessage` (Transferable, not `SharedArrayBuffer` — see Worker boundary below). The Worker replies `BOOTSTRAP_ACK`.
+4. Post-bootstrap, `MapEngine` exposes synchronous reads (`getBBox`/`getCentroid`/`getNeighbors`, hex-string and numeric-ID overloads) served from `SharedRegistryProxy` snapshots, and async Worker round-trips (`pick`, future pathfinding/aggregation/anchor calls) via `CALL`/`RESULT`.
 
 ## Sector identity system
 
-Every pixel's RGB value encodes a sector identity. The hex key (`"ff0000"` lowercase, no `#`) is the universal identifier connecting bitmap pixels to JSON definition entries. `toHexKey(r, g, b)` is the single conversion utility used throughout. `#000000` is the conventional void/non-interactive color.
+Every pixel's RGB value encodes a sector identity. The hex key (`"ff0000"` lowercase, no `#`) is the universal identifier connecting bitmap pixels to JSON definition entries. `toHexKey(r, g, b)` is the single conversion utility used throughout. `#000000` is the conventional void/non-interactive color. Internally, each sector also has a dense numeric ID (`0..sectorCount-1`); `idToHex: string[]` (Main-resident, never transferred) resolves numeric ID → hex key in O(1) for the picking pipeline.
 
-## Color overlay strategy (v0.0.1)
+## GPU palette LUT strategy
 
-`setSectorColor` patches only a sector's pixels in a persistent `displayImageData` (separate from `sourceBuffer`), flushes via dirty-rect `putImageData` using the sector's bbox, then sets `texture.needsUpdate = true`. This triggers a full `texImage2D` re-upload — accepted for the current version; the GPU palette approach is documented in the ROADMAP (CA-7).
+`setSectorColor`/`resetSectorColor`/`setPalette` write directly into a GPU-resident RGBA8 palette texture via `IThreeRenderBackend.writePaletteEntry`/`updateUniforms` — an O(1) LUT write, not a CPU pixel iteration. The fragment shader (`ThreeRenderBackend`, GLSL3 `RawShaderMaterial`) samples a `usampler2D` index texture and looks up the palette entry with `texelFetch`. A full-map recolor (map-mode swap) only replaces the palette uniform; the index texture is never re-uploaded. There is no `CanvasTexture`/`putImageData` path in the current architecture — color mutation never touches the CPU-side pixel buffer.
 
 ## Picking pipeline
 
-`pointermove`/`click` → NDC conversion via `getBoundingClientRect()` → `raycaster.intersectObject(mesh)` → UV → pixel (with mandatory Y-inversion: `pixelY = Math.floor((1 - uv.y) * height)`) → `getSectorAt` → `getSector`. Emits `sectorHover` (on change only) or `sectorClick`.
+`pointermove`/`click`/`MapEngine.pick(point)` all share `_resolvePixelCoords`: NDC conversion via `getBoundingClientRect()` → `raycaster.intersectObject(mesh)` → UV → pixel (mandatory Y-inversion: `pixelY = Math.floor((1 - uv.y) * height)`). The resulting pixel feeds `IThreeRenderBackend.readSectorIdAt(x, y)` (GPU index-texture readback), which returns a numeric ID resolved to a hex key via `idToHex`. `MapEngine.pick()` is async (`Promise<PickResult | null>`) — the one sanctioned public API signature break from the pre-Worker synchronous model — because GPU readback and Worker IPC cannot be answered synchronously. The hover/click event pipeline wraps the same resolution path and stays synchronous from the consumer's perspective (events fire when ready).
+
+## Worker boundary and Transferable discipline
+
+`MapEngine`/`MapRenderer` are Main-thread only (they own `HTMLCanvasElement`/WebGL). `SectorRegistry`/`SectorBitmapParser` stay zero-DOM and zero-Three.js so they remain constructible inside the Worker. Cross-thread data moves via `postMessage` with Transferable `ArrayBuffer`s, never `SharedArrayBuffer` — this keeps the engine deployable on zero-config static hosts with no COOP/COEP headers. After the one-time `BOOTSTRAP` transfer, a Main-resident `pixelIndicesMirror` (`Uint16Array` downcast of `pixelIndices`) is retained solely for `webglcontextrestored` index-texture recovery; reading it for anything else risks staleness against the Worker's live state.
 
 ## Resize / responsiveness strategy
 
-`MapRenderer` handles canvas resize inside the rAF render loop — not via `ResizeObserver`. At the top of every frame, `canvas.clientWidth/clientHeight` is compared to the last-known size. If changed, `renderer.setSize()` and the camera frustum are updated immediately before `renderer.render()` in the same callback. This is the canonical webgl2fundamentals.org resizing pattern (https://webgl2fundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html).
+`MapRenderer` handles canvas resize inside the rAF render loop — not via `ResizeObserver`. At the top of every frame, `canvas.clientWidth/clientHeight` is compared to the last-known size. If changed, `renderer.setSize()` and the camera frustum are updated immediately before `renderer.render()` in the same callback. This is the canonical webgl2fundamentals.org resizing pattern.
 
-**Why not ResizeObserver:** Per the HTML spec rendering order (rAF → layout → ResizeObserver → paint), any ResizeObserver approach that defers work to the next rAF frame is exactly one frame late — the CSS-scaled old buffer gets composited first. Checking size inside rAF avoids all timing ambiguity.
+**Why not ResizeObserver:** per the HTML spec rendering order (rAF → layout → ResizeObserver → paint), any ResizeObserver approach that defers work to the next rAF frame is exactly one frame late — the CSS-scaled old buffer gets composited first. Checking size inside rAF avoids all timing ambiguity.
 
-**Proportional frustum scaling:** A `_worldUnitsPerPixel` constant is computed once at construction from the initial "contain" framing. On resize, frustum half-dimensions are set to `(newCSSPx * _worldUnitsPerPixel) / 2`. This keeps the world-to-pixel ratio constant — the map appears the same physical size and the viewport boundary simply grows or shrinks. Do not rerun the "contain" strategy on resize; that changes scale.
+**Proportional frustum scaling:** a `_worldUnitsPerPixel` constant is computed once at construction from the initial "contain" framing. On resize, frustum half-dimensions are set to `(newCSSPx * _worldUnitsPerPixel) / 2`. This keeps the world-to-pixel ratio constant — the map appears the same physical size and the viewport boundary simply grows or shrinks. Do not rerun the "contain" strategy on resize; that changes scale.
 
 ## Build configuration
 
-`vite.config.ts` serves dual purpose: library build (`rollupOptions.external: ['three']` is mandatory — omitting it bundles Three.js and silently blows the 15 KB gzipped size target) and Vitest browser-mode testing. See PRD §"Dev Dependencies" for the exact config block.
+`vite.config.ts` serves dual purpose: library build (`rollupOptions.external: ['three']` is mandatory — omitting it bundles Three.js and silently blows the 15 KB gzipped size budget) and Vitest browser-mode testing. See PRD "Dev Dependencies" for the exact config block.
 
 ## Test fixtures
 

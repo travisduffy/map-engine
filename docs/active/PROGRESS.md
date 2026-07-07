@@ -43,7 +43,7 @@
 **Phase:** Phase 3 (The Concurrent Kernel) — COMPLETE, audited `[PASS]`, archived as v0.0.5 (`docs/archive/v0.0.5/`) | Phase 4 (GSG Logic) — READY, not yet activated.
 **Active version:** targets v0.0.6 (named by BDFL 2026-07-07)
 **Next task:** Epic 5, Task 5.1 (`docs/active/epics/epic-5-pathfinding.md`) — blocked until v0.0.5 is merged to `main` (BDFL handling that merge out-of-band of this document).
-**Blocking issues:** Hard phase gate (ROADMAP §3, `.claude/rules/roadmap-governance.md`): Epic 5 Task 5.1 must not begin until `docs/audits/phase-3-audit.md`'s `[PASS]` verdict is merged to `main`. Not yet merged as of this entry.
+**Blocking issues:** Hard phase gate (ROADMAP §3, `.claude/rules/roadmap-governance.md`): Epic 5 Task 5.1 must not begin until `docs/audits/phase-3-audit.md`'s `[PASS]` verdict is merged to `main`. Not yet merged as of this entry. Additionally, five items from the 2026-07-07 sprint-hardening pass need BDFL rulings before or during the sprint (see that Session Log entry) — the anchor-fixture regeneration (item 1) blocks Epic 7 Task 7.3's acceptance as written.
 
 ---
 
@@ -100,6 +100,31 @@
 
 > Entries are prepended (newest first). Each entry records the date, what was attempted, what was completed, and any decisions made that aren't captured elsewhere.
 
+### 2026-07-07 — Sprint-hardening pass over Phase 4 docs (pre-activation)
+
+**Tasks touched:** none (documentation hardening only; sprint not activated, registry untouched)
+**Outcome:** completed
+
+**What happened:**
+Ran the sprint-hardening skill: four parallel per-epic reviewers over `docs/active/**`, every claim verified against `src/`, `test/`, `bench/`, `package.json`, and the cited ROADMAP sections. ~35 defects fixed in place across the four epic files; 4 corrections applied to the PRD. Highest-impact fixes:
+
+- **Epic 5:** Task 5.4's perf-test approach was not executable (the real Worker entry only accepts `BOOTSTRAP` with nine bitmap-derived buffers; it cannot ingest the CSR fixture) — respecified as a dedicated test worker importing the real `SpatialGraph`. `SpatialGraph` constructor was missing the `centroids` its own A\* heuristic requires. The "path length ≥ 500" fixture pair is unobtainable from random pairs on a 100×100 grid (Manhattan diameter 198) — generator must carve a cost-1 serpentine corridor. Edge-cost semantics defined normatively (cost(a→b) = `traversalCosts[b]`, start excluded); admissibility bound corrected to the distance-aware form; FIFO serialization of Worker-side searches mandated (interleaved searches corrupt shared scratch arrays across `yieldIfNeeded` suspension points).
+- **Epic 6:** fixture schema was missing the `definition` field mandated by ROADMAP §9 CA-5; `MapRenderer.dispose()` corrected to `destroy()`; ring-pool allocation restated as 4 buffers of `maxGroups·4` Int16 each (not one buffer); reallocation required when `setParentMapping` is re-invoked with a different `maxGroups`; `0xFFFF`-always-sentinel rule made explicit.
+- **Epic 7:** `test/fixtures/anchor-shapes.json` has wrong `expectedAnchor` values for **13 of 20** records (verified against a reference polylabel; e.g. `annulus-2` off by 70.8 px, `multi-pole-2` expects the saddle not the pole; `concave-2` ring is degenerate; both spirals self-intersect under implicit closure) — "100% pass within 1.0 px" is unachievable by a correct implementation; PRD acceptance now gated on fixture regeneration (BDFL decision). B1.e emits interior cracks only (see Lessons Learned) — Task 7.1 must synthesize map-border cracks. `Math.round` anchor storage corrected to `Math.floor` (round breaks the single-pixel interiority case); ring-closure conventions and tie-determinism rules added.
+- **Epic 8:** Task 8.3 had inverted ROADMAP F-2.8 (told implementer to add a `.slice()` retention to `NullRenderBackend.uploadBorderEdges` that F-2.8 explicitly lists as a no-op); wrong PRD risk citation in 8.4 (Risk 4 → Risks 2–3); SwiftShader 5.0× tolerance added to the F-4.10 100 ms gate; sentinel-far-side=void rule pinned; `GLBufferAttribute`/`frustumCulled` gotcha, `GameClock` comment-rewording list, and `drift-100tick.json` keep-warning added. Coordinator added the **map-edge gap** flag to 8.1/8.2: the crack scan (`SectorRegistry.ts:149,169`) emits no segments along the bitmap outer boundary and the `borderEdges` capacity excludes them, so map-edge perimeter cannot be emitted as specified — in/out of CA-6 scope needs a BDFL ruling.
+- **PRD edits (4):** CA-order note (deliberate deviation from ROADMAP §9's CA-4→CA-5→CA-6→CA-8); Epic 7 acceptance gated on anchor-fixture regeneration; `GameClock` grep criterion fixed (`src/ test/ example/` → empty; old form could never match docs and omitted `test/`, which has 2 real comment hits today); `getAnchor` pre-ready error class documented as unassigned (plain `Error` default, pending ruling).
+
+**Decisions made / BDFL rulings needed:**
+
+1. **anchor-shapes.json regeneration** — regenerate `expectedAnchor` from reference polylabel (fix `concave-2`'s degenerate ring, close the spiral rings, break or clearance-assert ties), or re-spec the assertion to clearance-optimality (`d_max − d(anchor) ≤ 1.0 px`). Blocks Epic 7 Task 7.3 acceptance as written.
+2. **Map-edge perimeter** — is bitmap-boundary perimeter in CA-6 scope? Requires crack synthesis + pool-capacity growth if yes. ROADMAP §9 CA-6 is silent.
+3. **`getAnchor` pre-ready error class** — plain `Error` (current default) or a canonical class.
+4. **`onMappingChanged(cb)`** — ROADMAP §12.5 plans it for Phase 4, but it appears in neither the PRD API delta nor any epic. Add to sprint or record as a Documented Deviation.
+5. **Deferred ROADMAP defects (user-gated revision pass):** §12.3 says max sector count 65,535 but code (`SectorRegistry.ts:72`) and §12.4 enforce 65,534; §12.5 lists all 7 canonical errors as "Planned" though all exist in `src/errors.ts`; §12.1 "24/32-bit PNGs" vs §9 CA-5's mandated 8-bit indexed fixture maps; §9 recommended-order text if the PRD's order is preferred.
+
+**Left off at:**
+Sprint docs hardened and internally consistent; all four `bin/check-*.sh` green; `npm run format` run. Still awaiting BDFL merge of v0.0.5 to `main` and the rulings above. Sprint not activated.
+
 ### 2026-07-07 — v0.0.5 archived; Phase 4 (GSG Logic) sprint docs split out
 
 **Tasks touched:** none (documentation split only)
@@ -131,3 +156,4 @@ Docs fully split and consistent, including the `v0.0.3-phase-2 → v0.0.4` corre
 - An Engineer's self-report claiming a capability is "integration-tested" or "verified via a real browser session" is not evidence — independently `grep` for the actual assertion or artifact before accepting a PASS claim at the Phase 4 exit audit, regardless of how specific the narrative sounds.
 - Standalone Playwright scripts under `bench/` (real Node `http`/`child_process`, not Vitest browser mode) that build once and bind real ports are not safe under Playwright's default multi-worker scheduling. `bench/playwright.config.ts` pins `workers: 1`; any new Phase 4 bench/verification script added to that directory inherits and should stay compatible with that constraint.
 - `MapEngine.destroy()`/`dispose()` permanently disable the instance; only `loadMap()`-triggered reload tears down and re-bootstraps. Relevant to Epic 8's `GameClock` deletion task — verify consumer migration against this lifecycle, not an assumed reload-via-destroy pattern.
+- B1.e contour extraction emits **interior cracks only**: the scan checks right/bottom neighbors behind `x < width − 1` / `y < height − 1` guards (`src/SectorRegistry.ts:149,169`), so no segments exist along the bitmap outer edge, edge-touching sectors have unclosed contour sets, and `totalGeoPerimeterSegs` (hence `borderEdges` capacity) excludes map-edge segments. Epic 7 synthesizes map-border cracks for anchoring; whether Epic 8's perimeter output must cover the map edge is an open BDFL ruling (see 2026-07-07 hardening session log).
