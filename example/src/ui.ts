@@ -3,7 +3,6 @@ import type { PickResult, SectorData } from 'map-engine'
 export interface SelectedRegistryData {
   bbox: [number, number, number, number] | undefined
   centroid: [number, number] | undefined
-  pixelCount: number
 }
 
 // ─── DOM refs ────────────────────────────────────────────────────────────────
@@ -156,7 +155,6 @@ export function renderSelectedPanel(
       )
     )
   }
-  advRows.push(makeInfoRow('pixels', String(reg.pixelCount)))
   advancedContent.replaceChildren(...advRows)
 }
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { MapEngine } from '../src/MapEngine'
+import { MapInvalidatedError } from '../src/errors'
 import { makeCanvas } from './testUtils'
 
 describe('MapEngine — constructor and event subscription', () => {
@@ -120,7 +121,7 @@ describe('MapEngine — loadMap(), lifecycle guards, and destroy()', () => {
     ).resolves.toBeUndefined()
   })
 
-  it('double loadMap() throws "already loaded"', async () => {
+  it('loadMap() on an already-loaded engine reloads cleanly (Epic 3 Task 3.3)', async () => {
     canvas = makeCanvas()
     engine = new MapEngine()
     await engine.loadMap({
@@ -128,13 +129,16 @@ describe('MapEngine — loadMap(), lifecycle guards, and destroy()', () => {
       definitionUrl: DEFINITION_URL,
       canvas,
     })
+    expect(engine.getSector('ff0000')).toEqual({ name: 'Red Sector' })
+
     await expect(
       engine.loadMap({
         bitmapUrl: BITMAP_URL,
         definitionUrl: DEFINITION_URL,
         canvas,
       })
-    ).rejects.toThrow('already loaded')
+    ).resolves.toBeUndefined()
+    expect(engine.getSector('ff0000')).toEqual({ name: 'Red Sector' })
   })
 
   it('concurrent loadMap() throws "already in progress"', async () => {
@@ -239,6 +243,43 @@ describe('MapEngine — loadMap(), lifecycle guards, and destroy()', () => {
   })
 })
 
+describe('MapEngine — setTickRate (Epic 1 Task 1.4)', () => {
+  let canvas: HTMLCanvasElement
+  let engine: MapEngine
+
+  afterEach(() => {
+    engine?.destroy()
+    canvas?.remove()
+  })
+
+  it('defaults to 60 and accepts a valid value pre-loadMap', () => {
+    engine = new MapEngine()
+    expect(() => engine.setTickRate(30)).not.toThrow()
+    expect(() => engine.setTickRate(1)).not.toThrow()
+    expect(() => engine.setTickRate(240)).not.toThrow()
+  })
+
+  it('throws RangeError for out-of-range and NaN values', () => {
+    engine = new MapEngine()
+    expect(() => engine.setTickRate(0)).toThrow(RangeError)
+    expect(() => engine.setTickRate(241)).toThrow(RangeError)
+    expect(() => engine.setTickRate(NaN)).toThrow(RangeError)
+  })
+
+  it('throws after loadMap() has resolved', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    expect(() => engine.setTickRate(30)).toThrow(
+      'setTickRate() cannot be called after loadMap() has resolved'
+    )
+  })
+})
+
 describe('MapEngine — pass-through methods and getters', () => {
   let canvas: HTMLCanvasElement
   let engine: MapEngine
@@ -287,7 +328,7 @@ describe('MapEngine — pass-through methods and getters', () => {
     expect(() => engine.resetSectorColor('ff0000')).not.toThrow()
   })
 
-  it('renderer and registry getters return instances after loadMap()', async () => {
+  it('renderer getter returns an instance after loadMap(); registry getter throws MapInvalidatedError (ROADMAP §12.4)', async () => {
     canvas = makeCanvas()
     engine = new MapEngine()
     await engine.loadMap({
@@ -296,7 +337,7 @@ describe('MapEngine — pass-through methods and getters', () => {
       canvas,
     })
     expect(engine.renderer).toBeTruthy()
-    expect(engine.registry).toBeTruthy()
+    expect(() => engine.registry).toThrow(MapInvalidatedError)
   })
 
   it('pass-throughs throw "destroyed" after destroy() on fully-loaded engine', async () => {

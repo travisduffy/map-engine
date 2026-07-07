@@ -1,6 +1,17 @@
+---
+paths:
+  - 'docs/ROADMAP.md'
+  - 'docs/ROADMAP_TRACEABILITY_MATRIX.md'
+  - 'docs/audits/**/*.md'
+  - 'docs/processes/**/*.md'
+  - 'docs/active/**/*.md'
+---
+
 ## Hierarchy of Truth
 
 Code is the source of truth. When documentation and implementation conflict, trust the codebase over the docs. Treat documentation drift as a defect: cross-reference docs against the actual source to find inaccuracies, then fix the docs to match reality — never the reverse.
+
+This applies to incidental discoveries, not just direct reconciliation tasks. When researching precedent for a new document and the evidence (a commit message, code, existing file content) contradicts an existing artifact's claim, fix that artifact in the same pass rather than only using the evidence to validate the new decision. A discrepancy noticed but not corrected costs the same as one never found — it just defers the same fix to a later session, after the wrong artifact has had more chances to get copied forward.
 
 ## Roadmap Stewardship
 
@@ -19,12 +30,13 @@ A phase closes through this four-step cycle:
 
 ## Process Registry
 
-`docs/processes/` holds the executable process definitions this file points to:
+Executable process definitions this file points to live in `docs/processes/` (agent-neutral prompts) or `.claude/skills/` (harness skills):
 
-| Process             | File                            | Used for                                                             |
-| -------------------- | -------------------------------- | --------------------------------------------------------------------- |
-| Roadmap Audit         | `docs/processes/audit-only.md`   | The read-only compliance pass in step 2 above                        |
-| Sprint Hardening      | `docs/processes/harden-sprint.md`| Pre-implementation scan of `docs/active/**` for technical gaps before a sprint starts |
+| Process               | File                                       | Used for                                                                                                          |
+| --------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Roadmap Audit         | `docs/processes/audit-only.md`             | The read-only compliance pass in step 2 above                                                                     |
+| Sprint Hardening      | `.claude/skills/sprint-hardening/SKILL.md` | Review-and-revision pass over `docs/active/**` before sprint activation (invoke: sprint-hardening)                |
+| Version Archive Split | `docs/processes/version-archive-split.md`  | Splitting an active sprint's PRD/PROGRESS into an archived, newly-versioned phase plus a continuing active sprint |
 
 ## Technical Rationale for Findings
 

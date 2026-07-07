@@ -311,6 +311,45 @@ describe('GameClock — Epic 2', () => {
     expect(() => new GameClock(engine, { ticksPerSecond: 0.5 })).not.toThrow()
   })
 
+  it('F-3.2: drift fixture — 100-tick sequence at 60hz stays within ±1ms', async () => {
+    const fixture = (await fetch(
+      '/test/fixtures/game-clock/drift-100tick.json'
+    ).then(r => r.json())) as {
+      hz: number
+      ticks: { tick: number; timestamp: number }[]
+    }
+
+    const driftClock = new GameClock(engine, { ticksPerSecond: fixture.hz })
+    let prevTimestamp = fixture.ticks[0].timestamp
+    advanceFrame(renderer, prevTimestamp) // prime — dt=0 at t=0
+
+    for (let i = 1; i < fixture.ticks.length; i++) {
+      const { timestamp } = fixture.ticks[i]
+      advanceFrame(renderer, timestamp - prevTimestamp)
+      prevTimestamp = timestamp
+    }
+
+    const intervalMs = 1000 / fixture.hz
+    const expectedTicks = fixture.ticks.length - 1
+
+    // A fixed-timestep accumulator may legitimately hold up to one interval's
+    // worth of unfired residue (fired-tick count can lag the ideal count by 1
+    // at a sample boundary — this is quantization, not drift).
+    expect(driftClock.elapsed).toBeGreaterThanOrEqual(expectedTicks - 1)
+    expect(driftClock.elapsed).toBeLessThanOrEqual(expectedTicks)
+
+    // Real drift is whether time is conserved: fired ticks * interval, plus
+    // whatever sits unfired in the accumulator, must equal total real elapsed
+    // time (prevTimestamp) to within ±1ms — i.e. the clock neither gains nor
+    // loses time relative to the wall clock.
+    const accountedMs =
+      driftClock.elapsed * intervalMs + driftClock['_accumulator'] * 1000
+    const drift = Math.abs(accountedMs - prevTimestamp)
+    expect(drift).toBeLessThanOrEqual(1)
+
+    driftClock.destroy()
+  })
+
   it('AC 2.14: GameClock has no forbidden imports', async () => {
     const text = await fetch('/src/GameClock.ts').then(r => r.text())
     expect(text).not.toMatch(/\bthree\b/)

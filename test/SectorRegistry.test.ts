@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { SectorRegistry } from '../src/SectorRegistry'
-import { SectorLimitExceededError } from '../src/types'
+import { SectorLimitExceededError } from '../src/errors'
 import type { SectorDefinitionFile } from '../src/types'
 
 // 4×4 RGBA buffer matching the test fixture layout:

@@ -52,53 +52,7 @@ The example is a **permanent fixture** of the repo, not a throwaway demo. It ser
 
 This is a **TypeScript ESM library** (not an app) that renders Paradox-style grand strategy maps in the browser using Three.js. The entry point is `src/index.ts`; `src/main.ts` is Vite boilerplate only — the real development surface is `example/`.
 
-### The four modules (v0.0.1 — implemented)
-
-| Module               | Role                                                                                                                                                                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SectorBitmapParser` | Loads PNG URL or Blob → raw RGBA pixel buffer + dimensions. Worker-safe (zero DOM deps).                                                                                                    |
-| `SectorRegistry`     | Single O(W×H) scan over pixel buffer + JSON definition → all spatial data (hex-key map, bboxes, centroids, pixelIndices, borderEdges). Immutable after construction. Zero Three.js imports. |
-| `MapRenderer`        | Three.js scene: OrthographicCamera, PlaneGeometry + CanvasTexture, pan/zoom, `setSectorColor`/`resetSectorColor`. Main-thread only.                                                         |
-| `MapEngine`          | Public facade wiring all modules. Zero-arg constructor; consumer calls `loadMap(bitmapUrl, definitionUrl, canvas)`.                                                                         |
-
-### Key data flow
-
-1. `SectorBitmapParser.parse(source)` → `{ buffer: Uint8ClampedArray, width, height }`
-2. `SectorRegistry(buffer, width, height, definition)` → spatial lookup structure
-3. `MapRenderer(canvas, registry)` → Three.js scene with CanvasTexture initialized from `registry.sourceBuffer`
-4. `MapEngine.loadMap()` orchestrates 1–3; exposes `on('sectorHover'|'sectorClick', cb)` events
-
-### Sector identity system
-
-Every pixel's RGB value encodes a sector identity. The hex key (`"ff0000"` lowercase, no `#`) is the universal identifier connecting bitmap pixels to JSON definition entries. `toHexKey(r, g, b)` is the single conversion utility used throughout. `#000000` is the conventional void/non-interactive color.
-
-### Color overlay strategy (v0.0.1)
-
-`setSectorColor` patches only a sector's pixels in a persistent `displayImageData` (separate from `sourceBuffer`), flushes via dirty-rect `putImageData` using the sector's bbox, then sets `texture.needsUpdate = true`. This triggers a full `texImage2D` re-upload — accepted for the current version; the GPU palette approach is documented in the ROADMAP (CA-7).
-
-### Picking pipeline
-
-`pointermove`/`click` → NDC conversion via `getBoundingClientRect()` → `raycaster.intersectObject(mesh)` → UV → pixel (with mandatory Y-inversion: `pixelY = Math.floor((1 - uv.y) * height)`) → `getSectorAt` → `getSector`. Emits `sectorHover` (on change only) or `sectorClick`.
-
-### Resize / responsiveness strategy
-
-`MapRenderer` handles canvas resize inside the rAF render loop — **not** via `ResizeObserver`. At the top of every frame, `canvas.clientWidth/clientHeight` is compared to the last-known size. If changed, `renderer.setSize()` and the camera frustum are updated immediately before `renderer.render()` in the same callback. This is the canonical [webgl2fundamentals.org](https://webgl2fundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html) pattern.
-
-**Why not ResizeObserver:** Per the HTML spec rendering order (rAF → layout → ResizeObserver → paint), any ResizeObserver approach that defers work to the next rAF frame is exactly one frame late — the CSS-scaled old buffer gets composited first. Checking size inside rAF avoids all timing ambiguity.
-
-**Proportional frustum scaling:** A `_worldUnitsPerPixel` constant is computed once at construction from the initial "contain" framing. On resize, frustum half-dimensions are set to `(newCSSPx * _worldUnitsPerPixel) / 2`. This keeps the world-to-pixel ratio constant — the map appears the same physical size and the viewport boundary simply grows or shrinks. Do not rerun the "contain" strategy on resize; that changes scale.
-
-### Build configuration
-
-`vite.config.ts` serves dual purpose: library build (`rollupOptions.external: ['three']` is mandatory — omitting it bundles Three.js and silently blows the 15 KB gzipped size target) and Vitest browser-mode testing. See PRD §"Dev Dependencies" for the exact config block.
-
-### Test fixtures
-
-Located at `test/fixtures/`. The `test-4x4.png` (4×4 pixel, 4 sectors) is generated programmatically via `test/fixtures/generate-fixtures.js` using `sharp`. Use absolute paths in browser-mode tests (e.g., `'/test/fixtures/test-4x4.png'`), not relative paths.
-
-### Example app assets
-
-The example app's map bitmap and sector definition are committed static assets. Do not generate or replace them programmatically.
+See `.claude/rules/architecture.md` for the module breakdown, data flow, sector identity system, color overlay strategy, picking pipeline, resize strategy, build configuration, and test fixtures.
 
 ### Post-task checklist
 
@@ -139,7 +93,7 @@ playwright@^1.59.0
 sharp@^0.33.0           # fixture generation only
 ```
 
-## Important constraints from PRD
+## PRD Constraints
 
 - **ESM only** — no UMD/CJS bundles
 - `SectorRegistry` must have **zero Three.js imports** (enforced by static analysis)
@@ -157,8 +111,9 @@ sharp@^0.33.0           # fixture generation only
 - `docs/archive/` — completed versions organized by SemVer tag (e.g., `v0.0.1/`). Treat as read-only historical reference; never modify archive contents.
 - `docs/templates/` — blank starter templates (`PRD_TEMPLATE.md`, `PROGRESS_TEMPLATE.md`) used to initialize a new sprint's `docs/active/` workspace.
 - `.claude/rules/roadmap-governance.md` — roadmap stewardship, the Phase Exit Self-Audit Protocol, and the process registry. Read this before any phase exit.
+- `.claude/rules/architecture.md` — module breakdown, data flow, sector identity, rendering, and resize implementation details. Loads automatically when touching `src/`, `example/`, or `test/` TypeScript files.
 
-> **Archiving is a human-triggered event.** NEVER move files into `docs/archive/` autonomously. Only execute an archive sequence when the user explicitly instructs you to do so in that session.
+> **Archiving is a human-triggered event.** Never move files into `docs/archive/` autonomously. Only execute an archive sequence when the user explicitly instructs you to do so in that session.
 
 ## Versioning Policy
 
@@ -168,7 +123,7 @@ The project is in early development. **All releases increment the PATCH version 
 This applies regardless of change type — bugfixes, new features, and breaking changes
 all bump `v0.0.y` while this era is active.
 
-**Rules for AI agents (non-negotiable):**
+**Rules for AI agents:**
 
 1. **Never modify `package.json` version autonomously.** Version increments are
    BDFL-only decisions, announced explicitly in the session that releases.
@@ -179,6 +134,10 @@ all bump `v0.0.y` while this era is active.
    "the next patch release." The BDFL names the version number at release time.
 4. **The jump from v0.0.y to v0.1.0 is a BDFL-only decision.** Do not assume,
    suggest, or plan for it.
+5. **Each archived phase locks in its own version.** When a sprint's phase is split
+   out and archived mid-sprint, that archive gets a new, distinct SemVer patch
+   version — never a `-phase-N` suffix on a version already used elsewhere. See
+   `docs/processes/version-archive-split.md` for the full procedure.
 
 ## Operational Efficiency
 
@@ -238,7 +197,7 @@ When only a named section of a large file is needed (e.g., PRD §A1, ROADMAP §2
 5. **Cross-reference the PRD.** `docs/active/PRD.md` is the canonical authority. Epic files cite specific PRD sections — go there for algorithm details and acceptance criteria.
 6. **Update `docs/active/PROGRESS.md` when done.** Before closing a session: mark completed tasks `[x]`, mark any blocked task `[!]`, append a Session Log entry (date, tasks touched, outcome, decisions made, where you left off), and add any non-obvious discoveries to Lessons Learned.
 
-### Sprint Activation — BDFL-Only, Non-Negotiable
+### Sprint Activation — BDFL-Only
 
 **The BDFL (user) is the sole authority on when a sprint starts. This rule has no exceptions.**
 

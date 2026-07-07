@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as THREE from 'three'
 import { MapRenderer } from '../src/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
+import { NullRenderBackend } from '../src/render/NullRenderBackend'
 import { SectorRegistry } from '../src/SectorRegistry'
 import type { SectorDefinitionFile } from '../src/types'
 
@@ -175,74 +176,56 @@ describe('MapRenderer', () => {
     })
   })
 
-  describe('display canvas and texture (Task 2.2)', () => {
+  describe('backend construction (Epic 4 B2)', () => {
     beforeEach(() => {
       renderer = new MapRenderer(canvas, registry)
-    })
-
-    it('displayCtx is a non-null OffscreenCanvasRenderingContext2D', () => {
-      expect(renderer.displayCtx).toBeTruthy()
-      // OffscreenCanvasRenderingContext2D does not have a named constructor to instanceof-check,
-      // but we can verify it has the expected API
-      expect(typeof renderer.displayCtx.putImageData).toBe('function')
-      expect(typeof renderer.displayCtx.getImageData).toBe('function')
-    })
-
-    it('displayImageData has the correct dimensions', () => {
-      expect(renderer.displayImageData.width).toBe(registry.width)
-      expect(renderer.displayImageData.height).toBe(registry.height)
-    })
-
-    it('displayImageData reflects the source bitmap colors on construction', () => {
-      // Pixel (0,0) in the 4×4 buffer = red (255,0,0,255)
-      const data = renderer.displayImageData.data
-      expect(data[0]).toBe(255) // r
-      expect(data[1]).toBe(0) // g
-      expect(data[2]).toBe(0) // b
-      expect(data[3]).toBe(255) // a
     })
 
     it('registry.sourceBuffer is null after construction (PR-1 memory disposal)', () => {
       expect(registry.sourceBuffer).toBeNull()
     })
 
-    it('material.map is assigned (texture is wired into material)', () => {
+    it('material uniforms wire the index and palette LUT textures', () => {
       const backend = renderer['_backend'] as ThreeRenderBackend
-      expect(backend.material.map).not.toBeNull()
+      expect(backend.material.uniforms.indexTex.value).not.toBeNull()
+      expect(backend.material.uniforms.paletteTex.value).not.toBeNull()
+      expect(backend.material.uniforms.sectorCount.value).toBe(
+        registry.idToHex.length
+      )
     })
   })
 
-  describe('color mutation (Tasks 2.3 / 2.4)', () => {
+  describe('color mutation (Epic 4 B2 — palette LUT)', () => {
+    let backend: NullRenderBackend
+
     beforeEach(() => {
-      renderer = new MapRenderer(canvas, registry)
+      backend = new NullRenderBackend(
+        registry.pixelIndices,
+        registry.width,
+        registry.height
+      )
+      renderer = new MapRenderer(
+        canvas,
+        registry,
+        undefined,
+        undefined,
+        undefined,
+        backend
+      )
     })
 
     // ── setSectorColor ────────────────────────────────────────────────────────
 
-    it('setSectorColor writes the correct RGB to all sector pixels', () => {
+    it('setSectorColor writes the correct RGB to the sector numeric LUT entry', () => {
       renderer.setSectorColor('ff0000', '#0000ff')
-      const data = renderer.displayCtx.getImageData(0, 0, 4, 4).data
-      // pixel (0,0) → flat index 0 → byte offset 0
-      expect(data[0]).toBe(0)
-      expect(data[1]).toBe(0)
-      expect(data[2]).toBe(255)
-      expect(data[3]).toBe(255)
-      // pixel (1,1) → flat index 5 → byte offset 20
-      expect(data[20]).toBe(0)
-      expect(data[21]).toBe(0)
-      expect(data[22]).toBe(255)
-      expect(data[23]).toBe(255)
+      const numId = registry.getNumericId('ff0000')!
+      expect(backend.getPaletteEntry(numId)).toEqual([0, 0, 255])
     })
 
-    it('setSectorColor does not mutate an adjacent sector', () => {
+    it('setSectorColor does not mutate an adjacent sector entry', () => {
       renderer.setSectorColor('ff0000', '#0000ff')
-      const data = renderer.displayCtx.getImageData(0, 0, 4, 4).data
-      // pixel (2,0) belongs to green sector — must remain green
-      const offset = 2 * 4 // x=2, y=0
-      expect(data[offset]).toBe(0)
-      expect(data[offset + 1]).toBe(255)
-      expect(data[offset + 2]).toBe(0)
-      expect(data[offset + 3]).toBe(255)
+      const greenId = registry.getNumericId('00ff00')!
+      expect(backend.getPaletteEntry(greenId)).toBeUndefined()
     })
 
     it('setSectorColor: registry.sourceBuffer remains null (PR-1 — not mutated)', () => {
@@ -291,20 +274,16 @@ describe('MapRenderer', () => {
 
     // ── resetSectorColor ──────────────────────────────────────────────────────
 
-    it('resetSectorColor restores original RGB after setSectorColor', () => {
+    it('resetSectorColor restores the original RGB after setSectorColor', () => {
       renderer.setSectorColor('ff0000', '#0000ff')
       renderer.resetSectorColor('ff0000')
-      const data = renderer.displayCtx.getImageData(0, 0, 4, 4).data
-      // pixel (0,0) must be back to red
-      expect(data[0]).toBe(255)
-      expect(data[1]).toBe(0)
-      expect(data[2]).toBe(0)
-      expect(data[3]).toBe(255)
-      // pixel (1,1) too
-      expect(data[20]).toBe(255)
-      expect(data[21]).toBe(0)
-      expect(data[22]).toBe(0)
-      expect(data[23]).toBe(255)
+      const numId = registry.getNumericId('ff0000')!
+      const packed = registry.idToPackedRgb[numId]
+      expect(backend.getPaletteEntry(numId)).toEqual([
+        (packed >>> 16) & 0xff,
+        (packed >>> 8) & 0xff,
+        packed & 0xff,
+      ])
     })
 
     it('resetSectorColor: registry.sourceBuffer remains null (PR-1 — not mutated)', () => {

@@ -112,9 +112,9 @@ To prevent cross-phase data-type contradictions, all milestones MUST adhere to t
 | `adjacencyPointers`  | `Uint32Array`  | B1.b                            | Main                   | Worker                            | Worker    | Dev-time (Initial `loadMap`)         | Fixed: `sectorCount + 1` (CSR Row Pointers)                                                                                                       |
 | `adjacencyNeighbors` | `Uint16Array`  | B1.b                            | Main                   | Worker                            | Worker    | Dev-time (Initial `loadMap`)         | Fixed: `totalEdges` (CSR Column Indices)                                                                                                          |
 | `contourPointers`    | `Uint32Array`  | B1.e                            | Main                   | Worker                            | Worker    | Dev-time (Initial `loadMap`)         | Fixed: `sectorCount + 1` (CSR Row Pointers)                                                                                                       |
-| `contourPoints`      | `Int16Array`   | B1.e                            | Main                   | Worker                            | Worker    | Dev-time (Initial `loadMap`)         | Fixed: `totalPoints * 2` [x, y]                                                                                                                   |
-| `hexColors`          | `Uint32Array`  | B3.a (bootstrap)                | Worker                 | Main                              | Main      | On `BOOTSTRAP_ACK`                   | Fixed: `sectorCount` (Packed RGB). Used for binary-search lookup in `pick()`.                                                                     |
-| `sectorIds`          | `Uint16Array`  | B3.a (bootstrap)                | Worker                 | Main                              | Main      | On `BOOTSTRAP_ACK`                   | Fixed: `sectorCount` (Numeric IDs). Used for binary-search lookup in `pick()`.                                                                    |
+| `contourPoints`      | `Int16Array`   | B1.e                            | Main                   | Worker                            | Worker    | Dev-time (Initial `loadMap`)         | Fixed: `totalContourSegments * 4` [x1, y1, x2, y2] per segment (unordered; a shared edge appears once in each adjacent sector's CSR bucket)       |
+| `hexColors`          | `Uint32Array`  | B1.a (shipped)                  | Main                   | Main (never transferred)          | Main      | During `loadMap()` registry scan     | Fixed: `sectorCount` (Packed RGB, sorted ascending). Main-resident packed-RGB→ID table; never crosses the Worker boundary (Hardening Sync, PR-3). |
+| `sectorIds`          | `Uint16Array`  | B1.a (shipped)                  | Main                   | Main (never transferred)          | Main      | During `loadMap()` registry scan     | Fixed: `sectorCount` (Numeric IDs paired with `hexColors`). Main-resident; never crosses the Worker boundary (Hardening Sync, PR-3).              |
 | `borderEdges`        | `Float32Array` | B1.c (alloc) / CA-6 (populated) | Main                   | Worker (4-buffer pool, see F-C.8) | Main      | On `loadMap()`                       | `4 * totalGeometricPerimeterSegments` Float32 elements (= `16 * totalGeometricPerimeterSegments` bytes). Sized after B1.e produces segment count. |
 | `borderEdgeCount`    | `Uint32Array`  | B1.c                            | Main                   | Worker                            | Worker    | Dev-time (Initial `loadMap`)         | Fixed: `1` (Stored in a 1-element TypedArray for Transferable handoff consistency)                                                                |
 | `parentMapping`      | `Uint16Array`  | CA-5                            | Main                   | Worker                            | Worker    | Runtime, on `setParentMapping()`     | Fixed: `sectorCount`. Transferred Main → Worker via `postMessage`. Main does not retain copy.                                                     |
@@ -193,7 +193,7 @@ _Goal: Eliminate obvious waste and harden the rendering pipeline without breakin
 2. **A0.1 (Benchmark Infrastructure):** `npm run bench:registry-alloc <fixture-path>` is implemented.
    - **bench/SPEC.md:** Script must run `npx playwright test bench/registry-alloc.spec.ts` against fixture at `<fixture-path>`, measure `performance.measureUserAgentSpecificMemory()` before and after `new SectorRegistry(bitmap)`, and write median-of-10 to `bench/baselines.json` under key `b1.constructor_alloc_bytes`. The initial baseline must be captured and committed to `main`.
 3. **A0.2 (Audit Prompt):** `docs/processes/audit-only.md` exists and is checked into `main`.
-4. **A0.3 (Anchor Fixtures):** `test/fixtures/anchor-shapes.json` exists with ≥20 fixtures, ≥2 of each of 7 shape classes (convex, concave, annulus, spiral, off-centroid, narrow corridor, multi-pole), each with a hand-verified `expectedAnchor` at `tolerancePx ≤ 1.0`.
+4. **A0.3 (Anchor Fixtures):** `test/fixtures/anchor-shapes.json` exists with ≥20 fixtures, ≥2 of each of 7 shape classes (convex, concave, annulus, spiral, off-centroid, narrow corridor, multi-pole), each with a hand-verified `expectedAnchor` accurate to within a fixed 1.0 px tolerance (the tolerance is a test constant, not a per-record JSON field — the shipped fixture schema is `{id, type, points, expectedAnchor}`).
 5. **A0.4 (Finding Code Integrity):** `bin/check-finding-codes.sh` exists and is executable.
 6. **A0.5 (Roadmap Cross-Refs):** `bin/check-roadmap-cross-refs.sh` exists and is executable.
 7. **A0.6 (Matrix Consistency):** `bin/check-matrix-vs-roadmap.sh` exists and is executable. Script must assert that for every Pass 8+ matrix entry in `docs/ROADMAP_TRACEABILITY_MATRIX.md`, the cited document text is actually present in `docs/ROADMAP.md` (string match against the change description).
@@ -268,7 +268,7 @@ _Goal: Rip out the V8-idiomatic object graph and replace it with a high-performa
 - **Milestones:**
   - **B1.a (Dense SoA):** Assign dense 0..N-1 integer IDs. Convert `bboxes`, `centroids`, and `pixelIndices` into SoA TypedArrays. **Acceptance:** `bboxes + centroids + pixelIndices` heap is within 5% of theoretical-minimum byte size.
   - **B1.b (CSR Adjacency):** Implement adjacency using `adjacencyPointers: Uint32Array` (indices into neighbors) and `adjacencyNeighbors: Uint16Array` (neighbor IDs). **Acceptance:** `adjacencyPointers + adjacencyNeighbors` heap == `(sectorCount+1)*4 + totalEdges*2` bytes ± 5%.
-  - **B1.e (Contour Extraction):** Extract ordered polygon rings during the existing O(W×H) pass. Produce `contourPointers: Uint32Array`, `contourPoints: Int16Array`, and `totalGeometricPerimeterSegments: number` (sum of all ring segments). **Acceptance:** `contourPointers + contourPoints` populated within the same O(W×H) pass; assert via instrumented Vitest spy that the pixel-iteration loop runs exactly once per `loadMap`.
+  - **B1.e (Contour Extraction):** Extract per-sector boundary contour segments during the existing O(W×H) pass — an unordered flat CSR segment list (`[x1,y1,x2,y2]` per segment); no ring ordering or per-segment neighbor identity is stored, and consumers needing the far side of a segment pair it by resampling `pixelIndices` (Hardening Sync — Code-Truth). Produce `contourPointers: Uint32Array`, `contourPoints: Int16Array`, and `totalGeometricPerimeterSegments: number` (deduplicated geometric segment count). **Acceptance:** `contourPointers + contourPoints` populated within the same O(W×H) pass; assert via instrumented Vitest spy that the pixel-iteration loop runs exactly once per `loadMap`.
   - **B1.c (Border Edge Allocator):** B1.c executes after B1.e and consumes its `totalGeometricPerimeterSegments` output. Implement `SectorRegistry`'s allocation of `borderEdges: Float32Array` and `borderEdgeCount: Uint32Array(1)` (initialized to 0) during `loadMap()`. Both buffers are transferred to Worker during B3.a bootstrap. **Acceptance:**
     - `borderEdges instanceof Float32Array`
     - `borderEdges.length === 4 * totalGeometricPerimeterSegments`
@@ -329,7 +329,7 @@ _Goal: Move the brain into a Worker and the eyes onto the GPU using Transferable
   - `{type: 'INIT_GROUPS', payload: {groupBBoxes: Int16Array}}`
   - `{type: 'INIT_ANCHORS', payload: {anchors: Int16Array}}`
     Triggered by first `setParentMapping` / `computeAnchors` respectively.
-- **Bootstrap Ack (Worker → Main):** `{type: 'BOOTSTRAP_ACK', payload: {sectorCount, totalEdges, firstSectorBBox, lastSectorBBox, hexColors, sectorIds}}`. **Note:** `hexColors: Uint32Array` (packed RGB) and `sectorIds: Uint16Array` (numeric ID) are Transferable arrays that replace the structured-cloned `hexMap`, eliminating GC spikes at bootstrap.
+- **Bootstrap Ack (Worker → Main):** `{type: 'BOOTSTRAP_ACK', payload: {sectorCount, totalEdges, firstSectorBBox, lastSectorBBox}}` — verification scalars only. **Note:** `hexColors`/`sectorIds` are constructed on Main during registry construction and never routed through the Worker; there is no structured-cloned `hexMap` and no ACK-time Transferable payload (Hardening Sync — the GC-spike concern this ack once addressed is moot with Main-side registry construction, PR-3).
 - **Method call (Main → Worker):** `{type: 'CALL', id: number, method: string, args: any[]}`
 - **Method result (Worker → Main):** `{type: 'RESULT', id: number, value: any, snapshot?: any}` | `{type: 'ERROR', id: number, message: string}`
 - **Worker Lifecycle:** Worker spins up in `MapEngine` constructor; `loadMap()` triggers Bootstrap. Method calls correlate via monotonic `id`.
@@ -359,7 +359,7 @@ _Goal: Move the brain into a Worker and the eyes onto the GPU using Transferable
   - **B3.b (SimulationClock Relocation):**
     - Add `SimulationClock` to Worker (accumulator-driven, tick rate `tickHz` from `BOOTSTRAP`, default 60Hz). Keep `RenderClock` on Main for rAF integration.
     - **Principles Compliance:** PR-3 (Performance ROI).
-    - **Yield Helper Mandate:** Create a cooperative yielding helper (`MessageChannel.postMessage(0)`) to be used by heavy Worker tasks to prevent event-loop starvation.
+    - **Yield Helper Mandate:** Create a cooperative yielding helper — `yieldIfNeeded(state: { lastYield: number }): Promise<void>` (`src/worker/yield.ts`), implemented via a `MessageChannel.postMessage(0)` round-trip; `state` is caller-owned and shared across call sites — used by heavy Worker tasks to prevent event-loop starvation.
     - **Drift Re-verification:** Post-relocation, re-run drift fixture; ±1ms must still hold for `SimulationClock`. Both clocks are float-accumulator-based; the rAF wall-clock distinction is irrelevant for drift measurement, so the existing fixture's expected values transfer.
     - **Acceptance:** `SimulationClock.tick()` runs at steady 60Hz in Worker under 100ms Main-thread block.
   - **B3.c (SharedRegistryProxy):**
@@ -368,11 +368,11 @@ _Goal: Move the brain into a Worker and the eyes onto the GPU using Transferable
     - **Sync methods (direct):**
       - `setMapMode(id)`: Consults Main-thread registry synchronously. Throws `Error('Unknown map mode: <id>')` on miss. On hit, sets dirty flag synchronously and calls `IThreeRenderBackend.updateUniforms({palette: colors})`. No Worker message dispatched.
       - `registerMapMode(id, colors)`: Validates synchronously (throws on duplicate ID or length mismatch), adds to Main-thread registry.
-      - `dispose(): Promise<void>`: Terminates Worker, releases GPU resources, drops in-flight buffers and buffered map-mode calls.
+      - `dispose(): Promise<void>`: Terminates Worker, releases GPU resources, drops in-flight buffers and registered palette data.
     - **Async methods (Worker round-trip):** `loadMap`, `pick`, `setTraversalCosts`, `setParentMapping`, `aggregateGroups`, `computeAnchors`, `findPath`. Promises resolve only after Worker returns and proxy's snapshot is refreshed.
-    - **Harden Lifecycle Rejection:** `loadMap()` and `dispose()` MUST reject all in-flight async Promises (`recomputeBorders`, `aggregateGroups`, `computeAnchors`, `findPath`, `setTraversalCosts`, `setParentMapping`) with `MapInvalidatedError`. `loadMap` also discards all buffered `setMapMode` calls.
-    - **pick(point):** Returns a `Promise<PickResult | null>`. Resolves to `null` if (a) no `loadMap` has been awaited successfully, or (b) `BOOTSTRAP_ACK` has not yet been received. Otherwise, performs `readSectorIdAt()`. If numeric ID is `0xFFFF` or invalid, resolve to `null`. Otherwise resolves to `PickResult` using binary search over `hexColors`/`sectorIds`.
-    - **Hex-ID Lookup:** Proxy receives `hexColors` and `sectorIds` in `BOOTSTRAP_ACK`. It must implement a **binary search** over these paired arrays to resolve numeric IDs back to hex strings for `pick()` results.
+    - **Harden Lifecycle Rejection:** `loadMap()` and `dispose()` MUST reject all in-flight async Promises (`recomputeBorders`, `aggregateGroups`, `computeAnchors`, `findPath`, `setTraversalCosts`, `setParentMapping`) with `MapInvalidatedError`. `loadMap` also discards all registered map modes (palette data).
+    - **pick(point):** Returns a `Promise<PickResult | null>`. Resolves to `null` if (a) no `loadMap` has been awaited successfully, or (b) `BOOTSTRAP_ACK` has not yet been received. Otherwise, performs `readSectorIdAt()`. If numeric ID is `0xFFFF` or invalid, resolve to `null`. Otherwise resolves to `PickResult` via the Main-resident `idToHex` table (O(1)).
+    - **Hex-ID Lookup:** Numeric ID → hex string resolves through the Main-resident `idToHex: string[]` table retained from registry construction — O(1), zero extra memory (Hardening Sync, PR-3). The paired `hexColors`/`sectorIds` arrays remain Main-resident for packed-RGB → numeric-ID lookups (binary search over sorted `hexColors`); they are not on the `pick()` path.
     - **Acceptance:**
       - Verifiable via `test/integration/proxy-snapshot.spec.ts` asserting sync reads on Main post-async-mutation.
       - **Lifecycle Invalidation:** Verifiable via `test/integration/lifecycle-invalidation.spec.ts` asserting that rapid `loadMap → in-flight async → loadMap` results in `MapInvalidatedError` for the first async call.
@@ -399,8 +399,8 @@ _Goal: Move the brain into a Worker and the eyes onto the GPU using Transferable
   1. `setMapMode(id)` consults the Main-thread registry synchronously.
   2. If valid, it sets the dirty flag synchronously.
   3. It executes `IThreeRenderBackend.updateUniforms({palette: colors})` immediately.
-  4. **In-Flight Registration (F-3.6):** If `registerMapMode` is still in-flight, the call is buffered Main-side via `pendingMapMode: string | null`. On registration resolve: if `pendingMapMode === id`, execute synchronous path; otherwise drop. After executing the synchronous path (or dropping), set `pendingMapMode = null`. On registration rejection: clear `pendingMapMode` and emit `'mapModeRegistrationFailed'`.
-  5. **Lifecycle Cleanup:** Buffered calls and palette data are discarded on `loadMap()` or `dispose()`.
+  4. **Registration Atomicity (F-3.6):** `registerMapMode` is fully synchronous (validate → persist, no awaited work), so no "in-flight" window exists and no buffering is required. The previously specified `pendingMapMode` buffer and `'mapModeRegistrationFailed'` event are removed as unreachable states (Hardening Sync, PR-4: no API surface for impossible conditions). Both `registerMapMode` and `setMapMode` throw `ModeNotReadyError` if called before `loadMap()` has resolved.
+  5. **Lifecycle Cleanup:** Registered palette data is discarded on `loadMap()` or `dispose()`.
 - **No-Op Semantics:** If the id is already the active mode, the call must no-op (zero uniform writes, zero dirty-flag mutations).
 - **Constraint:** Group-level coloring (country/state palettes) is deferred to Phase 5. CA-7 handles sector-level palettes only.
 - **Acceptance:**
@@ -435,7 +435,7 @@ B3
 - **Yield Mandate:** Mandate yielding every ≤8ms using the B3.b helper during pathfinding search.
 - **Public API:**
   - `engine.setTraversalCosts(costs: Uint8Array): Promise<void>`: Main → Worker transfer, called once or on cost mutation.
-  - `engine.findPath(startId: number, endId: number): Promise<Uint16Array>`: Returns sector ID sequence; rejects on unreachable with `PathNotFoundError`.
+  - `engine.findPath(startId: number, endId: number): Promise<Uint16Array>`: Returns sector ID sequence; rejects on unreachable with `PathNotFoundError`; rejects with `CostsRequiredError` if called before `setTraversalCosts` has resolved at least once (explicit failure beats silently pathing over costs the consumer never supplied — the engine never invents game state, P-4).
 - **Signaling:** Path results are returned to the main thread via standard `postMessage`.
 - **Acceptance (F-4.7):**
   - A\* over a 10,000-sector graph resolves a 500-sector path in < 2ms in the worker.
@@ -450,10 +450,10 @@ B3
 - **Public API (F-4.3):**
   - `engine.setParentMapping(mapping: Uint16Array, maxGroups: number): Promise<void>`.
   - `engine.aggregateGroups(): Promise<void>`.
-  - `engine.getGroupBBox(groupId: number): [number, number, number, number]` (sync accessor reading from latest snapshot).
+  - `engine.getGroupBBox(groupId: number): [number, number, number, number]` (sync accessor reading from latest snapshot; throws `MappingRequiredError` before the first `aggregateGroups` resolution — see the widened trigger in §12.5).
 - **Signaling:** Aggregated `groupBBoxes` are sent to the main thread via **Transferable Handoff** inside the tick loop. (F-4.2)
 - **Validation Fixture (`test/fixtures/mappings/regions.json`):**
-  - Schema: `{mapImage: string, parentMapping: number[], maxGroups: number, expectedGroupBBoxes: [[minX,minY,maxX,maxY], ...]}`.
+  - Schema: `{mapImage: string, definition: string, parentMapping: number[], maxGroups: number, expectedGroupBBoxes: [[minX,minY,maxX,maxY], ...]}`. `definition` is the path to a companion sector-definition JSON (same pattern as `test/fixtures/test-4x4.json`) whose key iteration order fixes the dense numeric-ID space that `parentMapping` indexes — `SectorRegistry` assigns numeric IDs in definition order, not raster order (Hardening Sync).
   - Map images live in `test/fixtures/mappings/maps/` (8-bit indexed PNGs ≤ 256×256).
   - Mandate ≥5 fixtures including: identity (1 sector → 1 group), all-to-one, disjoint-groups, sentinel sectors, single-pixel groups.
 - **Acceptance:**
@@ -474,7 +474,7 @@ B3
 - **Public API:**
   - `engine.computeAnchors(): Promise<void>`.
   - `engine.getAnchor(sectorId: number): [number, number]` (sync accessor reading from latest snapshot).
-- **Algorithm:** **Pole of Inaccessibility (polylabel)** computed from the contour rings produced by B1.e, with default precision = 1.0px.
+- **Algorithm:** **Pole of Inaccessibility (polylabel)** computed from the contour segments produced by B1.e (unordered segment list — distance tests are segment-wise; no ring reconstruction is required), with default precision = 1.0px.
 - **Signaling:** Computed `anchors` are returned to the main thread via **Transferable Handoff**. (F-4.6)
 - **Acceptance:**
   - 100% pass on `test/fixtures/anchor-shapes.json`.
@@ -583,6 +583,9 @@ The BDFL (User) is the sole authority on versioning. The project is currently in
 - **async `pick()` (Pass 8 Revision):** `MapEngine.pick()` signature will change from synchronous to `Promise<PickResult | null>`.
   - **Rationale:** Accommodate GPU readback latency and Web Worker IPC overhead. Required to maintain OMT (Off-Main-Thread) architecture without blocking the Main thread.
 
+- **`registry` getter gating (Hardening Sync):** `MapEngine.registry` becomes `@deprecated` and throws `MapInvalidatedError` once the B3.a bootstrap transfer has detached the registry's buffers.
+  - **Rationale (PR-2):** Post-transfer, buffer-backed registry methods would silently read zero-length detached arrays — fail loudly instead. Replacement surface: `MapEngine.getSector`/`getSectorKeys`/`getBBox`/`getCentroid`/`getNeighbors`, served from pre-transfer snapshots (B3.a retains `.slice()` copies of `bboxes`, `centroids`, `adjacencyPointers`, `adjacencyNeighbors` — ≤ ~1 MB at the 65,534-sector cap — so the shipped sync API keeps working from the moment of transfer).
+
 ### 12.5 Module Layout (F-C.4)
 
 | Component             | Path                                |
@@ -623,9 +626,10 @@ The BDFL (User) is the sole authority on versioning. The project is currently in
 | --- | --- | --- | --- |
 | `WebGL2NotSupportedError` | `src/errors.ts` | Thrown if WebGL2 is unavailable. | Phase 3 |
 | `SectorLimitExceededError` | `src/errors.ts` | Thrown if map exceeds 65,534 sectors. | Phase 2 |
-| `MappingRequiredError` | `src/errors.ts` | Thrown if methods called before `setParentMapping`. | Phase 4 |
+| `MappingRequiredError` | `src/errors.ts` | Thrown when a mapping/aggregation precondition is unmet: methods called before `setParentMapping`, or group accessors (`getGroupBBox`) before the first `aggregateGroups` resolution. | Phase 4 |
 | `PathNotFoundError` | `src/errors.ts` | Thrown if pathfinding fails. | Phase 4 |
-| `ModeNotReadyError` | `src/errors.ts` | Thrown if `setMapMode` used prematurely. | Phase 3 |
+| `CostsRequiredError` | `src/errors.ts` | Thrown by `findPath` before `setTraversalCosts` has resolved at least once. | Phase 4 |
+| `ModeNotReadyError` | `src/errors.ts` | Thrown if `registerMapMode`/`setMapMode` called before `loadMap()` resolves. | Phase 3 |
 | `MapInvalidatedError` | `src/errors.ts` | Thrown when in-flight async calls are invalidated by `loadMap()` or `destroy()`/`dispose()`. | Phase 3 |
 
 **Common Types:**
@@ -639,6 +643,7 @@ The BDFL (User) is the sole authority on versioning. The project is currently in
 
 ## 13. Revision History
 
+- **2026-07-07-hardening-sync:** Code-Truth Synchronization (pre-implementation sprint hardening). Resolved 5 BDFL rulings and 6 doc/code drift defects surfaced by the per-epic hardening pass. Synchronized §4/F-3.1/B3.c to Main-resident `hexColors`/`sectorIds` — `BOOTSTRAP_ACK` carries verification scalars only (PR-3). Replaced the `pick()` binary-search mandate with the O(1) Main-resident `idToHex` table (PR-3). Rewrote F-3.6 as Registration Atomicity — removed unreachable `pendingMapMode` buffering and the `'mapModeRegistrationFailed'` event (PR-4). Added `CostsRequiredError` for the `findPath` precondition (P-4); widened `MappingRequiredError` to aggregation preconditions; scoped `ModeNotReadyError` to pre-`loadMap` guards (PR-2). Gated the deprecated `MapEngine.registry` getter post-transfer with snapshot-backed replacement surface (§12.4, PR-2). Corrected B1.e/CA-8/§4 contour descriptions to the shipped unordered segment list and fixed the `contourPoints` sizing row (Code-Truth). Specified the `yieldIfNeeded` signature (B3.b). Corrected A0.3 tolerance wording (test constant, not a fixture field). Added the CA-5 fixture `definition` field fixing the numeric-ID space.
 - **2026-05-07-pass-12:** Technical Hardening. Removed all specific git commit SHAs from the document to improve robustness and prevent agent confusion. Codified the "No Commit SHAs in Roadmap" standard in `GEMINI.md`.
 - **2026-05-07-pass-11:** Technical Hardening. Resolved 100% of Pass 10 findings. Synchronized Memory Contract (§4) with Pass 8.1 mandates (`pixelIndicesMirror`, `hexColors`, `sectorIds`). Hardened milestones with mandatory "Principles Compliance" fields (B1.5, B3.a-c). Relocated future errors and types to "Planned" status in §12.5. Corrected visibility of `_preRenderHook` to Public.
 - **2026-05-07-pass-10:** Phase 0 Audit. Identified missing Phase 0 prerequisites (scripts, benchmarks, fixtures). Detected hallucinations in Canonical Exports and Memory Contract. Marked §6 prerequisites as "Pending Implementation".

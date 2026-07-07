@@ -53,7 +53,7 @@ Use each element for its appropriate purpose:
 | Lists       | Short parallel items where order doesn't matter and prose would run on |
 
 - Rules files use H2 for sections, H3 for subsections — no deeper nesting
-- Every rules file requires YAML `paths:` frontmatter
+- Every rules file requires YAML `paths:` frontmatter with concrete glob patterns. Content with no natural file-pattern trigger is not a rules file — see File Type Guidelines below.
 - One rule per paragraph — don't bundle multiple distinct rules into a single block
 - Use plain prose for cross-file references (e.g., `See auth.md for...`) — never markdown hyperlinks (`[text](./file.md#anchor)`). Claude reads `.claude/` files as plain text and cannot navigate links; the syntax adds tokens with no benefit.
 
@@ -63,11 +63,13 @@ Use each element for its appropriate purpose:
 
 Contains facts that apply to every session: build commands, project layout, conventions, always-apply rules. Target under 200 lines — longer files reduce adherence.
 
+Content that has no natural per-file trigger — it should apply on every task regardless of what's being touched — belongs here, not in a rules file with an empty or omitted `paths:` field. A rules file without `paths:` is functionally identical to CLAUDE.md content but invisible at a glance: nothing distinguishes a path-scoped file from an always-loaded one except reading its frontmatter, so always-on context can accumulate there unnoticed. CLAUDE.md's line-count target exists precisely to keep every-session content visible to whoever maintains this file; routing it into an unscoped rules file defeats that.
+
 Reference rules files as prose pointers (`"See .claude/rules/<filename>.md"`), not as `@path/to/file.md` imports. An `@` import expands the referenced file inline at every session launch, bypassing the path-scoped conditional loading that makes the rules architecture efficient.
 
 ### Rules files
 
-Each file covers one topic, with a descriptive filename (`testing.md`, `api-design.md`). Uses `paths:` frontmatter to scope loading — files without a `paths:` field load unconditionally on every session. Path-scoped rules load when Claude reads a file matching the pattern, not on every tool use.
+Each file covers one topic, with a descriptive filename (`testing.md`, `api-design.md`). Uses `paths:` frontmatter to scope loading to files matching the pattern — a rules file always has concrete `paths:` values. If a candidate rule doesn't scope to a file pattern, it isn't a rules file; put it in CLAUDE.md instead (see CLAUDE.md above).
 
 ### Skills files
 

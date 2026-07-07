@@ -8,12 +8,11 @@ describe('NullRenderBackend', () => {
     expect(backend).toBeTruthy()
   })
 
-  it('exposes camera, scene, mesh, and texture', () => {
+  it('exposes camera, scene, and mesh', () => {
     const backend = new NullRenderBackend()
     expect(backend.camera).toBeInstanceOf(THREE.OrthographicCamera)
     expect(backend.scene).toBeInstanceOf(THREE.Scene)
     expect(backend.mesh).toBeInstanceOf(THREE.Mesh)
-    expect(backend.texture).toBeInstanceOf(THREE.Texture)
   })
 
   it('camera is positioned at (0, 0, 1)', () => {
@@ -33,6 +32,8 @@ describe('NullRenderBackend', () => {
     expect(() => backend.setSize(800, 600)).not.toThrow()
     expect(() => backend.getThreeScene()).not.toThrow()
     expect(backend.getThreeScene()).toBe(backend.scene)
+    expect(() => backend.reuploadIndexTexture(new Uint16Array(0))).not.toThrow()
+    expect(backend.getIndexTexture()).toBeNull()
   })
 
   it('getThreeRenderer throws', () => {
@@ -42,69 +43,48 @@ describe('NullRenderBackend', () => {
     )
   })
 
-  it('readSectorIdAt returns 0xffff when no texture has been uploaded', () => {
+  it('readSectorIdAt returns 0xffff when constructed without pixelIndices', () => {
     const backend = new NullRenderBackend()
     expect(backend.readSectorIdAt(0, 0)).toBe(0xffff)
     expect(backend.readSectorIdAt(-1, -1)).toBe(0xffff)
     expect(backend.readSectorIdAt(100, 100)).toBe(0xffff)
   })
 
-  it('uploadTexture slices image data from an OffscreenCanvas-backed texture; readSectorIdAt returns packed RGB', () => {
-    const backend = new NullRenderBackend()
+  it('readSectorIdAt resolves numeric sector IDs from a constructor-provided pixelIndices snapshot (Epic 3 Task 3.4)', () => {
+    // 2×2 grid: id 0, id 1 / id 2, VOID (0xffff)
+    const pixelIndices = new Uint32Array([0, 1, 2, 0xffff])
+    const backend = new NullRenderBackend(pixelIndices, 2, 2)
 
-    // 2×2 canvas: top-left = red (ff0000)
-    const offscreen = new OffscreenCanvas(2, 2)
-    const ctx = offscreen.getContext('2d')!
-    const pixels = new Uint8ClampedArray([
-      255,
-      0,
-      0,
-      255, // (0,0) red
-      0,
-      255,
-      0,
-      255, // (1,0) green
-      0,
-      0,
-      255,
-      255, // (0,1) blue
-      255,
-      255,
-      0,
-      255, // (1,1) yellow
-    ])
-    ctx.putImageData(new ImageData(pixels, 2, 2), 0, 0)
-
-    const tex = new THREE.CanvasTexture(offscreen)
-    backend.uploadTexture(tex)
-
-    // Slice was captured — bounds-checked lookup returns packed RGB
-    expect(backend.readSectorIdAt(0, 0)).toBe(0xff0000) // red
-    expect(backend.readSectorIdAt(1, 0)).toBe(0x00ff00) // green
-    expect(backend.readSectorIdAt(0, 1)).toBe(0x0000ff) // blue
+    expect(backend.readSectorIdAt(0, 0)).toBe(0)
+    expect(backend.readSectorIdAt(1, 0)).toBe(1)
+    expect(backend.readSectorIdAt(0, 1)).toBe(2)
+    expect(backend.readSectorIdAt(1, 1)).toBe(0xffff)
 
     // Out-of-bounds returns sentinel
     expect(backend.readSectorIdAt(2, 0)).toBe(0xffff)
     expect(backend.readSectorIdAt(0, 2)).toBe(0xffff)
   })
 
-  it('dispose() clears the sliced image data reference', () => {
+  it('writePaletteEntry retains the last per-entry color patch (F-2.8)', () => {
     const backend = new NullRenderBackend()
+    expect(() => backend.writePaletteEntry(3, 10, 20, 30)).not.toThrow()
+    expect(backend.getPaletteEntry(3)).toEqual([10, 20, 30])
+    expect(backend.getPaletteEntry(4)).toBeUndefined()
+  })
 
-    const offscreen = new OffscreenCanvas(2, 2)
-    const ctx = offscreen.getContext('2d')!
-    ctx.fillStyle = 'red'
-    ctx.fillRect(0, 0, 2, 2)
-    const tex = new THREE.CanvasTexture(offscreen)
-    backend.uploadTexture(tex)
+  it('updateUniforms({palette}) retains the last full-palette replace (F-2.8)', () => {
+    const backend = new NullRenderBackend()
+    expect(backend.getLastPalette()).toBeNull()
+    const palette = new Uint32Array([0xff0000, 0x00ff00])
+    expect(() => backend.updateUniforms({ palette })).not.toThrow()
+    expect(backend.getLastPalette()).toEqual(palette)
+  })
 
-    // Confirm slice was captured
-    expect(backend['_imageData']).not.toBeNull()
+  it('dispose() does not throw and readSectorIdAt remains safe afterward', () => {
+    const pixelIndices = new Uint32Array([0])
+    const backend = new NullRenderBackend(pixelIndices, 1, 1)
 
-    backend.dispose()
-    expect(backend['_imageData']).toBeNull()
-
-    // readSectorIdAt is safe after dispose
-    expect(backend.readSectorIdAt(0, 0)).toBe(0xffff)
+    expect(() => backend.dispose()).not.toThrow()
+    expect(backend.readSectorIdAt(0, 0)).toBe(0)
   })
 })

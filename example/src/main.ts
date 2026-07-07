@@ -4,8 +4,8 @@
  * Demonstrates every public API surface:
  *   MapEngine, MapRenderer, SectorRegistry, SectorBitmapParser, toHexKey
  *   Events: sectorHover, sectorClick
- *   Methods: loadMap, setSectorColor, resetSectorColor, getSector, getSectorKeys,
- *            on, off, destroy, engine.registry.*, engine.renderer.*
+ *   Methods: loadMap, setTickRate, setSectorColor, resetSectorColor, getSector, getSectorKeys,
+ *            getBBox, getCentroid, getNeighbors, registerMapMode, setMapMode, on, off, destroy
  */
 
 import { AppController } from './controller'

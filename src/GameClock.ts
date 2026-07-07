@@ -3,6 +3,12 @@ import type { ClockTickCallback } from './types'
 
 const MAX_TICKS_PER_FRAME = 10
 
+/**
+ * @deprecated Superseded by the Worker-side `SimulationClock` (fixed-tick
+ * simulation) and Main-side `RenderClock` (raw per-frame dispatch), landing
+ * in this sprint's Epic 2 (B3.b). Retained through the deprecation window;
+ * scheduled for deletion in Epic 8.
+ */
 export class GameClock {
   private _engine: MapEngine
   private _speed = 1

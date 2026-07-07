@@ -3,7 +3,7 @@ import type {
   SectorDefinitionFile,
   ISpatialRegistry,
 } from './types'
-import { SectorLimitExceededError } from './types'
+import { SectorLimitExceededError } from './errors'
 import { toHexKey, packRgb } from './utils'
 
 const VOID_ID = 0xffff
@@ -330,14 +330,19 @@ export class SectorRegistry implements ISpatialRegistry {
 
   // ── Public accessors ───────────────────────────────────────────────────────
 
-  /** Returns the hex key of the sector at pixel (pixelX, pixelY), or '000000' for void pixels. */
+  /**
+   * Returns the hex key of the sector at pixel (pixelX, pixelY), or '000000' for void pixels.
+   * Reads `pixelIndicesMirror` (not `pixelIndices`) — the mirror is a lossless Uint16 downcast
+   * (sector IDs never exceed 65534) that stays Main-resident after the Epic 1 bootstrap
+   * transfer detaches `pixelIndices`'s backing buffer (F-3.3).
+   */
   getSectorAt(pixelX: number, pixelY: number): string {
     const x = Math.floor(pixelX)
     const y = Math.floor(pixelY)
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
       throw new Error('getSectorAt: coordinates out of bounds')
     }
-    const id = this.pixelIndices[y * this.width + x]
+    const id = this.pixelIndicesMirror[y * this.width + x]
     return id === VOID_ID ? '000000' : this.idToHex[id]
   }
 
