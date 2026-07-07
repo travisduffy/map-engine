@@ -1,6 +1,6 @@
 # Roadmap Audit Process (Audit-Only)
 
-ROLE: External Auditor.
+ROLE: Auditor (self-audit, read-only pass).
 MISSION: Verify compliance between Code (Truth) and `docs/ROADMAP.md` (North Star).
 
 ## MANDATE
