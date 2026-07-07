@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { MapRenderer } from '../src/MapRenderer'
+import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
 import { SectorRegistry } from '../src/SectorRegistry'
 import type { SectorDefinitionFile } from '../src/types'
 import { makeCanvas } from './testUtils'
@@ -51,14 +52,20 @@ describe('Render Gating (A1)', () => {
   }
 
   it('renders on the first tick (_dirty starts true)', () => {
-    const spy = vi.spyOn(renderer.renderer, 'render')
+    const spy = vi.spyOn(
+      (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
+      'render'
+    )
     tick()
     expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it('skips render on 10 consecutive no-op ticks after first frame', () => {
     tick() // initial frame — dirty, renders, clears _dirty
-    const spy = vi.spyOn(renderer.renderer, 'render')
+    const spy = vi.spyOn(
+      (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
+      'render'
+    )
     for (let i = 0; i < 10; i++) tick()
     expect(spy).not.toHaveBeenCalled()
   })
@@ -80,7 +87,10 @@ describe('Render Gating (A1)', () => {
         bubbles: true,
       })
     )
-    const spy = vi.spyOn(renderer.renderer, 'render')
+    const spy = vi.spyOn(
+      (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
+      'render'
+    )
     tick()
     expect(spy).toHaveBeenCalledTimes(1)
   })
@@ -103,7 +113,10 @@ describe('Render Gating (A1)', () => {
       })
     )
     tick() // renders — dirty set by pan
-    const spy = vi.spyOn(renderer.renderer, 'render')
+    const spy = vi.spyOn(
+      (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
+      'render'
+    )
     tick() // no-op — dirty cleared by previous tick
     expect(spy).not.toHaveBeenCalled()
   })
@@ -111,7 +124,10 @@ describe('Render Gating (A1)', () => {
   it('renders after setSectorColor sets dirty', () => {
     tick() // initial frame
     renderer.setSectorColor('ff0000', '#0000ff')
-    const spy = vi.spyOn(renderer.renderer, 'render')
+    const spy = vi.spyOn(
+      (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
+      'render'
+    )
     tick()
     expect(spy).toHaveBeenCalledTimes(1)
   })
@@ -119,7 +135,10 @@ describe('Render Gating (A1)', () => {
   it('renders after resetSectorColor sets dirty', () => {
     tick() // initial frame
     renderer.resetSectorColor('ff0000')
-    const spy = vi.spyOn(renderer.renderer, 'render')
+    const spy = vi.spyOn(
+      (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
+      'render'
+    )
     tick()
     expect(spy).toHaveBeenCalledTimes(1)
   })
@@ -128,7 +147,10 @@ describe('Render Gating (A1)', () => {
     tick() // initial frame
     renderer['_patchSectorPixels']('ff0000', 0, 0, 255)
     renderer['_flushPendingDirty']()
-    const spy = vi.spyOn(renderer.renderer, 'render')
+    const spy = vi.spyOn(
+      (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
+      'render'
+    )
     tick()
     expect(spy).toHaveBeenCalledTimes(1)
   })
@@ -137,7 +159,10 @@ describe('Render Gating (A1)', () => {
     tick() // initial frame
     renderer.setSectorColor('ff0000', '#0000ff')
     renderer.setSectorColor('00ff00', '#ff0000')
-    const spy = vi.spyOn(renderer.renderer, 'render')
+    const spy = vi.spyOn(
+      (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
+      'render'
+    )
     tick()
     expect(spy).toHaveBeenCalledTimes(1)
   })

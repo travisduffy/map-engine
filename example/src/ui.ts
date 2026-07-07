@@ -1,8 +1,8 @@
 import type { PickResult, SectorData } from 'map-engine'
 
 export interface SelectedRegistryData {
-  bbox: { minX: number; minY: number; maxX: number; maxY: number } | undefined
-  centroid: { x: number; y: number } | undefined
+  bbox: [number, number, number, number] | undefined
+  centroid: [number, number] | undefined
   pixelCount: number
 }
 
@@ -144,7 +144,7 @@ export function renderSelectedPanel(
     advRows.push(
       makeInfoRow(
         'bbox',
-        `${reg.bbox.minX},${reg.bbox.minY} → ${reg.bbox.maxX},${reg.bbox.maxY}`
+        `${reg.bbox[0]},${reg.bbox[1]} → ${reg.bbox[2]},${reg.bbox[3]}`
       )
     )
   }
@@ -152,7 +152,7 @@ export function renderSelectedPanel(
     advRows.push(
       makeInfoRow(
         'centroid',
-        `(${reg.centroid.x.toFixed(1)}, ${reg.centroid.y.toFixed(1)})`
+        `(${reg.centroid[0].toFixed(1)}, ${reg.centroid[1].toFixed(1)})`
       )
     )
   }

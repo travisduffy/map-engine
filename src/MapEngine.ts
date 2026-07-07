@@ -280,10 +280,12 @@ export class MapEngine {
     }
   }
 
-  getNeighbors(hexKey: string): ReadonlySet<string> | undefined {
+  getNeighbors(hexKey: string): string[] | undefined {
     if (this._destroyed) throw new Error('MapEngine: destroyed')
     if (!this._loaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
-    return this._registry!.adjacency.get(hexKey)
+    // undefined if hexKey is not in the definition (bitmap-only or unknown)
+    if (this._registry!.getSector(hexKey) === undefined) return undefined
+    return this._registry!.getNeighbors(hexKey)
   }
 }

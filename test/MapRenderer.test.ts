@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as THREE from 'three'
 import { MapRenderer } from '../src/MapRenderer'
+import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
 import { SectorRegistry } from '../src/SectorRegistry'
 import type { SectorDefinitionFile } from '../src/types'
 
@@ -135,7 +136,8 @@ describe('MapRenderer', () => {
     })
 
     it('renderer is a THREE.WebGLRenderer', () => {
-      expect(renderer.renderer).toBeInstanceOf(THREE.WebGLRenderer)
+      const backend = renderer['_backend'] as ThreeRenderBackend
+      expect(backend.getThreeRenderer()).toBeInstanceOf(THREE.WebGLRenderer)
     })
 
     it('PlaneGeometry UV at vertex 0 is u≈0.0, v≈1.0 (Three.js bottom-left UV origin)', () => {
@@ -159,7 +161,10 @@ describe('MapRenderer', () => {
 
     it('render loop fires at least one frame', async () => {
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
-      expect(renderer.renderer.info.render.frame).toBeGreaterThanOrEqual(1)
+      const backend = renderer['_backend'] as ThreeRenderBackend
+      expect(
+        backend.getThreeRenderer().info.render.frame
+      ).toBeGreaterThanOrEqual(1)
     })
 
     it('camera uses contain framing — 800×600 canvas with 4×4 bitmap (square) → frustum wider than tall', () => {
@@ -197,23 +202,13 @@ describe('MapRenderer', () => {
       expect(data[3]).toBe(255) // a
     })
 
-    it('displayImageData is a separate copy from registry.sourceBuffer', () => {
-      // Mutate displayImageData.data
-      renderer.displayImageData.data[0] = 42
-      // registry.sourceBuffer must be unchanged
-      expect(registry.sourceBuffer[0]).toBe(255)
-    })
-
-    it('mutating registry.sourceBuffer does not affect displayImageData', () => {
-      // Cast away readonly to simulate a mutation attempt
-      ;(registry.sourceBuffer as Uint8ClampedArray)[0] = 99
-      expect(renderer.displayImageData.data[0]).toBe(255)
-      // Restore
-      ;(registry.sourceBuffer as Uint8ClampedArray)[0] = 255
+    it('registry.sourceBuffer is null after construction (PR-1 memory disposal)', () => {
+      expect(registry.sourceBuffer).toBeNull()
     })
 
     it('material.map is assigned (texture is wired into material)', () => {
-      expect(renderer.material.map).not.toBeNull()
+      const backend = renderer['_backend'] as ThreeRenderBackend
+      expect(backend.material.map).not.toBeNull()
     })
   })
 
@@ -250,13 +245,9 @@ describe('MapRenderer', () => {
       expect(data[offset + 3]).toBe(255)
     })
 
-    it('setSectorColor does not mutate registry.sourceBuffer', () => {
+    it('setSectorColor: registry.sourceBuffer remains null (PR-1 — not mutated)', () => {
       renderer.setSectorColor('ff0000', '#0000ff')
-      // pixel (0,0) in sourceBuffer must still be red
-      expect(registry.sourceBuffer[0]).toBe(255)
-      expect(registry.sourceBuffer[1]).toBe(0)
-      expect(registry.sourceBuffer[2]).toBe(0)
-      expect(registry.sourceBuffer[3]).toBe(255)
+      expect(registry.sourceBuffer).toBeNull()
     })
 
     it('setSectorColor: unknown hex key emits console.warn and does not throw', () => {
@@ -316,13 +307,10 @@ describe('MapRenderer', () => {
       expect(data[23]).toBe(255)
     })
 
-    it('resetSectorColor does not mutate registry.sourceBuffer', () => {
+    it('resetSectorColor: registry.sourceBuffer remains null (PR-1 — not mutated)', () => {
       renderer.setSectorColor('ff0000', '#0000ff')
       renderer.resetSectorColor('ff0000')
-      expect(registry.sourceBuffer[0]).toBe(255)
-      expect(registry.sourceBuffer[1]).toBe(0)
-      expect(registry.sourceBuffer[2]).toBe(0)
-      expect(registry.sourceBuffer[3]).toBe(255)
+      expect(registry.sourceBuffer).toBeNull()
     })
 
     it('resetSectorColor: unknown hex key emits console.warn and does not throw', () => {

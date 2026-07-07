@@ -22,7 +22,7 @@ import { AppController } from './controller'
  *   const definition = await response.json()
  *
  *   const registry = new SectorRegistry(buffer, width, height, definition)
- *   // registry.bboxes, registry.centroids, registry.pixelIndices are now available
+ *   // registry.getBBox(), registry.getCentroid(), registry.getSectorPixels() are now available
  *   // Both SectorBitmapParser and SectorRegistry are DOM-free and Worker-safe.
  */
 

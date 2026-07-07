@@ -1,4 +1,5 @@
 export type * from './types'
+export { SectorLimitExceededError } from './types'
 export { toHexKey } from './utils'
 export { SectorBitmapParser } from './SectorBitmapParser'
 export { SectorRegistry } from './SectorRegistry'

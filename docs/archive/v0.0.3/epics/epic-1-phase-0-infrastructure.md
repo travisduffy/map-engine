@@ -38,7 +38,7 @@ Codify the "Project Manager & Master Auditor" protocols into executable scripts.
 
 **Work:**
 
-- Ensure `docs/prompts/audit-only.md` matches the template in `GEMINI.md`.
+- Ensure `docs/processes/audit-only.md` matches the template in `GEMINI.md`.
 - Implement `bin/check-finding-codes.sh` (regex-based orphan detection).
 - Implement `bin/check-roadmap-cross-refs.sh` (markdown link validation).
 - Implement bin/check-matrix-vs-roadmap.sh (fidelity check between ROADMAP.md and ROADMAP_TRACEABILITY_MATRIX.md for Pass 8+ entries).

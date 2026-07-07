@@ -6,7 +6,7 @@ import { buildTestBuffer, makeCanvas } from './testUtils'
 import type { SectorDefinitionFile } from '../src/types'
 
 describe('AdjacencyGraph — Epic 3', () => {
-  it("AC 3.1 — bidirectionality: each sector in the other's adjacency set", () => {
+  it("AC 3.1 — bidirectionality: each sector in the other's neighbor list", () => {
     const buf = buildTestBuffer(2, 1, [
       [255, 0, 0],
       [0, 255, 0],
@@ -16,11 +16,11 @@ describe('AdjacencyGraph — Epic 3', () => {
       '00ff00': { name: 'B' },
     }
     const registry = new SectorRegistry(buf, 2, 1, def)
-    expect(registry.adjacency.get('ff0000')!.has('00ff00')).toBe(true)
-    expect(registry.adjacency.get('00ff00')!.has('ff0000')).toBe(true)
+    expect(registry.getNeighbors('ff0000')).toContain('00ff00')
+    expect(registry.getNeighbors('00ff00')).toContain('ff0000')
   })
 
-  it('AC 3.1 — toHexKey consistency: adjacency.get(toHexKey(r,g,b)) is defined for a registered sector', () => {
+  it('AC 3.1 — toHexKey consistency: getNeighbors(toHexKey(r,g,b)) is defined for a registered sector', () => {
     const buf = buildTestBuffer(2, 1, [
       [255, 0, 0],
       [0, 255, 0],
@@ -30,11 +30,12 @@ describe('AdjacencyGraph — Epic 3', () => {
       '00ff00': { name: 'B' },
     }
     const registry = new SectorRegistry(buf, 2, 1, def)
-    expect(registry.adjacency.get(toHexKey(255, 0, 0))).toBeDefined()
-    expect(registry.adjacency.get(toHexKey(0, 255, 0))).toBeDefined()
+    // getNeighbors returns [] for unknown keys; known sectors return a real array
+    expect(registry.getSector(toHexKey(255, 0, 0))).toBeDefined()
+    expect(registry.getSector(toHexKey(0, 255, 0))).toBeDefined()
   })
 
-  it('AC 3.2 — deduplication: long shared border appears exactly once in each set', () => {
+  it('AC 3.2 — deduplication: long shared border appears exactly once in each neighbor list', () => {
     // Two columns of 2 pixels each — sectors share 2 vertical border segments
     const buf = buildTestBuffer(2, 2, [
       [255, 0, 0],
@@ -47,23 +48,23 @@ describe('AdjacencyGraph — Epic 3', () => {
       '00ff00': { name: 'B' },
     }
     const registry = new SectorRegistry(buf, 2, 2, def)
-    expect(registry.adjacency.get('ff0000')!.size).toBe(1)
-    expect(registry.adjacency.get('00ff00')!.size).toBe(1)
+    expect(registry.getNeighbors('ff0000').length).toBe(1)
+    expect(registry.getNeighbors('00ff00').length).toBe(1)
   })
 
-  it('AC 3.3 — pre-initialization: definition sector with no pixels returns empty set, not undefined', () => {
+  it('AC 3.3 — pre-initialization: definition sector with no pixels returns empty array, not undefined', () => {
     const buf = buildTestBuffer(1, 1, [[255, 0, 0]])
     const def: SectorDefinitionFile = {
       ff0000: { name: 'A' },
       '00ff00': { name: 'Isolated — no pixels' },
     }
     const registry = new SectorRegistry(buf, 1, 1, def)
-    const isolated = registry.adjacency.get('00ff00')
+    const isolated = registry.getNeighbors('00ff00')
     expect(isolated).toBeDefined()
-    expect(isolated!.size).toBe(0)
+    expect(isolated.length).toBe(0)
   })
 
-  it('AC 3.4 — bitmap-only color: not a key and not a value in adjacency', () => {
+  it('AC 3.4 — bitmap-only color: not in definition, not a neighbor of any defined sector', () => {
     // ff0000 defined; 0000ff is bitmap-only
     const buf = buildTestBuffer(2, 1, [
       [255, 0, 0],
@@ -73,10 +74,10 @@ describe('AdjacencyGraph — Epic 3', () => {
       ff0000: { name: 'A' },
     }
     const registry = new SectorRegistry(buf, 2, 1, def)
-    expect(registry.adjacency.has('0000ff')).toBe(false)
-    for (const set of registry.adjacency.values()) {
-      expect(set.has('0000ff')).toBe(false)
-    }
+    // bitmap-only key is not a known sector
+    expect(registry.getSector('0000ff')).toBeUndefined()
+    // defined sector's neighbor list does not include bitmap-only color
+    expect(registry.getNeighbors('ff0000')).not.toContain('0000ff')
   })
 
   it('AC 3.5 — 4-connectivity: diagonal-only contact does not create adjacency', () => {
@@ -90,13 +91,11 @@ describe('AdjacencyGraph — Epic 3', () => {
       '00ff00': { name: 'B' },
     }
     const registry = new SectorRegistry(buf, 2, 2, def)
-    expect(registry.adjacency.get('ff0000')!.size).toBe(0)
-    expect(registry.adjacency.get('00ff00')!.size).toBe(0)
+    expect(registry.getNeighbors('ff0000').length).toBe(0)
+    expect(registry.getNeighbors('00ff00').length).toBe(0)
   })
 
-  it('AC 3.7 — borderEdges retained: correct values; @deprecated JSDoc verified by code review', () => {
-    // @deprecated on borderEdges (SectorRegistry.ts) and BorderEdge (types.ts) is
-    // a JSDoc annotation stripped by esbuild — verified by reading source, not fetching.
+  it('AC 3.7 — borderEdges is zero-initialized Float32Array placeholder (Phase 4 populates)', () => {
     const buf = buildTestBuffer(2, 1, [
       [255, 0, 0],
       [0, 255, 0],
@@ -106,14 +105,14 @@ describe('AdjacencyGraph — Epic 3', () => {
       '00ff00': { name: 'B' },
     }
     const registry = new SectorRegistry(buf, 2, 1, def)
-    expect(registry.borderEdges).toHaveLength(1)
-    expect(registry.borderEdges[0]).toMatchObject({
-      x: 0,
-      y: 0,
-      direction: 'h',
-      sectorA: 'ff0000',
-      sectorB: '00ff00',
-    })
+    expect(registry.borderEdges).toBeInstanceOf(Float32Array)
+    expect(registry.borderEdgeCount[0]).toBe(0)
+
+    // Contour IS populated: each sector has 1 segment (the shared V-border)
+    expect(registry.contourPointers).toBeInstanceOf(Uint32Array)
+    expect(registry.contourPointers[1] - registry.contourPointers[0]).toBe(1)
+    expect(registry.contourPointers[2] - registry.contourPointers[1]).toBe(1)
+    expect(registry.contourPoints).toBeInstanceOf(Int16Array)
   })
 
   it('AC 3.9 — P-1/P-2: SectorRegistry.ts has no forbidden imports', async () => {
@@ -145,17 +144,20 @@ describe('AdjacencyGraph — Epic 3', () => {
       canvas?.remove()
     })
 
-    it('AC 3.6a — getNeighbors returns === reference to registry.adjacency.get(hexKey)', () => {
+    it('AC 3.6a — getNeighbors returns correct neighbors for a known sector', () => {
       const result = engine.getNeighbors('ff0000')
-      const expected = engine.registry.adjacency.get('ff0000')
-      expect(result).toBe(expected)
+      expect(result).toBeDefined()
+      // ff0000 (top-left 2×2) touches 00ff00 (right) and 0000ff (below)
+      expect(result).toContain('00ff00')
+      expect(result).toContain('0000ff')
+      expect(result).not.toContain('ffff00')
     })
 
     it('AC 3.6b — getNeighbors returns undefined for a key not in the definition', () => {
       expect(engine.getNeighbors('aabbcc')).toBeUndefined()
     })
 
-    it('AC 3.6c — getNeighbors returns empty set for a definition sector with no defined neighbors', async () => {
+    it('AC 3.6c — getNeighbors returns empty array for a definition sector with no defined neighbors', async () => {
       // test-4x4-mismatch.json has 'ffffff' (not in bitmap) — isolated sector
       const canvas2 = makeCanvas()
       const engine2 = new MapEngine()
@@ -167,7 +169,7 @@ describe('AdjacencyGraph — Epic 3', () => {
         })
         const result = engine2.getNeighbors('ffffff')
         expect(result).toBeDefined()
-        expect(result!.size).toBe(0)
+        expect(result!.length).toBe(0)
       } finally {
         engine2.destroy()
         canvas2.remove()

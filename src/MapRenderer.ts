@@ -1,20 +1,21 @@
-import * as THREE from 'three'
+import type { OrthographicCamera, Scene, Mesh, Texture, Vector2 } from 'three'
+import type { IThreeRenderBackend } from './render/IThreeRenderBackend'
+import { ThreeRenderBackend } from './render/ThreeRenderBackend'
 import type { SectorRegistry } from './SectorRegistry'
 import type { PickEvent, SectorBBox } from './types'
 import { parseColorToRgb } from './internal/color'
 import { InputController } from './input/InputController'
 
 export class MapRenderer {
-  readonly scene: THREE.Scene
-  readonly camera: THREE.OrthographicCamera
-  readonly mesh: THREE.Mesh
-  readonly renderer: THREE.WebGLRenderer
-
-  readonly material: THREE.MeshBasicMaterial
+  readonly scene: Scene
+  readonly camera: OrthographicCamera
+  readonly mesh: Mesh
 
   readonly displayCtx: OffscreenCanvasRenderingContext2D
   readonly displayImageData: ImageData
-  private readonly _texture: THREE.CanvasTexture<OffscreenCanvas>
+
+  private readonly _texture: Texture
+  private readonly _backend: IThreeRenderBackend
 
   protected readonly _canvas: HTMLCanvasElement
   protected readonly _registry: SectorRegistry
@@ -28,7 +29,6 @@ export class MapRenderer {
 
   private readonly _input: InputController
 
-  // Prep for Task 2.2 render gating — set by InputController onDirty callback.
   _dirty: boolean = true
 
   private _destroyed = false
@@ -45,7 +45,8 @@ export class MapRenderer {
     registry: SectorRegistry,
     preRenderHook?: () => void,
     onPointerMove?: (e: PickEvent) => void,
-    onClick?: (e: PickEvent) => void
+    onClick?: (e: PickEvent) => void,
+    _backend?: IThreeRenderBackend
   ) {
     if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
       throw new Error(
@@ -57,37 +58,41 @@ export class MapRenderer {
     this._registry = registry
     this._preRenderHook = preRenderHook ?? null
 
-    // WebGL renderer
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false })
-    this.renderer.setPixelRatio(window.devicePixelRatio)
-    this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false)
+    // Build displayImageData from pixelIndices + idToPackedRgb.
+    // sourceBuffer is null after SectorRegistry construction (disposed for memory — PR-1).
+    const w = registry.width
+    const h = registry.height
+    const rawData = new Uint8ClampedArray(w * h * 4)
+    const idToPackedRgb = registry.idToPackedRgb
+    const pixelIndices = registry.pixelIndices
+    for (let i = 0, n = w * h; i < n; i++) {
+      const id = pixelIndices[i]
+      if (id !== 0xffff) {
+        const packed = idToPackedRgb[id]
+        rawData[i * 4] = (packed >>> 16) & 0xff
+        rawData[i * 4 + 1] = (packed >>> 8) & 0xff
+        rawData[i * 4 + 2] = packed & 0xff
+      }
+      rawData[i * 4 + 3] = 255
+    }
 
-    // Scene
-    this.scene = new THREE.Scene()
-
-    // Geometry: 1 world unit = 1 pixel, centered at origin
-    const geometry = new THREE.PlaneGeometry(registry.width, registry.height)
-
-    this.material = new THREE.MeshBasicMaterial({
-      map: null,
-      side: THREE.DoubleSide,
-    })
-
-    this.mesh = new THREE.Mesh(geometry, this.material)
-    this.scene.add(this.mesh)
+    const displayCanvas = new OffscreenCanvas(w, h)
+    this.displayCtx = displayCanvas.getContext('2d')!
+    this.displayImageData = new ImageData(rawData, w, h)
+    this.displayCtx.putImageData(this.displayImageData, 0, 0)
 
     // Orthographic camera — "contain" framing strategy
     const canvasAspect = canvas.clientWidth / canvas.clientHeight
-    const bitmapAspect = registry.width / registry.height
+    const bitmapAspect = w / h
 
     let frustumHalfW: number
     let frustumHalfH: number
 
     if (canvasAspect >= bitmapAspect) {
-      frustumHalfH = registry.height / 2
+      frustumHalfH = h / 2
       frustumHalfW = frustumHalfH * canvasAspect
     } else {
-      frustumHalfW = registry.width / 2
+      frustumHalfW = w / 2
       frustumHalfH = frustumHalfW / canvasAspect
     }
 
@@ -97,37 +102,21 @@ export class MapRenderer {
     this._currentW = canvas.clientWidth
     this._currentH = canvas.clientHeight
 
-    this.camera = new THREE.OrthographicCamera(
-      -frustumHalfW,
-      frustumHalfW,
-      frustumHalfH,
-      -frustumHalfH,
-      -1000,
-      1000
-    )
-    this.camera.position.set(0, 0, 1)
-    this.camera.zoom = 1.0
-    this.camera.updateProjectionMatrix()
+    this._backend =
+      _backend ??
+      new ThreeRenderBackend(
+        canvas,
+        displayCanvas,
+        frustumHalfW,
+        frustumHalfH,
+        w,
+        h
+      )
 
-    // Display canvas and displayImageData
-    const displayCanvas = new OffscreenCanvas(registry.width, registry.height)
-    this.displayCtx = displayCanvas.getContext('2d')!
-
-    // Mandatory .slice() — keeps displayImageData.data independent from registry.sourceBuffer
-    this.displayImageData = new ImageData(
-      registry.sourceBuffer.slice(),
-      registry.width,
-      registry.height
-    )
-    this.displayCtx.putImageData(this.displayImageData, 0, 0)
-
-    // CanvasTexture wired to the display OffscreenCanvas
-    this._texture = new THREE.CanvasTexture(displayCanvas)
-    this._texture.minFilter = THREE.NearestFilter
-    this._texture.magFilter = THREE.NearestFilter
-    this._texture.generateMipmaps = false
-
-    this.material.map = this._texture
+    this.scene = this._backend.scene
+    this.camera = this._backend.camera
+    this.mesh = this._backend.mesh
+    this._texture = this._backend.texture
 
     // InputController owns all DOM event listeners (CA-3)
     this._input = new InputController(canvas, {
@@ -144,14 +133,14 @@ export class MapRenderer {
     const loop = () => {
       this._animFrameId = requestAnimationFrame(loop)
       if (this._preRenderHook) this._preRenderHook()
-      const w = this._canvas.clientWidth
-      const h = this._canvas.clientHeight
-      if (w !== this._currentW || h !== this._currentH) {
-        this._currentW = w
-        this._currentH = h
-        this.renderer.setSize(w, h, false)
-        const fhw = (w * this._worldUnitsPerPixel) / 2
-        const fhh = (h * this._worldUnitsPerPixel) / 2
+      const cw = this._canvas.clientWidth
+      const ch = this._canvas.clientHeight
+      if (cw !== this._currentW || ch !== this._currentH) {
+        this._currentW = cw
+        this._currentH = ch
+        this._backend.setSize(cw, ch)
+        const fhw = (cw * this._worldUnitsPerPixel) / 2
+        const fhh = (ch * this._worldUnitsPerPixel) / 2
         this._frustumHalfW = fhw
         this._frustumHalfH = fhh
         this.camera.left = -fhw
@@ -163,14 +152,14 @@ export class MapRenderer {
         this._dirty = true
       }
       if (this._dirty) {
-        this.renderer.render(this.scene, this.camera)
+        this._backend.render(this.scene, this.camera)
         this._dirty = false
       }
     }
     this._animFrameId = requestAnimationFrame(loop)
   }
 
-  private _applyPan(delta: THREE.Vector2): void {
+  private _applyPan(delta: Vector2): void {
     const scaleX = (this._frustumHalfW * 2) / this._canvas.clientWidth
     const scaleY = (this._frustumHalfH * 2) / this._canvas.clientHeight
     this.camera.position.x -= (delta.x * scaleX) / this.camera.zoom
@@ -178,9 +167,9 @@ export class MapRenderer {
     this.clampPan()
   }
 
-  private _applyZoom(factor: number, ndcPoint: THREE.Vector2): void {
+  private _applyZoom(factor: number, ndcPoint: Vector2): void {
     const zoomBefore = this.camera.zoom
-    const newZoom = THREE.MathUtils.clamp(zoomBefore * factor, 0.5, 20.0)
+    const newZoom = Math.max(0.5, Math.min(20.0, zoomBefore * factor))
     this.camera.zoom = newZoom
     this.camera.updateProjectionMatrix()
     this.camera.position.x +=
@@ -216,36 +205,35 @@ export class MapRenderer {
   }
 
   setSectorColor(hexKey: string, color: string): void {
-    if (!this._registry.pixelIndices.has(hexKey)) {
+    const pixels = this._registry.getSectorPixels(hexKey)
+    if (!pixels) {
       console.warn('[MapEngine] setSectorColor: sector has no pixel data')
       return
     }
 
     const { r, g, b } = parseColorToRgb(color)
-
-    const indices = this._registry.pixelIndices.get(hexKey)!
     const data = this.displayImageData.data
-    for (let n = 0; n < indices.length; n++) {
-      const offset = indices[n] * 4
+    for (let n = 0; n < pixels.length; n++) {
+      const offset = pixels[n] * 4
       data[offset] = r
       data[offset + 1] = g
       data[offset + 2] = b
       data[offset + 3] = 255
     }
 
-    const bbox = this._registry.bboxes.get(hexKey)!
+    const [minX, minY, maxX, maxY] = this._registry.getBBox(hexKey)
     this.displayCtx.putImageData(
       this.displayImageData,
       0,
       0,
-      bbox.minX,
-      bbox.minY,
-      bbox.maxX - bbox.minX + 1,
-      bbox.maxY - bbox.minY + 1
+      minX,
+      minY,
+      maxX - minX + 1,
+      maxY - minY + 1
     )
 
     this._dirty = true
-    this._texture.needsUpdate = true
+    this._backend.uploadTexture(this._texture)
   }
 
   /** @internal */
@@ -255,70 +243,50 @@ export class MapRenderer {
     g: number,
     b: number
   ): void {
-    if (!this._registry.pixelIndices.has(hexKey)) return
-    const arr = this._registry.pixelIndices.get(hexKey)!
+    const pixels = this._registry.getSectorPixels(hexKey)
+    if (!pixels) return
     const data = this.displayImageData.data
-    for (let i = 0; i < arr.length; i++) {
-      const byteOffset = arr[i] * 4
-      data[byteOffset] = r
-      data[byteOffset + 1] = g
-      data[byteOffset + 2] = b
+    for (let i = 0; i < pixels.length; i++) {
+      const offset = pixels[i] * 4
+      data[offset] = r
+      data[offset + 1] = g
+      data[offset + 2] = b
     }
-    const bbox = this._registry.bboxes.get(hexKey)!
+    const [minX, minY, maxX, maxY] = this._registry.getBBox(hexKey)
     if (this._pendingDirtyRect === null) {
-      this._pendingDirtyRect = { ...bbox }
+      this._pendingDirtyRect = { minX, minY, maxX, maxY }
     } else {
-      this._pendingDirtyRect.minX = Math.min(
-        this._pendingDirtyRect.minX,
-        bbox.minX
-      )
-      this._pendingDirtyRect.minY = Math.min(
-        this._pendingDirtyRect.minY,
-        bbox.minY
-      )
-      this._pendingDirtyRect.maxX = Math.max(
-        this._pendingDirtyRect.maxX,
-        bbox.maxX
-      )
-      this._pendingDirtyRect.maxY = Math.max(
-        this._pendingDirtyRect.maxY,
-        bbox.maxY
-      )
+      this._pendingDirtyRect.minX = Math.min(this._pendingDirtyRect.minX, minX)
+      this._pendingDirtyRect.minY = Math.min(this._pendingDirtyRect.minY, minY)
+      this._pendingDirtyRect.maxX = Math.max(this._pendingDirtyRect.maxX, maxX)
+      this._pendingDirtyRect.maxY = Math.max(this._pendingDirtyRect.maxY, maxY)
     }
   }
 
   /** @internal */
   public _patchSectorPixelsFromSource(hexKey: string): void {
-    if (!this._registry.pixelIndices.has(hexKey)) return
-    const arr = this._registry.pixelIndices.get(hexKey)!
+    const pixels = this._registry.getSectorPixels(hexKey)
+    if (!pixels) return
+    const numId = this._registry.getNumericId(hexKey)!
+    const packed = this._registry.idToPackedRgb[numId]
+    const r = (packed >>> 16) & 0xff
+    const g = (packed >>> 8) & 0xff
+    const b = packed & 0xff
     const data = this.displayImageData.data
-    const src = this._registry.sourceBuffer
-    for (let i = 0; i < arr.length; i++) {
-      const byteOffset = arr[i] * 4
-      data[byteOffset] = src[byteOffset]
-      data[byteOffset + 1] = src[byteOffset + 1]
-      data[byteOffset + 2] = src[byteOffset + 2]
+    for (let i = 0; i < pixels.length; i++) {
+      const offset = pixels[i] * 4
+      data[offset] = r
+      data[offset + 1] = g
+      data[offset + 2] = b
     }
-    const bbox = this._registry.bboxes.get(hexKey)!
+    const [minX, minY, maxX, maxY] = this._registry.getBBox(hexKey)
     if (this._pendingDirtyRect === null) {
-      this._pendingDirtyRect = { ...bbox }
+      this._pendingDirtyRect = { minX, minY, maxX, maxY }
     } else {
-      this._pendingDirtyRect.minX = Math.min(
-        this._pendingDirtyRect.minX,
-        bbox.minX
-      )
-      this._pendingDirtyRect.minY = Math.min(
-        this._pendingDirtyRect.minY,
-        bbox.minY
-      )
-      this._pendingDirtyRect.maxX = Math.max(
-        this._pendingDirtyRect.maxX,
-        bbox.maxX
-      )
-      this._pendingDirtyRect.maxY = Math.max(
-        this._pendingDirtyRect.maxY,
-        bbox.maxY
-      )
+      this._pendingDirtyRect.minX = Math.min(this._pendingDirtyRect.minX, minX)
+      this._pendingDirtyRect.minY = Math.min(this._pendingDirtyRect.minY, minY)
+      this._pendingDirtyRect.maxX = Math.max(this._pendingDirtyRect.maxX, maxX)
+      this._pendingDirtyRect.maxY = Math.max(this._pendingDirtyRect.maxY, maxY)
     }
   }
 
@@ -336,40 +304,44 @@ export class MapRenderer {
       r.maxY - r.minY + 1
     )
     this._dirty = true
-    this._texture.needsUpdate = true
+    this._backend.uploadTexture(this._texture)
     this._pendingDirtyRect = null
   }
 
   resetSectorColor(hexKey: string): void {
-    if (!this._registry.pixelIndices.has(hexKey)) {
+    const pixels = this._registry.getSectorPixels(hexKey)
+    if (!pixels) {
       console.warn('[MapEngine] resetSectorColor: sector has no pixel data')
       return
     }
 
-    const indices = this._registry.pixelIndices.get(hexKey)!
-    const src = this._registry.sourceBuffer
+    const numId = this._registry.getNumericId(hexKey)!
+    const packed = this._registry.idToPackedRgb[numId]
+    const r = (packed >>> 16) & 0xff
+    const g = (packed >>> 8) & 0xff
+    const b = packed & 0xff
     const data = this.displayImageData.data
-    for (let n = 0; n < indices.length; n++) {
-      const offset = indices[n] * 4
-      data[offset] = src[offset]
-      data[offset + 1] = src[offset + 1]
-      data[offset + 2] = src[offset + 2]
+    for (let n = 0; n < pixels.length; n++) {
+      const offset = pixels[n] * 4
+      data[offset] = r
+      data[offset + 1] = g
+      data[offset + 2] = b
       data[offset + 3] = 255
     }
 
-    const bbox = this._registry.bboxes.get(hexKey)!
+    const [minX, minY, maxX, maxY] = this._registry.getBBox(hexKey)
     this.displayCtx.putImageData(
       this.displayImageData,
       0,
       0,
-      bbox.minX,
-      bbox.minY,
-      bbox.maxX - bbox.minX + 1,
-      bbox.maxY - bbox.minY + 1
+      minX,
+      minY,
+      maxX - minX + 1,
+      maxY - minY + 1
     )
 
     this._dirty = true
-    this._texture.needsUpdate = true
+    this._backend.uploadTexture(this._texture)
   }
 
   destroy(): void {
@@ -379,9 +351,6 @@ export class MapRenderer {
     this._preRenderHook = null
     this._pendingDirtyRect = null
     this._input.destroy()
-    this.renderer.dispose()
-    ;(this.mesh.geometry as THREE.BufferGeometry).dispose()
-    this.material.dispose()
-    this._texture.dispose()
+    this._backend.dispose()
   }
 }

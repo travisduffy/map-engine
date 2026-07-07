@@ -69,7 +69,7 @@ Executed the Phase 1 self-audit per Task 2.3 work spec. Verified all acceptance 
 **Decisions made:**
 
 - No discrepancies found between ROADMAP §5 and implementation — discrepancy log is empty.
-- Audit authored as self-audit by Engineer per Task 2.3 work spec. Gemini may independently verify via `docs/prompts/audit-only.md` if BDFL requests.
+- Audit authored as self-audit by Engineer per Task 2.3 work spec. Gemini may independently verify via `docs/processes/audit-only.md` if BDFL requests.
 
 **Left off at:**
 All three Epic 2 tasks complete (`[x]`). Phase 1 audit `[PASS]`. Awaiting BDFL instruction for next sprint.

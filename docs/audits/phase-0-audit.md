@@ -11,7 +11,7 @@
 | Code | Milestone                | Status | Finding/Gap                                                  |
 | ---- | ------------------------ | ------ | ------------------------------------------------------------ |
 | A0.1 | Benchmark Infrastructure | [PASS] | `bench/` directory and `registry-alloc` scripts implemented. |
-| A0.2 | Audit Prompt             | [PASS] | `docs/prompts/audit-only.md` exists and is normative.        |
+| A0.2 | Audit Prompt             | [PASS] | `docs/processes/audit-only.md` exists and is normative.      |
 | A0.3 | Anchor Fixtures          | [PASS] | `test/fixtures/anchor-shapes.json` authored with 20 shapes.  |
 | A0.4 | Finding Code Integrity   | [PASS] | `bin/check-finding-codes.sh` implemented and passing.        |
 | A0.5 | Roadmap Cross-Refs       | [PASS] | `bin/check-roadmap-cross-refs.sh` implemented and passing.   |

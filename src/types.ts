@@ -51,6 +51,29 @@ export interface PickEvent {
   clientY: number
 }
 
+/** Thrown when a map exceeds the hard sector limit of 65,534 (sentinel 0xFFFF reserved). */
+export class SectorLimitExceededError extends Error {
+  constructor(count: number) {
+    super(
+      `SectorRegistry: sector count ${count} exceeds the hard limit of 65,534. Map cannot be loaded.`
+    )
+    this.name = 'SectorLimitExceededError'
+  }
+}
+
+/**
+ * Contract for spatial registry implementations and future hierarchical proxies.
+ * Overloaded signatures ensure strict return-type consistency per caller ID type.
+ */
+export interface ISpatialRegistry {
+  getBBox(id: string): [number, number, number, number]
+  getBBox(id: number): [number, number, number, number]
+  getNeighbors(id: string): string[]
+  getNeighbors(id: number): number[]
+  getCentroid(id: string): [number, number]
+  getCentroid(id: number): [number, number]
+}
+
 /** Result of a successful pick operation. */
 export interface PickResult {
   hexKey: string
