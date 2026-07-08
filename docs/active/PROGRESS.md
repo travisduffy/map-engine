@@ -100,6 +100,26 @@
 
 > Entries are prepended (newest first). Each entry records the date, what was attempted, what was completed, and any decisions made that aren't captured elsewhere.
 
+### 2026-07-07 — Sprint-hardening Phase 1 Pass (Epics 5-8)
+
+**Tasks touched:** none (documentation hardening only)
+**Outcome:** completed
+
+**What happened:**
+Ran the `sprint-hardening` skill again over Phase 4 active docs: four parallel per-epic reviewers over `docs/active/**`, verifying all claims against `src/`, `test/`, and the cited ROADMAP sections.
+
+- **Epic 5:** Fixed a sync/async mismatch in the `CostsRequiredError` rejection: it must track resolution state on Main (as doing it Worker-side would fail if `findPath` is called while `setTraversalCosts` is in-flight). Fixed JSON serialization gotcha where TypedArrays were specified for the `grid-10k.json` fixture but JSON stringify serializes them as objects.
+- **Epic 6:** Corrected a wrong risk citation (PRD Known Risk 4 -> 3) and fixed a title mismatch with the PROGRESS Task Registry.
+- **Epic 7:** Corrected a principle citation from PR-4 to P-9, and fixed the example application file path (`example/src/main.ts` -> `example/src/controller.ts`).
+- **Epic 8:** Fixed an executability blocker in Task 8.3 by mandating the addition of `getBorderVBO(): WebGLBuffer | null` to `ThreeRenderBackendInternalAccess` so `BorderRenderer` can bind the VBO. Corrected an incorrect F-2.8 reference to `uploadTexture` which doesn't exist, and corrected the `webglcontextrestored` listener attribution from Epic 1 to Epic 3.
+- **PRD edits (1):** Corrected `INIT_GROUPS` Worker message allocation documentation to specify it triggers on any subsequent call that requires a reallocation (like changing `maxGroups`), not just the first call.
+
+**Decisions made / BDFL rulings needed:**
+No new BDFL rulings needed. All findings were fixed in place.
+
+**Left off at:**
+Sprint docs successfully hardened. Awaiting BDFL to merge Phase 3 and activate the Phase 4 sprint.
+
 ### 2026-07-07 — Sprint-hardening pass over Phase 4 docs (pre-activation)
 
 **Tasks touched:** none (documentation hardening only; sprint not activated, registry untouched)

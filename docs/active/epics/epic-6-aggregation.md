@@ -16,7 +16,7 @@
 
 ### Task 6.1 — Shared infra: `_postRenderHook` + 4-buffer Transferable ring pool (F-C.7/F-C.8)
 
-**PRD Reference:** §"Transferable Ownership & the ring pool", PRD Known Risk 4.
+**PRD Reference:** §"Transferable Ownership & the ring pool", PRD Known Risk 3.
 
 Built here because CA-5 is its first consumer; CA-8 (`anchors`) and CA-6 (`borderEdges`) reuse it unchanged.
 
@@ -45,7 +45,7 @@ Built here because CA-5 is its first consumer; CA-8 (`anchors`) and CA-6 (`borde
 
 ---
 
-### Task 6.3 — Worker aggregation + public API
+### Task 6.3 — Worker aggregation + `setParentMapping`/`aggregateGroups`/`getGroupBBox`
 
 **PRD Reference:** §"Public API delta"; ROADMAP §9 CA-5.
 

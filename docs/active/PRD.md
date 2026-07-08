@@ -58,7 +58,7 @@ Existing modules that change: `MapEngine` (new async public API: `setTraversalCo
 
 The `BOOTSTRAP`/`BOOTSTRAP_ACK`/`CALL`/`RESULT`/`ERROR` skeleton shipped in Phase 3 (`docs/archive/v0.0.5/PRD.md`) is reused unchanged. This sprint adds:
 
-- **Worker-initiated allocs (Worker → Main):** `{type: 'INIT_GROUPS', payload: {groupBBoxes: Int16Array}}` and `{type: 'INIT_ANCHORS', payload: {anchors: Int16Array}}`, triggered by the first `setParentMapping` / `computeAnchors` call respectively.
+- **Worker-initiated allocs (Worker → Main):** `{type: 'INIT_GROUPS', payload: {groupBBoxes: Int16Array}}` and `{type: 'INIT_ANCHORS', payload: {anchors: Int16Array}}`, triggered by the first `setParentMapping` / `computeAnchors` call respectively, and on any subsequent call that requires a reallocation (e.g. changing `maxGroups`).
 - **Hot-path handoff:** `{type: 'borderEdges', edges, count}` with both buffers in the transfer list (F-4.9); analogous handoffs for `groupBBoxes` and `anchors`.
 
 ### Transferable Ownership & the ring pool (normative: ROADMAP §4)

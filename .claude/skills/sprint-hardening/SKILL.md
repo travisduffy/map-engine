@@ -53,10 +53,9 @@ Check, in order:
    sentinel values, sync/async mismatches, ownership/transfer ordering,
    lifecycle edge cases an implementer could plausibly get wrong.
 
-Authority: edit ONLY your epic file, applying the smallest wording change that
-removes each defect. Do not edit the PRD, PROGRESS, the roadmap, or any other
-file — report those findings instead. Do not add version numbers. Do not
-expand scope: hardening clarifies existing requirements, it does not invent
+Authority: Do not attempt to edit files directly. Return exact text replacements
+for the coordinator to apply for any defect you find. Do not add version numbers.
+Do not expand scope: hardening clarifies existing requirements, it does not invent
 new ones. This is a docs-only pass: skip the CLAUDE.md post-task code
 checklist (typecheck/test/build) — the coordinator runs format and the
 consistency scripts once at the end, and parallel reviewers running builds
@@ -64,18 +63,17 @@ collide.
 
 Return a report: (a) findings table ordered by severity
 [Critical/High/Medium/Low] with columns WHAT / WHERE (file §section) / WHY
-(number, quoted contradiction, or failed check) / RESOLUTION (FIXED-IN-EPIC,
-PROPOSED-FOR-<file>, or NEEDS-BDFL-RULING); (b) exact list of edits you
-applied; (c) proposed exact text changes for any PRD/PROGRESS fixes.
+(number, quoted contradiction, or failed check) / RESOLUTION
+(PROPOSED-FOR-<file> or NEEDS-BDFL-RULING); (b) proposed exact text
+changes (Target/Replacement blocks) for all fixes across all files.
 ```
 
 ## Phase 2 — Fan-in and shared-file revision (coordinator)
 
-1. Collect all subagent reports. Deduplicate findings; where two epics propose conflicting fixes (e.g., both claim ownership of shared infrastructure, or propose different values for the same constant), resolve against the roadmap and code, and re-edit the losing epic file directly.
+1. Collect all subagent reports. Deduplicate findings; where two epics propose conflicting fixes (e.g., both claim ownership of shared infrastructure, or propose different values for the same constant), resolve against the roadmap and code, and apply the correct fix to the losing epic file.
 2. Propagate cross-epic discoveries: when one epic's report contains a code-truth discovery that implicates a sibling epic's assumptions (shared data structures, fixtures, or infrastructure), verify the code fact yourself, then edit the sibling epic to flag it — parallel reviewers cannot see each other's findings, so cross-epic implications are invisible unless the coordinator owns them (first pass, 2026-07-07: one epic's contour-extraction discovery invalidated a sibling's extraction spec). If the implication changes scope, flag it in the sibling epic as `needs BDFL ruling` rather than deciding.
-3. Re-read any epic file a subagent edited only if its report is ambiguous about what changed — otherwise trust the report.
-4. Apply all accepted PRD fixes, then all accepted PROGRESS fixes — one Read → one Write per file, folding in the session-log entry for this pass (CLAUDE.md efficiency directive: never multiple edits to a state file).
-5. Sweep for cross-epic consistency after edits: task numbering matches the registry, shared-infrastructure tasks are owned by exactly one epic and referenced (not respecified) by the others, phase-gate wording is identical everywhere it appears.
+3. Apply all accepted fixes proposed by subagents (epic files, PRD, and PROGRESS) — one Read → one Write per file, folding in the session-log entry for this pass (CLAUDE.md efficiency directive: never multiple edits to a state file). Trust the subagent reports unless the proposed text replacements are ambiguous.
+4. Sweep for cross-epic consistency after edits: task numbering matches the registry, shared-infrastructure tasks are owned by exactly one epic and referenced (not respecified) by the others, phase-gate wording is identical everywhere it appears.
 
 ## Phase 3 — Verify and report
 
