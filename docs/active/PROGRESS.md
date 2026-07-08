@@ -43,7 +43,7 @@
 **Phase:** Phase 3 (The Concurrent Kernel) — COMPLETE, audited `[PASS]`, archived as v0.0.5 (`docs/archive/v0.0.5/`) | Phase 4 (GSG Logic) — READY, not yet activated.
 **Active version:** targets v0.0.6 (named by BDFL 2026-07-07)
 **Next task:** Epic 5, Task 5.1 (`docs/active/epics/epic-5-pathfinding.md`) — blocked until v0.0.5 is merged to `main` (BDFL handling that merge out-of-band of this document).
-**Blocking issues:** Hard phase gate (ROADMAP §3, `.claude/rules/roadmap-governance.md`): Epic 5 Task 5.1 must not begin until `docs/audits/phase-3-audit.md`'s `[PASS]` verdict is merged to `main`. Not yet merged as of this entry. Additionally, five items from the 2026-07-07 sprint-hardening pass need BDFL rulings before or during the sprint (see that Session Log entry) — the anchor-fixture regeneration (item 1) blocks Epic 7 Task 7.3's acceptance as written.
+**Blocking issues:** Hard phase gate (ROADMAP §3, `.claude/rules/roadmap-governance.md`): Epic 5 Task 5.1 must not begin until `docs/audits/phase-3-audit.md`'s `[PASS]` verdict is merged to `main`. Not yet merged as of this entry. Additionally, items from the 2026-07-07 sprint-hardening passes need BDFL rulings before or during the sprint (see Session Log entries) — the anchor-fixture regeneration (item 1) blocks Epic 7 Task 7.3's acceptance, and the Epic 7 Projection API defect blocks Task 7.2.
 
 ---
 
@@ -99,6 +99,26 @@
 ## Session Log
 
 > Entries are prepended (newest first). Each entry records the date, what was attempted, what was completed, and any decisions made that aren't captured elsewhere.
+
+### 2026-07-07 — Sprint-hardening Phase 2 Pass (Epics 5-8)
+
+**Tasks touched:** none (documentation hardening only)
+**Outcome:** completed
+
+**What happened:**
+Ran the `sprint-hardening` skill again over Phase 4 active docs: four parallel per-epic reviewers over `docs/active/epics/**`.
+
+- **Epic 5:** Fixed sub-view detachment gotcha by verifying `costs.byteOffset === 0` and `costs.byteLength === costs.buffer.byteLength` on transfer. Fixed unfalsifiable `findPath` transfer requirement by removing the transfer list expectation and confirming standard structured clone per the PRD. Added check to prevent A\* heuristic multiplier `Infinity` (div-by-zero) when adjacent centroid distance is 0. Corrected `example/src/main.ts` to `example/src/controller.ts`.
+- **Epic 6:** Mandated `INIT_GROUPS` notification on `groupBBoxes` pool reallocation. Added out-of-bounds `RangeError` validation for `getGroupBBox(groupId)`. Corrected `example/src/main.ts` to `example/src/controller.ts`.
+- **Epic 7:** Flagged a projection API defect where the example app requires `renderer.camera` and dimensions for `Vector3.project()`, which are not exposed by the engine, blocking visual overlay creation (NEEDS BDFL RULING).
+- **Epic 8:** Corrected the 1,000-frame soak test to execute asynchronously (`await engine.recomputeBorders()`) to avoid bounce-back pool starvation caused by synchronous fake timers. Relaxed the VBO exactly-once allocation constraint to allow `gl.bufferData` upon `webglcontextrestored`. Fixed a detachment gotcha by explicitly specifying `.slice()` when retaining the Main-side private copy.
+
+**Decisions made / BDFL rulings needed:**
+
+1. **Epic 7 Projection API Defect** — `MapEngine` exposes neither `camera`, `width`, `height`, nor any projection API, but the epic requires projecting coordinates for visual anchors. The BDFL must authorize exposing a projection method, exposing the camera/dimensions, or dropping the visual overlay requirement.
+
+**Left off at:**
+Docs hardened. Awaiting BDFL rulings and the merge of v0.0.5 to `main`.
 
 ### 2026-07-07 — Sprint-hardening Phase 1 Pass (Epics 5-8)
 
