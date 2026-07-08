@@ -61,6 +61,18 @@ Every pixel's RGB value encodes a sector identity. The hex key (`"ff0000"` lower
 
 Located at `test/fixtures/`. The `test-4x4.png` (4×4 pixel, 4 sectors) is generated programmatically via `test/fixtures/generate-fixtures.js` using `sharp`. Use absolute paths in browser-mode tests (e.g., `'/test/fixtures/test-4x4.png'`), not relative paths.
 
+## Perf and timing test design
+
+This dev session has no dedicated GPU and runs `*.gl.spec.ts` perf gates alongside other real-GPU tests and, per the CLAUDE.md post-task checklist, concurrently with `npm run build`. Design any perf/timing gate around that contention from the first draft, not as a reaction to an observed failure.
+
+Apply the same environment-aware tolerance already established for render perf (5.0× on a detected software renderer, via `WEBGL_debug_renderer_info`) to every hardware-relative assertion in the gate — a drift or cadence bound is exactly as hardware-relative as a render-time bound. Sample latency across repeated passes and keep the minimum per measurement, since contention only makes a run slower, never faster. Run any extra latency passes after a drift/cadence snapshot, not overlapping it — lengthening a same-thread measurement window can itself starve a co-resident timer.
+
+A same-thread sequence of many fast calls chained via `await` can starve a co-resident `setInterval`-driven clock (e.g. `SimulationClock`) even though each call is individually async: `yieldIfNeeded` only yields past its interval threshold, so a sequence where every call resolves under that threshold runs entirely on microtasks with no macrotask yield in between. Don't pad between calls with `setTimeout(0)` to fix this — browsers clamp zero-delay timeouts to a floor around 4ms, which aliases against a 60Hz tick period and produces a different, still-wrong reading. Sample a real ≥1 second wall-clock window instead (`test/SimulationClock.test.ts` is the precedent), so a transient disruption's catch-up burst dilutes into an acceptable overall mean rather than needing every inter-tick delta to individually pass.
+
+Compare a computed tolerance with `toBeLessThanOrEqual`, not `toBeLessThan` — an exact tie at the boundary is a reachable value, not an edge case to ignore.
+
+Stop once best-of-N sampling and environment-aware tolerance are in place and a few stress-test runs — including one concurrent with `npm run build` — look reasonable. ROADMAP §12.2 already treats a slow or contended box as non-authoritative for a perf gate; chasing zero residual flakiness past that point costs far more than the policy asks for.
+
 ## Example app assets
 
 The example app's map bitmap and sector definition are committed static assets. Do not generate or replace them programmatically.

@@ -5,7 +5,8 @@
  *   MapEngine, MapRenderer, SectorRegistry, SectorBitmapParser, toHexKey
  *   Events: sectorHover, sectorClick
  *   Methods: loadMap, setTickRate, setSectorColor, resetSectorColor, getSector, getSectorKeys,
- *            getBBox, getCentroid, getNeighbors, registerMapMode, setMapMode, on, off, destroy
+ *            getBBox, getCentroid, getNeighbors, registerMapMode, setMapMode, on, off, destroy,
+ *            setTraversalCosts, findPath
  */
 
 import { AppController } from './controller'

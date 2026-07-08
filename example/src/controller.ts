@@ -1,4 +1,9 @@
-import MapEngine, { GameClock, toHexKey, type PickResult } from 'map-engine'
+import MapEngine, {
+  GameClock,
+  toHexKey,
+  PathNotFoundError,
+  type PickResult,
+} from 'map-engine'
 import type { SelectedRegistryData } from './ui'
 import {
   setStatus,
@@ -14,7 +19,12 @@ import {
   setNeighborOutput,
   clearNeighborOutput,
   setClockPauseButton,
+  setPathOutput,
+  clearPathOutput,
 } from './ui'
+
+const PATH_START_COLOR = '#ffcc00'
+const PATH_ROUTE_COLOR = '#ff6a00'
 
 export class AppController {
   private engine: MapEngine | null = null
@@ -25,6 +35,15 @@ export class AppController {
   private pulseHexKey: string | null = null
   private pulsePhase = 0
   private previousNeighbors = new Set<string>()
+
+  // Pathfinding demo (Epic 5 Task 5.3): right-click sets start, then end;
+  // sectorKeys[numericId] resolves a findPath() result back to hex keys
+  // (array index === numeric id, since getSectorKeys() returns idToHex order).
+  private sectorKeys: string[] = []
+  private hexToId = new Map<string, number>()
+  private pathStartHex: string | null = null
+  private pathSectors = new Set<string>()
+  private pathHighlightColor = PATH_ROUTE_COLOR
 
   private readonly canvas: HTMLCanvasElement
   private readonly chkHover: HTMLInputElement
@@ -79,6 +98,14 @@ export class AppController {
     renderSectorList(keys, key => this.engine!.getSector(key))
 
     this.registerMapModes(keys)
+
+    // Pathfinding demo (Epic 5 Task 5.3): uniform cost 1 so findPath()
+    // returns the fewest-hop route; hexToId/sectorKeys bridge the hex-key
+    // pick results to/from findPath()'s numeric sector ids.
+    this.sectorKeys = keys
+    this.hexToId.clear()
+    keys.forEach((key, id) => this.hexToId.set(key, id))
+    await this.engine.setTraversalCosts(new Uint8Array(keys.length).fill(1))
 
     // Demonstrate toHexKey API: verify round-trip for first sector
     if (keys.length > 0) {
@@ -135,10 +162,29 @@ export class AppController {
     this.pulseHexKey = null
     this.pulsePhase = 0
     this.previousNeighbors.clear()
+    this.sectorKeys = []
+    this.hexToId.clear()
+    this.pathStartHex = null
+    this.pathSectors.clear()
     setFrameCounter(0)
     setTickCounter(0)
     setClockSpeed(1)
     clearNeighborOutput()
+    clearPathOutput()
+  }
+
+  // Restores a sector to whichever highlight layer currently owns it
+  // (path > neighbor > none), instead of unconditionally resetting to the
+  // map-mode default. Used anywhere a transient overlay (hover, selection)
+  // needs to hand a sector back to its underlying state.
+  private restoreSectorBaseColor(hexKey: string): void {
+    if (this.pathSectors.has(hexKey)) {
+      this.engine!.setSectorColor(hexKey, this.pathHighlightColor)
+    } else if (this.previousNeighbors.has(hexKey)) {
+      this.engine!.setSectorColor(hexKey, '#aaccff')
+    } else {
+      this.engine!.resetSectorColor(hexKey)
+    }
   }
 
   private onHover = (result: PickResult | null): void => {
@@ -148,15 +194,12 @@ export class AppController {
         this.lastHovered !== result.hexKey &&
         this.lastHovered !== this.selectedHex
       ) {
-        if (this.previousNeighbors.has(this.lastHovered)) {
-          this.engine!.setSectorColor(this.lastHovered, '#aaccff')
-        } else {
-          this.engine!.resetSectorColor(this.lastHovered)
-        }
+        this.restoreSectorBaseColor(this.lastHovered)
       }
       if (
         result.hexKey !== this.selectedHex &&
-        !this.previousNeighbors.has(result.hexKey)
+        !this.previousNeighbors.has(result.hexKey) &&
+        !this.pathSectors.has(result.hexKey)
       ) {
         this.engine!.setSectorColor(result.hexKey, '#e8e8d0')
       }
@@ -164,11 +207,7 @@ export class AppController {
       renderHoverPanel(result)
     } else {
       if (this.lastHovered && this.lastHovered !== this.selectedHex) {
-        if (this.previousNeighbors.has(this.lastHovered)) {
-          this.engine!.setSectorColor(this.lastHovered, '#aaccff')
-        } else {
-          this.engine!.resetSectorColor(this.lastHovered)
-        }
+        this.restoreSectorBaseColor(this.lastHovered)
       }
       this.lastHovered = null
       clearHoverPanel()
@@ -180,7 +219,7 @@ export class AppController {
       const wasSelected = this.selectedHex
       this.pulseHexKey = null
       this.pulsePhase = 0
-      this.engine!.resetSectorColor(wasSelected)
+      this.restoreSectorBaseColor(wasSelected)
       this.resetNeighborHighlights()
       this.selectedHex = null
       clearSelectedPanel()
@@ -188,7 +227,7 @@ export class AppController {
         this.engine!.setSectorColor(wasSelected, '#e8e8d0')
       }
     } else {
-      if (this.selectedHex) this.engine!.resetSectorColor(this.selectedHex)
+      if (this.selectedHex) this.restoreSectorBaseColor(this.selectedHex)
       this.resetNeighborHighlights(result.hexKey)
       this.pulseHexKey = result.hexKey
       this.pulsePhase = 0
@@ -200,6 +239,77 @@ export class AppController {
       renderSelectedPanel(result, reg)
       this.applyNeighborHighlights(result.hexKey)
     }
+  }
+
+  // Right-click sets the pathfinding start sector, then the end sector;
+  // left-click's select/neighbor-highlight behavior above is untouched.
+  private onContextMenu = (e: MouseEvent): void => {
+    e.preventDefault()
+    void this.handlePathPick(e.clientX, e.clientY)
+  }
+
+  private async handlePathPick(
+    clientX: number,
+    clientY: number
+  ): Promise<void> {
+    if (!this.engine) return
+    const result = await this.engine.pick({ clientX, clientY })
+    if (!result) return
+
+    if (!this.pathStartHex) {
+      this.resetPathHighlights()
+      this.pathStartHex = result.hexKey
+      this.pathHighlightColor = PATH_START_COLOR
+      this.engine.setSectorColor(result.hexKey, PATH_START_COLOR)
+      this.pathSectors.add(result.hexKey)
+      setPathOutput(`Start: #${result.hexKey} — right-click an end sector`)
+      return
+    }
+
+    const startHex = this.pathStartHex
+    const endHex = result.hexKey
+    this.pathStartHex = null
+
+    if (startHex === endHex) {
+      this.resetPathHighlights()
+      clearPathOutput()
+      return
+    }
+
+    const startId = this.hexToId.get(startHex)
+    const endId = this.hexToId.get(endHex)
+    if (startId === undefined || endId === undefined) return
+
+    setPathOutput(`Finding path from #${startHex} to #${endHex}…`)
+    try {
+      const path = await this.engine.findPath(startId, endId)
+      this.resetPathHighlights()
+      this.pathHighlightColor = PATH_ROUTE_COLOR
+      const hexPath = Array.from(path).map(id => this.sectorKeys[id])
+      for (const hex of hexPath) {
+        this.engine.setSectorColor(hex, PATH_ROUTE_COLOR)
+        this.pathSectors.add(hex)
+      }
+      setPathOutput(
+        `Path: ${hexPath.length} sectors — #${hexPath.join(' → #')}`
+      )
+    } catch (err) {
+      this.resetPathHighlights()
+      if (err instanceof PathNotFoundError) {
+        setPathOutput(`No path exists between #${startHex} and #${endHex}`)
+      } else {
+        setPathOutput(
+          `Pathfinding failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+    }
+  }
+
+  private resetPathHighlights(): void {
+    for (const hex of this.pathSectors) {
+      this.engine!.resetSectorColor(hex)
+    }
+    this.pathSectors.clear()
   }
 
   private onFrameTick = (dt: number): void => {
@@ -229,7 +339,13 @@ export class AppController {
 
   private resetNeighborHighlights(exceptHex: string | null = null): void {
     for (const hex of this.previousNeighbors) {
-      if (hex !== exceptHex) this.engine!.resetSectorColor(hex)
+      if (hex !== exceptHex) {
+        if (this.pathSectors.has(hex)) {
+          this.engine!.setSectorColor(hex, this.pathHighlightColor)
+        } else {
+          this.engine!.resetSectorColor(hex)
+        }
+      }
     }
     this.previousNeighbors.clear()
     clearNeighborOutput()
@@ -246,6 +362,15 @@ export class AppController {
     const btnMapModeGrayscale = document.getElementById(
       'btn-mapmode-grayscale'
     )!
+    const btnPathClear = document.getElementById('btn-path-clear')!
+
+    this.canvas.addEventListener('contextmenu', this.onContextMenu)
+
+    btnPathClear.addEventListener('click', () => {
+      this.pathStartHex = null
+      this.resetPathHighlights()
+      clearPathOutput()
+    })
 
     this.chkHover.addEventListener('change', () => {
       if (!this.engine) return
@@ -253,7 +378,7 @@ export class AppController {
         this.engine.on('sectorHover', this.onHover)
       } else {
         if (this.lastHovered && this.lastHovered !== this.selectedHex) {
-          this.engine.resetSectorColor(this.lastHovered)
+          this.restoreSectorBaseColor(this.lastHovered)
           this.lastHovered = null
           clearHoverPanel()
         }

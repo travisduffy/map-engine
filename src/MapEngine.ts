@@ -13,7 +13,11 @@ import type {
   WorkerMessage,
   MapModeId,
 } from './types'
-import { MapInvalidatedError, ModeNotReadyError } from './errors'
+import {
+  MapInvalidatedError,
+  ModeNotReadyError,
+  CostsRequiredError,
+} from './errors'
 import { RenderClock } from './RenderClock'
 import { SharedRegistryProxy } from './worker/SharedRegistryProxy'
 
@@ -37,6 +41,7 @@ export class MapEngine {
   private _lastBootstrapAck: BootstrapAckPayload | null = null
   private _mapModes: Map<MapModeId, Uint32Array> = new Map()
   private _currentMapMode: MapModeId | null = null
+  private _costsReady: boolean = false
 
   constructor() {
     this._parser = new SectorBitmapParser()
@@ -220,6 +225,9 @@ export class MapEngine {
       // CA-7: discard the registered palette data (Epic 4 Task 4.3).
       this._mapModes.clear()
       this._currentMapMode = null
+      // CA-4: a fresh Worker means a fresh (empty) SpatialGraph -- costs
+      // must be re-supplied before findPath() is usable again.
+      this._costsReady = false
     }
 
     this._loading = true
@@ -498,5 +506,45 @@ export class MapEngine {
     if (numId === undefined)
       throw new Error(`MapEngine: unknown sector '${id}'`)
     return this._proxy!.getCentroidByNumericId(numId)
+  }
+
+  /**
+   * Uploads per-sector traversal costs for `findPath` (CA-4). Transfers
+   * ownership of `costs.buffer` itself (the caller's actual `ArrayBuffer`,
+   * never a copy) to the Worker — `costs.byteLength === 0` on Main once
+   * this resolves. Replacing costs requires a fresh `Uint8Array`
+   * allocation; a sub-view (non-zero `byteOffset`, or a `byteLength`
+   * shorter than the backing buffer) is rejected up front so an unrelated
+   * slice of the consumer's memory is never detached.
+   */
+  async setTraversalCosts(costs: Uint8Array): Promise<void> {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    if (
+      costs.byteOffset !== 0 ||
+      costs.byteLength !== costs.buffer.byteLength
+    ) {
+      throw new Error(
+        'MapEngine.setTraversalCosts: costs must be a Uint8Array over the whole of its own ArrayBuffer (byteOffset 0, byteLength === buffer.byteLength) — pass a fresh allocation, not a sub-view.'
+      )
+    }
+    await this._proxy!.call<void>('setTraversalCosts', costs, [costs.buffer])
+    this._costsReady = true
+  }
+
+  /**
+   * Resolves the cost-optimal path between two sectors by numeric id
+   * (CA-4), computed via A* over the CSR adjacency graph in the Worker.
+   * Rejects with `CostsRequiredError` if `setTraversalCosts` has never
+   * resolved, or `PathNotFoundError` if the sectors are not connected by
+   * traversable edges.
+   */
+  async findPath(startId: number, endId: number): Promise<Uint16Array> {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    if (!this._costsReady) throw new CostsRequiredError()
+    return this._proxy!.call<Uint16Array>('findPath', { startId, endId })
   }
 }

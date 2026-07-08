@@ -2,6 +2,7 @@ import type { WorkerMessage, BootstrapAckPayload } from '../types'
 import { setWorkerState } from './state'
 import { getCallHandler, registerCallHandler } from './callHandlers'
 import { SimulationClock, type TickTelemetry } from './SimulationClock'
+import './pathfindingHandlers'
 
 function bboxAt(
   bboxes: Int16Array,

@@ -18,6 +18,7 @@ const tickCounterEl = document.getElementById('tick-counter')!
 const clockSpeedEl = document.getElementById('clock-speed')!
 const btnClockPause = document.getElementById('btn-clock-pause')!
 const neighborOutputEl = document.getElementById('neighbor-output')!
+const pathOutputEl = document.getElementById('pathfinding-output')!
 
 // ─── Skeleton label sets ──────────────────────────────────────────────────────
 
@@ -220,4 +221,12 @@ export function clearNeighborOutput(): void {
 
 export function setClockPauseButton(paused: boolean): void {
   btnClockPause.textContent = paused ? 'Resume' : 'Pause'
+}
+
+export function setPathOutput(msg: string): void {
+  pathOutputEl.textContent = msg
+}
+
+export function clearPathOutput(): void {
+  pathOutputEl.textContent = 'Right-click two sectors to find a path'
 }
