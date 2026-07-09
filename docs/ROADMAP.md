@@ -177,6 +177,7 @@ This graph maps the chronological flow of work. Refactors (A/B) unblock Capabili
                     ┌───────────────────▼─────────────────────┐
     Phase 4         │ [CA-4, CA-5] -> CA-6 Dynamic Borders    │
   (GSG Logic)       │ [A0.3, B1.e] -> CA-8 Anchors            │
+                    │ Status: [COMPLETE]                      │
                     └─────────────────────────────────────────┘
 ```
 
@@ -412,7 +413,9 @@ _Goal: Move the brain into a Worker and the eyes onto the GPU using Transferable
 
 ---
 
-## 9. Phase 4
+## 9. Phase 4 (GSG Logic) (COMPLETE)
+
+**Status: [COMPLETE]** — Phase 4 was successfully audited (`docs/audits/phase-4-audit.md`, `[PASS]`) and closed on 2026-07-09, archived as `docs/archive/v0.0.6/`. Epics 5–8 shipped (CA-4 pathfinding, CA-5 hierarchical aggregation, CA-6 dynamic borders, CA-8 spatial anchors), and `src/GameClock.ts` was deleted per the Finality Audit (all consumers migrated to `RenderClock`/`SimulationClock`).
 
 _Goal: Deliver actual GSG features built upon the ultra-fast Transferable-discipline kernel._
 
@@ -618,11 +621,22 @@ The BDFL (User) is the sole authority on versioning. The project is currently in
 | `MapEngine` | `offFrame` | `offFrame(cb: (dt: number) => void): void` |
 | `MapEngine` | `destroy` | `destroy(): void` |
 | `MapEngine` | `setTickRate` | `setTickRate(hz: number): void` |
+| `MapEngine` | `setTraversalCosts` | `setTraversalCosts(costs: Uint8Array): Promise<void>` (CA-4, `v0.0.6`) |
+| `MapEngine` | `findPath` | `findPath(startId: number, endId: number): Promise<Uint16Array>` (CA-4, `v0.0.6`) |
+| `MapEngine` | `setParentMapping` | `setParentMapping(mapping: Uint16Array, maxGroups: number): Promise<void>` (CA-5, `v0.0.6`) |
+| `MapEngine` | `aggregateGroups` | `aggregateGroups(): Promise<void>` (CA-5, `v0.0.6`) |
+| `MapEngine` | `getGroupBBox` | `getGroupBBox(groupId: number): [number, number, number, number]` (CA-5, `v0.0.6`) |
+| `MapEngine` | `computeAnchors` | `computeAnchors(): Promise<void>` (CA-8, `v0.0.6`) |
+| `MapEngine` | `getAnchor` | `getAnchor(sectorId: number): [number, number]` (CA-8, `v0.0.6`) |
+| `MapEngine` | `recomputeBorders` | `recomputeBorders(): Promise<void>` (CA-6, `v0.0.6`) |
+| `MapEngine` | `getBorderSegments` | `getBorderSegments(): Float32Array \| null` (CA-6, `v0.0.6`) |
+| `MapEngine` | `setBordersVisible` | `setBordersVisible(visible: boolean): void` (CA-6 follow-up, `v0.0.6`) |
+| `MapEngine` | `project` | `project(x: number, y: number): [number, number]` (CA-8 support, `v0.0.6`) |
 
 **Canonical Exports (Planned):**
 | Module | Export | Signature | Phase |
 | --- | --- | --- | --- |
-| `MapEngine` | `onMappingChanged` | `onMappingChanged(cb: () => void): () => void` | Phase 4 |
+| `MapEngine` | `onMappingChanged` | `onMappingChanged(cb: () => void): () => void` | Deferred — Phase 4 closed (`v0.0.6`) without shipping it; a future phase, if still wanted |
 
 **Canonical Errors (Shipped):**
 | Error | Path | Rationale |
@@ -631,13 +645,14 @@ The BDFL (User) is the sole authority on versioning. The project is currently in
 | `SectorLimitExceededError` | `src/errors.ts` | Thrown if map exceeds 65,534 sectors. |
 | `ModeNotReadyError` | `src/errors.ts` | Thrown if `registerMapMode`/`setMapMode` called before `loadMap()` resolves. |
 | `MapInvalidatedError` | `src/errors.ts` | Thrown when in-flight async calls are invalidated by `loadMap()` or `destroy()`/`dispose()`. |
+| `MappingRequiredError` | `src/errors.ts` | Thrown when a mapping/aggregation precondition is unmet: `aggregateGroups`/`recomputeBorders` (or group accessors like `getGroupBBox`) called before `setParentMapping`/`aggregateGroups` has resolved. Shipped in Phase 4 (`v0.0.6`). |
+| `PathNotFoundError` | `src/errors.ts` | Thrown by `findPath` when the endpoints are not connected by traversable edges. Shipped in Phase 4 (`v0.0.6`). |
+| `CostsRequiredError` | `src/errors.ts` | Thrown by `findPath` before `setTraversalCosts` has resolved at least once. Shipped in Phase 4 (`v0.0.6`). |
 
 **Canonical Errors (Planned):**
 | Error | Path | Rationale | Phase |
 | --- | --- | --- | --- |
-| `MappingRequiredError` | `src/errors.ts` | Thrown when a mapping/aggregation precondition is unmet: methods called before `setParentMapping`, or group accessors (`getGroupBBox`) before the first `aggregateGroups` resolution. | Phase 4 |
-| `PathNotFoundError` | `src/errors.ts` | Thrown if pathfinding fails. | Phase 4 |
-| `CostsRequiredError` | `src/errors.ts` | Thrown by `findPath` before `setTraversalCosts` has resolved at least once. | Phase 4 |
+| _(none — all previously-planned errors have shipped)_ | | | |
 
 **Common Types:**
 
@@ -650,6 +665,7 @@ The BDFL (User) is the sole authority on versioning. The project is currently in
 
 ## 13. Revision History
 
+- **2026-07-09-phase-4-close:** Documentation Sync (PR-5, Reversibility — truthful status markers keep the cost of resuming/auditing work low), run after `v0.0.6` (Phase 4, Epics 5–8) merged to `main` (closing Phase 4 per the "close on merge only" rule). Marked Phase 4 `[COMPLETE]` in both the §5 dependency graph box and the new §9 prose header, citing the `phase-4-audit.md` `[PASS]` verdict and the `docs/archive/v0.0.6/` archive. Promoted `MappingRequiredError`/`PathNotFoundError`/`CostsRequiredError` from §12.5 Canonical Errors (Planned) to (Shipped) — all confirmed in `src/errors.ts` and exported from `src/index.ts`; the Planned-errors table is now empty. Added the eleven shipped Phase 4 `MapEngine` methods (`setTraversalCosts`, `findPath`, `setParentMapping`, `aggregateGroups`, `getGroupBBox`, `computeAnchors`, `getAnchor`, `recomputeBorders`, `getBorderSegments`, `setBordersVisible`, `project`) to §12.5 Canonical Exports (Shipped), verified against source signatures. Re-marked the planned `onMappingChanged` export as **Deferred**: it was Phase-4-planned (matrix #276) but Phase 4 shipped without it (`git grep onMappingChanged src/` → empty), so "Planned, Phase 4" was no longer truthful for a closed phase — this records the fact, it does not re-plan the export (that remains a future-scope decision). This unblocks the promotions the two prior 2026-07-09 syncs correctly deferred pending this merge. README.md and CHANGELOG.md updated in the same pass to describe `v0.0.6` as the shipped release.
 - **2026-07-09-documentation-sync-2:** Documentation Sync (PR-5, Reversibility — truthful status markers and an accurate module map keep the cost of resuming/auditing work low), run after the Phase 4 Master Auditor pass recorded a `[PASS]` verdict in `docs/audits/phase-4-audit.md` §9. Code-truth check found `.claude/rules/architecture.md`'s Module layout table missing two Epic 8 modules entirely (`src/worker/borderHandlers.ts`, `src/render/BorderRenderer.ts`) and its `transferablePool` row omitting the `TransferableBorderPool` class that exists in `src/worker/transferablePool.ts` — fixed all three. Updated the Key Data Flow §4/§5 notes to include `recomputeBorders`/`getBorderSegments` in the round-trip and ring-pool-ordering description, replacing the now-stale "future feature" framing for `borderEdges` (it shipped this phase). Added `docs/ROADMAP_TRACEABILITY_MATRIX.md` row 337 recording the Master Auditor's one finding (a flaky-perf-gate misattribution, non-blocking, corrected in the audit document itself). **Did not** promote `MappingRequiredError`/`PathNotFoundError`/`CostsRequiredError`/`onMappingChanged` (§12.5) from "Planned, Phase 4" to "Shipped," and did not add a `Status:` line to Phase 4's §5 box or §9 header: per `.claude/rules/roadmap-governance.md`'s "close on merge only" rule, an audited `[PASS]` on an unmerged branch is not yet a closed phase — that promotion is deferred to the next sync, once this branch (or the audit document) actually merges to `main`. README.md/CHANGELOG.md re-checked and left untouched for the same reason, unchanged from the prior sync's reasoning.
 - **2026-07-09-documentation-sync:** Documentation Sync (PR-5, Reversibility — truthful status markers keep the cost of resuming/auditing work low). §12.5's "Planned" tables had drifted stale in the direction the sync skill's own gotcha list warns about: several items had already shipped without ever being moved out of "Planned." Moved `setTickRate` (Canonical Exports) and `WebGL2NotSupportedError`/`SectorLimitExceededError`/`ModeNotReadyError`/`MapInvalidatedError` (Canonical Errors) to their respective "Shipped" tables, and `MapModeId`/`WorkerMessage`/`BootstrapAckPayload` (Common Types) to `(Shipped)` — all confirmed present in `src/types.ts`/`src/errors.ts` and established by the already-merged, archived Phase 2 (`v0.0.4`) and Phase 3 (`v0.0.5`) `[PASS]` audits. Left `MappingRequiredError`/`PathNotFoundError`/`CostsRequiredError` and `onMappingChanged` as "Planned, Phase 4": their classes exist (pre-wired since v0.0.5 per the archived Phase 3 PRD) but the behavior the Rationale column describes is wired by the still-in-progress, unaudited, unmerged Phase 4 sprint — moving them to Shipped would get ahead of that phase's own exit audit. This is a status-sync correction only; it does not decide the open `onMappingChanged` scope question flagged in `docs/active/PROGRESS.md`'s Lessons Learned.
 - **2026-07-07-phase-3-close:** Documentation Sync (PR-5, Reversibility — keeping status markers truthful minimizes the cost of resuming or auditing work later). Marked Phase 3 `[COMPLETE]` in both the §5 dependency graph and the §8 prose header following the `phase-3-audit.md` `[PASS]` verdict and its merge to `main` as v0.0.5. Corrected the Phase 2 (§7) header, which still read `[DOCUMENTATION FREEZE]` after the freeze was already lifted per the traceability matrix's own closing note — a stale-status drift, not a new decision.

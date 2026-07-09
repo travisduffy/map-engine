@@ -11,6 +11,25 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.0.6] — 2026-07-09
+
+Phase 4 (GSG Logic) — Worker-side grand-strategy spatial primitives built on the v0.0.5 Off-Main-Thread kernel. All computation runs in the Web Worker and returns to Main via the zero-GC Transferable ring-pool handoff.
+
+### Added
+
+- Pathfinding (CA-4): `MapEngine.setTraversalCosts(costs: Uint8Array): Promise<void>` (transfers the caller's buffer to the Worker; sub-views are rejected) and `MapEngine.findPath(startId: number, endId: number): Promise<Uint16Array>` — A\* over the CSR adjacency graph in the Worker, returning the sector-ID sequence
+- Hierarchical aggregation (CA-5): `MapEngine.setParentMapping(mapping: Uint16Array, maxGroups: number): Promise<void>`, `MapEngine.aggregateGroups(): Promise<void>`, and the synchronous `MapEngine.getGroupBBox(groupId: number)` accessor served from the ring-pool snapshot — folds member-sector bboxes into one aggregate bbox per group (sectors mapped to `0xFFFF` are excluded)
+- Spatial anchoring (CA-8): `MapEngine.computeAnchors(): Promise<void>` and the synchronous `MapEngine.getAnchor(sectorId: number)` accessor — a guaranteed-interior label anchor (Pole of Inaccessibility / `polylabel`) per sector, computed from the B1.e contour segments
+- Dynamic perimeter rendering (CA-6): `MapEngine.recomputeBorders(): Promise<void>` (concurrent calls coalesce to ≤2 Worker computations sharing one resolution), the synchronous `MapEngine.getBorderSegments(): Float32Array | null` accessor, and `MapEngine.setBordersVisible(visible: boolean): void`. Group perimeters draw as GPU-VBO-backed `THREE.LineSegments` via the new internal `BorderRenderer`; the managed VBO survives WebGL context loss (re-uploaded and re-bound on `webglcontextrestored`)
+- `MapEngine.project(x: number, y: number): [number, number]` — closed-form bitmap-pixel → CSS-screen-space projection honoring live camera pan/zoom (no Three.js type crosses the public boundary)
+- Canonical errors now active: `MappingRequiredError` (aggregation/border precondition unmet), `PathNotFoundError` (endpoints unreachable), `CostsRequiredError` (`findPath` before `setTraversalCosts`)
+
+### Removed
+
+- `GameClock` and its `ClockTickCallback` type — deleted per the Phase 4 Finality Audit after the v0.0.5 deprecation window. All consumers now use `RenderClock` (Main) or `SimulationClock` (Worker); the example app migrated to an inline fixed-tick accumulator against `engine.onFrame(dt)`
+
+---
+
 ## [0.0.5] — 2026-07-07
 
 ### Added

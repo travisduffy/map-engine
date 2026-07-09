@@ -188,7 +188,7 @@ Files shown in system-reminder `Read` results at session start are already in yo
 
 When only a named section of a large file is needed (e.g., PRD §A1, ROADMAP §2.1, a specific audit section), use `offset` + `limit` parameters. Thirty lines around the target is almost always sufficient. Reading a full 80-line PRD to extract a 10-line section wastes 70 lines of context budget every time.
 
-When editing a single row of a prettier-formatted markdown table, anchor the `Edit` on a short unique fragment rather than the full copied line — column-alignment padding often doesn't match what gets typed manually, and a full-line `old_string` fails on that whitespace mismatch.
+When editing a single row of a prettier-formatted markdown table, anchor the `Edit` on a short unique fragment rather than the full copied line — column-alignment padding often doesn't match what gets typed manually, and a full-line `old_string` fails on that whitespace mismatch. When that same edit expands one row into several (or merges several into one), emit every resulting row in `new_string` — the short anchor shrinks only what you match, not what you must output, so a replacement that names one row while the source row covered three silently drops the other two and costs a follow-up edit to restore them (2026-07-09: splitting one combined error row into three emitted only one, losing two).
 
 ### 7. Plan Mode: verify before exiting
 

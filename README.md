@@ -9,6 +9,7 @@ Inspired by the Clausewitz/Jomini engine pipeline (EU4, HOI4, CK3): a 24-bit RGB
 1. Ingests a PNG bitmap where every pixel's RGB value encodes a **sector** identity
 2. Builds an in-memory spatial registry from the bitmap and a JSON definition file, then transfers it into a dedicated Web Worker (Off-Main-Thread architecture) so simulation-side work never blocks rendering
 3. Renders the map via Three.js using a GPU palette-shader pipeline (instant, zero-CPU-iteration recoloring), with pan/zoom and typed `sectorClick` / `sectorHover` events, plus async `pick()` for on-demand lookups
+4. Provides Worker-side grand-strategy spatial primitives — A\* pathfinding, hierarchical (group) bbox aggregation, guaranteed-interior label anchors, and dynamic group-perimeter border rendering — all returning to the main thread via zero-GC Transferable handoffs
 
 **Bundle size:** < 15 KB gzipped (Three.js is a peer dependency — not bundled)
 
@@ -20,11 +21,11 @@ Inspired by the Clausewitz/Jomini engine pipeline (EU4, HOI4, CK3): a 24-bit RGB
 
 ## Stability
 
-| Tier             | Exports                                                                                                                       | Contract                                                                                                                              |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Primary**      | `MapEngine`, `MapConfig`, `PickResult`, `SectorData`, `SectorBBox`, `SectorDefinitionFile`, `MapModeId`                       | Stable. Removals and signature changes are breaking.                                                                                  |
-| **Advanced**     | `SectorRegistry`, `SectorBitmapParser`, `toHexKey`, canonical errors (`MapInvalidatedError`, `WebGL2NotSupportedError`, etc.) | Stable.                                                                                                                               |
-| **Experimental** | Exports marked `@experimental` or `@deprecated` (currently: `BorderEdge` type, `SectorRegistry.borderEdges` raw buffer)       | No stability guarantee. `borderEdges` is reserved for a future border-rendering capability and is not yet populated with usable data. |
+| Tier             | Exports                                                                                                                       | Contract                                                                                                                                                                                                                                                                                 |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Primary**      | `MapEngine`, `MapConfig`, `PickResult`, `SectorData`, `SectorBBox`, `SectorDefinitionFile`, `MapModeId`                       | Stable. Removals and signature changes are breaking.                                                                                                                                                                                                                                     |
+| **Advanced**     | `SectorRegistry`, `SectorBitmapParser`, `toHexKey`, canonical errors (`MapInvalidatedError`, `WebGL2NotSupportedError`, etc.) | Stable.                                                                                                                                                                                                                                                                                  |
+| **Experimental** | Exports marked `@experimental` or `@deprecated` (currently: `BorderEdge` type, `SectorRegistry.borderEdges` raw buffer)       | No stability guarantee. Group-perimeter border _rendering_ shipped in `v0.0.6` via `recomputeBorders()` / `getBorderSegments()` (see API below); the deprecated `BorderEdge` type and the raw `SectorRegistry.borderEdges` allocation are legacy internal buffers, not that public path. |
 
 The project is in early development (`v0.0.y`). All releases increment the patch version only.
 
@@ -318,6 +319,55 @@ engine.registry // SectorRegistry instance — @deprecated, see below
 
 ---
 
+### Grand-strategy spatial primitives
+
+These Worker-side primitives (shipped in `v0.0.6`) run off the main thread and index sectors by **numeric ID** — the dense `0..sectorCount-1` id space (`SectorRegistry.idToHex` maps id ↔ hex key). Each `Promise`-returning method rejects with `MapInvalidatedError` if a concurrent `loadMap()`/`dispose()` invalidates it, and all guard with `"MapEngine: not loaded"` before load / `"MapEngine: destroyed"` after destroy.
+
+#### Pathfinding (A\*)
+
+```typescript
+await engine.setTraversalCosts(costs) // Uint8Array, one cost per sector id
+const path = await engine.findPath(startId, endId) // Uint16Array of sector ids
+```
+
+`setTraversalCosts(costs: Uint8Array): Promise<void>` transfers the buffer to the Worker (`costs.byteLength === 0` on Main once it resolves — pass a fresh allocation, never a sub-view). `findPath(startId: number, endId: number): Promise<Uint16Array>` runs A\* over the CSR adjacency graph and returns the sector-ID sequence; rejects with `CostsRequiredError` if costs were never set, or `PathNotFoundError` if the endpoints are not connected by traversable edges.
+
+#### Hierarchical aggregation (groups)
+
+```typescript
+await engine.setParentMapping(mapping, maxGroups) // Uint16Array: sector id → group id (0xFFFF = excluded)
+await engine.aggregateGroups()
+const [minX, minY, maxX, maxY] = engine.getGroupBBox(groupId)
+```
+
+`setParentMapping(mapping: Uint16Array, maxGroups: number): Promise<void>` transfers the mapping to the Worker. `aggregateGroups(): Promise<void>` folds each group's member-sector bounding boxes into one aggregate bbox per group (rejects with `MappingRequiredError` if no mapping was set). `getGroupBBox(groupId: number)` reads the result synchronously from the Main-side snapshot.
+
+#### Spatial anchors (label placement)
+
+```typescript
+await engine.computeAnchors()
+const [x, y] = engine.getAnchor(sectorId) // bitmap pixel-space, guaranteed interior
+```
+
+`computeAnchors(): Promise<void>` computes a guaranteed-interior Pole-of-Inaccessibility (`polylabel`) anchor for every sector from its contour geometry. `getAnchor(sectorId: number)` reads it synchronously.
+
+#### Dynamic group borders
+
+```typescript
+await engine.setParentMapping(mapping, maxGroups) // required at least once first
+await engine.recomputeBorders()
+const segments = engine.getBorderSegments() // Float32Array [x1,y1,x2,y2,...] or null
+engine.setBordersVisible(false) // hide the drawn lines without recomputing
+```
+
+`recomputeBorders(): Promise<void>` extracts the group-perimeter line segments from the current `parentMapping` and uploads them to a managed GPU VBO drawn as `THREE.LineSegments` (rejects with `MappingRequiredError` if no mapping was set; does **not** require `aggregateGroups()`). Concurrent calls coalesce — at most two Worker computations run regardless of caller count, and coalesced callers share one resolution. `getBorderSegments(): Float32Array | null` returns a retained Main-side copy (`null` before the first resolution; `Float32Array(0)` for a zero-edge result). `setBordersVisible(visible: boolean)` toggles the drawn lines without recomputing or re-uploading — safe to call before any border exists (the choice is remembered and applied when borders are next built).
+
+#### `project(x: number, y: number): [number, number]`
+
+Projects a bitmap pixel-space coordinate to CSS screen-space (canvas-relative, top-left origin), honoring the live camera pan/zoom — e.g. to position a DOM label overlay at a `getAnchor()` point. A pure-number transform; no Three.js type crosses the boundary.
+
+---
+
 ### Types
 
 ```typescript
@@ -353,13 +403,15 @@ type MapModeId = string
 
 ### Canonical errors
 
-| Error                                                             | Thrown when                                                                                                                                                                     |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MapInvalidatedError`                                             | An in-flight async call (`pick`, etc.) is invalidated by a concurrent `loadMap()` or `dispose()`, or a consumer reads the deprecated `registry` getter after bootstrap transfer |
-| `WebGL2NotSupportedError`                                         | The canvas's WebGL context does not support WebGL2 (required for the index-texture picking/palette pipeline)                                                                    |
-| `SectorLimitExceededError`                                        | The bitmap defines more than 65,534 distinct sectors                                                                                                                            |
-| `ModeNotReadyError`                                               | `registerMapMode`/`setMapMode` called before `loadMap()` resolves                                                                                                               |
-| `MappingRequiredError`, `PathNotFoundError`, `CostsRequiredError` | Reserved for hierarchical aggregation and pathfinding capabilities landing in a future release                                                                                  |
+| Error                      | Thrown when                                                                                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MapInvalidatedError`      | An in-flight async call (`pick`, etc.) is invalidated by a concurrent `loadMap()` or `dispose()`, or a consumer reads the deprecated `registry` getter after bootstrap transfer |
+| `WebGL2NotSupportedError`  | The canvas's WebGL context does not support WebGL2 (required for the index-texture picking/palette pipeline)                                                                    |
+| `SectorLimitExceededError` | The bitmap defines more than 65,534 distinct sectors                                                                                                                            |
+| `ModeNotReadyError`        | `registerMapMode`/`setMapMode` called before `loadMap()` resolves                                                                                                               |
+| `MappingRequiredError`     | `aggregateGroups()` / `recomputeBorders()` (or `getGroupBBox`) called before `setParentMapping()` / `aggregateGroups()` has resolved                                            |
+| `PathNotFoundError`        | `findPath()` cannot connect the two sectors through traversable edges                                                                                                           |
+| `CostsRequiredError`       | `findPath()` called before `setTraversalCosts()` has resolved at least once                                                                                                     |
 
 ### Camera controls
 
@@ -405,6 +457,10 @@ The example demonstrates:
 - `sectorClick` — persistent selection, plus `getBBox`/`getCentroid`/`getNeighbors` in the Advanced panel
 - `getSectorKeys()` / `getSector()` — sector enumeration in the sidebar
 - `registerMapMode()` / `setMapMode()` — a Map Modes panel toggling between palettes
+- `setTraversalCosts()` / `findPath()` — a Pathfinding panel drawing A\* routes between two clicked sectors
+- `setParentMapping()` / `aggregateGroups()` / `getGroupBBox()` — a Regions panel visualizing aggregated group bounds
+- `computeAnchors()` / `getAnchor()` / `project()` — an Anchors panel placing DOM labels at guaranteed-interior points
+- `recomputeBorders()` / `getBorderSegments()` / `setBordersVisible()` — a Borders panel toggling group-perimeter lines
 - `on()` / `off()` — live unsubscribe toggle for the hover handler
 - `toHexKey()` — round-trip verification on load
 
@@ -482,10 +538,6 @@ Camera controls are mouse/wheel only (middle-click drag to pan, scroll wheel to 
 
 The following are explicitly out of scope for the current release (see `docs/ROADMAP.md` for what's planned and when):
 
-- Area / region hierarchy (grouping sectors into provinces, countries, etc.) — planned, not yet built
-- Dynamic/rendered border overlays (`SectorRegistry.borderEdges` is allocated but not yet populated with usable geometry)
-- Pathfinding primitives
-- Spatial anchor points for label placement
 - River layer or heightmap rendering
 - CSV definition format — JSON only
 - Built-in UI controls, tooltips, or legend components
@@ -498,7 +550,7 @@ The following are explicitly out of scope for the current release (see `docs/ROA
 
 ## Future work
 
-See `docs/ROADMAP.md` for the full, versioned plan. At a glance, the next release targets pathfinding primitives, hierarchical (group-level) aggregation, dynamic border rendering, and spatial anchoring — all Worker-side capabilities building on this release's Off-Main-Thread kernel.
+See `docs/ROADMAP.md` for the full, versioned plan. This release (`v0.0.6`) shipped the Worker-side grand-strategy primitives — pathfinding, hierarchical (group-level) aggregation, dynamic border rendering, and spatial anchoring — on top of the earlier Off-Main-Thread kernel. Beyond it, the roadmap's Phase 5 sketches framework bindings, a modding script boundary, and group-scope palettes; that scope is gated on an explicit review and is not yet committed.
 
 ## Bundle size
 
