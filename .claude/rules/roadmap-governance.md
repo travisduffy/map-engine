@@ -32,11 +32,11 @@ A phase closes through this four-step cycle:
 
 Executable process definitions this file points to live in `docs/processes/` (agent-neutral prompts) or `.claude/skills/` (harness skills):
 
-| Process               | File                                       | Used for                                                                                                          |
-| --------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| Roadmap Audit         | `docs/processes/audit-only.md`             | The read-only compliance pass in step 2 above                                                                     |
-| Sprint Hardening      | `.claude/skills/sprint-hardening/SKILL.md` | Review-and-revision pass over `docs/active/**` before sprint activation (invoke: sprint-hardening)                |
-| Version Archive Split | `docs/processes/version-archive-split.md`  | Splitting an active sprint's PRD/PROGRESS into an archived, newly-versioned phase plus a continuing active sprint |
+| Process               | File                                       | Used for                                                                                                                                                                                                                   |
+| --------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Roadmap Audit         | `docs/processes/audit-only.md`             | The read-only compliance pass in step 2 above                                                                                                                                                                              |
+| Sprint Hardening      | `.claude/skills/sprint-hardening/SKILL.md` | Review-and-revision pass over `docs/active/**` before sprint activation (invoke: sprint-hardening)                                                                                                                         |
+| Version Archive Split | `docs/processes/version-archive-split.md`  | Archiving a completed, exit-audited phase into a newly-versioned archive — either splitting it out from a continuing active sprint, or, if it was the sprint's last phase, resetting the active docs to `NO ACTIVE SPRINT` |
 
 ## Technical Rationale for Findings
 
