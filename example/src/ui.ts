@@ -19,6 +19,8 @@ const clockSpeedEl = document.getElementById('clock-speed')!
 const btnClockPause = document.getElementById('btn-clock-pause')!
 const neighborOutputEl = document.getElementById('neighbor-output')!
 const pathOutputEl = document.getElementById('pathfinding-output')!
+const regionsButtonsEl = document.getElementById('regions-buttons')!
+const regionsOutputEl = document.getElementById('regions-output')!
 
 // ─── Skeleton label sets ──────────────────────────────────────────────────────
 
@@ -229,4 +231,54 @@ export function setPathOutput(msg: string): void {
 
 export function clearPathOutput(): void {
   pathOutputEl.textContent = 'Right-click two sectors to find a path'
+}
+
+// ─── Regions (Epic 6 Task 6.3 — Aggregation demo) ──────────────────────────
+
+let regionButtons: HTMLButtonElement[] = []
+
+/** Builds one button per region (province); buttons are generated at
+ * runtime since they depend on the loaded map's sector names. */
+export function renderRegionButtons(
+  names: string[],
+  onSelect: (index: number) => void
+): void {
+  regionButtons = names.map((name, index) => {
+    const btn = document.createElement('button')
+    btn.textContent = name
+    btn.addEventListener('click', () => onSelect(index))
+    return btn
+  })
+  regionsButtonsEl.replaceChildren(...regionButtons)
+}
+
+export function clearRegionButtons(): void {
+  regionButtons = []
+  regionsButtonsEl.replaceChildren()
+}
+
+/** Toggles the `.active` visual state; pass `null` to clear all. */
+export function setActiveRegionButton(index: number | null): void {
+  regionButtons.forEach((btn, i) => {
+    btn.classList.toggle('active', i === index)
+  })
+}
+
+export function setRegionOutput(
+  name: string,
+  bbox: [number, number, number, number],
+  width: number,
+  height: number
+): void {
+  regionsOutputEl.classList.remove('empty-state')
+  regionsOutputEl.replaceChildren(
+    makeInfoRow('region', name),
+    makeInfoRow('bbox', `${bbox[0]},${bbox[1]} → ${bbox[2]},${bbox[3]}`),
+    makeInfoRow('size', `${width} × ${height} px`)
+  )
+}
+
+export function clearRegionOutput(): void {
+  regionsOutputEl.classList.add('empty-state')
+  regionsOutputEl.textContent = 'Select a region to see its bounding box'
 }

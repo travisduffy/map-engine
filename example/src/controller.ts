@@ -21,10 +21,16 @@ import {
   setClockPauseButton,
   setPathOutput,
   clearPathOutput,
+  renderRegionButtons,
+  clearRegionButtons,
+  setActiveRegionButton,
+  setRegionOutput,
+  clearRegionOutput,
 } from './ui'
 
 const PATH_START_COLOR = '#ffcc00'
 const PATH_ROUTE_COLOR = '#ff6a00'
+const REGION_HL_COLOR = '#b39ddb'
 
 export class AppController {
   private engine: MapEngine | null = null
@@ -44,6 +50,16 @@ export class AppController {
   private pathStartHex: string | null = null
   private pathSectors = new Set<string>()
   private pathHighlightColor = PATH_ROUTE_COLOR
+
+  // Aggregation demo (Epic 6 Task 6.3): sectors are grouped by the province
+  // suffix of their "County, Province" name into regions via a parentMapping
+  // built from sectorKeys (index === numeric id, same convention as the
+  // pathfinding bridge above). Selecting a region highlights its member
+  // sectors and reads the aggregate bbox from getGroupBBox().
+  private provinceNames: string[] = []
+  private regionMembers: string[][] = []
+  private regionSectors = new Set<string>()
+  private selectedRegion: number | null = null
 
   private readonly canvas: HTMLCanvasElement
   private readonly chkHover: HTMLInputElement
@@ -107,6 +123,9 @@ export class AppController {
     keys.forEach((key, id) => this.hexToId.set(key, id))
     await this.engine.setTraversalCosts(new Uint8Array(keys.length).fill(1))
 
+    // Aggregation demo (Epic 6 Task 6.3): group sectors by province.
+    await this.setupRegions(keys)
+
     // Demonstrate toHexKey API: verify round-trip for first sector
     if (keys.length > 0) {
       const first = keys[0]
@@ -143,6 +162,93 @@ export class AppController {
     this.engine.setMapMode('default')
   }
 
+  /**
+   * Aggregation demo (Epic 6 Task 6.3): builds a parentMapping grouping every
+   * sector by the province suffix of its "County, Province" name, uploads it
+   * via setParentMapping/aggregateGroups, then renders one selector button
+   * per province. A name that doesn't parse (unexpected for this example's
+   * data) maps to the 0xFFFF sentinel and is excluded from every group.
+   */
+  private async setupRegions(keys: string[]): Promise<void> {
+    if (!this.engine) return
+
+    const provinceIndex = new Map<string, number>()
+    const members: string[][] = []
+    const mapping = new Uint16Array(keys.length)
+
+    keys.forEach((key, id) => {
+      const name = this.engine!.getSector(key)?.name ?? ''
+      const commaAt = name.lastIndexOf(',')
+      const province = commaAt >= 0 ? name.slice(commaAt + 1).trim() : ''
+
+      if (!province) {
+        mapping[id] = 0xffff
+        return
+      }
+      let groupId = provinceIndex.get(province)
+      if (groupId === undefined) {
+        groupId = provinceIndex.size
+        provinceIndex.set(province, groupId)
+        members.push([])
+      }
+      mapping[id] = groupId
+      members[groupId].push(key)
+    })
+
+    this.provinceNames = [...provinceIndex.keys()]
+    this.regionMembers = members
+
+    await this.engine.setParentMapping(mapping, this.provinceNames.length)
+    await this.engine.aggregateGroups()
+
+    renderRegionButtons(this.provinceNames, index => this.selectRegion(index))
+  }
+
+  private selectRegion(groupId: number): void {
+    if (!this.engine) return
+    if (this.selectedRegion === groupId) {
+      this.deselectRegion()
+      return
+    }
+    if (this.selectedRegion !== null) this.deselectRegion()
+
+    this.selectedRegion = groupId
+    for (const hex of this.regionMembers[groupId]) {
+      this.regionSectors.add(hex)
+      // Don't stomp a more specific overlay already owning this sector --
+      // same precedence as the rest of the demo (path > neighbor > region).
+      if (
+        hex !== this.selectedHex &&
+        hex !== this.lastHovered &&
+        !this.previousNeighbors.has(hex) &&
+        !this.pathSectors.has(hex)
+      ) {
+        this.engine.setSectorColor(hex, REGION_HL_COLOR)
+      }
+    }
+    setActiveRegionButton(groupId)
+
+    const [minX, minY, maxX, maxY] = this.engine.getGroupBBox(groupId)
+    setRegionOutput(
+      this.provinceNames[groupId],
+      [minX, minY, maxX, maxY],
+      maxX - minX + 1,
+      maxY - minY + 1
+    )
+  }
+
+  private deselectRegion(): void {
+    if (this.selectedRegion === null) return
+    const hexes = [...this.regionSectors]
+    this.regionSectors.clear()
+    this.selectedRegion = null
+    for (const hex of hexes) {
+      this.restoreSectorBaseColor(hex)
+    }
+    setActiveRegionButton(null)
+    clearRegionOutput()
+  }
+
   private stopEngine(): void {
     if (!this.engine) return
     // off() throws if engine is destroyed — must be called before destroy()
@@ -166,22 +272,30 @@ export class AppController {
     this.hexToId.clear()
     this.pathStartHex = null
     this.pathSectors.clear()
+    this.provinceNames = []
+    this.regionMembers = []
+    this.regionSectors.clear()
+    this.selectedRegion = null
     setFrameCounter(0)
     setTickCounter(0)
     setClockSpeed(1)
     clearNeighborOutput()
     clearPathOutput()
+    clearRegionOutput()
+    clearRegionButtons()
   }
 
   // Restores a sector to whichever highlight layer currently owns it
-  // (path > neighbor > none), instead of unconditionally resetting to the
-  // map-mode default. Used anywhere a transient overlay (hover, selection)
-  // needs to hand a sector back to its underlying state.
+  // (path > neighbor > region > none), instead of unconditionally resetting
+  // to the map-mode default. Used anywhere a transient overlay (hover,
+  // selection) needs to hand a sector back to its underlying state.
   private restoreSectorBaseColor(hexKey: string): void {
     if (this.pathSectors.has(hexKey)) {
       this.engine!.setSectorColor(hexKey, this.pathHighlightColor)
     } else if (this.previousNeighbors.has(hexKey)) {
       this.engine!.setSectorColor(hexKey, '#aaccff')
+    } else if (this.regionSectors.has(hexKey)) {
+      this.engine!.setSectorColor(hexKey, REGION_HL_COLOR)
     } else {
       this.engine!.resetSectorColor(hexKey)
     }
@@ -199,7 +313,8 @@ export class AppController {
       if (
         result.hexKey !== this.selectedHex &&
         !this.previousNeighbors.has(result.hexKey) &&
-        !this.pathSectors.has(result.hexKey)
+        !this.pathSectors.has(result.hexKey) &&
+        !this.regionSectors.has(result.hexKey)
       ) {
         this.engine!.setSectorColor(result.hexKey, '#e8e8d0')
       }
@@ -307,7 +422,16 @@ export class AppController {
 
   private resetPathHighlights(): void {
     for (const hex of this.pathSectors) {
-      this.engine!.resetSectorColor(hex)
+      // pathSectors itself is being cleared below, so fall through to the
+      // next-highest overlay directly rather than via restoreSectorBaseColor
+      // (which would see this hex still in pathSectors and re-apply it).
+      if (this.previousNeighbors.has(hex)) {
+        this.engine!.setSectorColor(hex, '#aaccff')
+      } else if (this.regionSectors.has(hex)) {
+        this.engine!.setSectorColor(hex, REGION_HL_COLOR)
+      } else {
+        this.engine!.resetSectorColor(hex)
+      }
     }
     this.pathSectors.clear()
   }
@@ -340,8 +464,12 @@ export class AppController {
   private resetNeighborHighlights(exceptHex: string | null = null): void {
     for (const hex of this.previousNeighbors) {
       if (hex !== exceptHex) {
+        // previousNeighbors itself is being cleared below -- same
+        // self-reference reason as resetPathHighlights above.
         if (this.pathSectors.has(hex)) {
           this.engine!.setSectorColor(hex, this.pathHighlightColor)
+        } else if (this.regionSectors.has(hex)) {
+          this.engine!.setSectorColor(hex, REGION_HL_COLOR)
         } else {
           this.engine!.resetSectorColor(hex)
         }

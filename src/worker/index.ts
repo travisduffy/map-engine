@@ -3,6 +3,7 @@ import { setWorkerState } from './state'
 import { getCallHandler, registerCallHandler } from './callHandlers'
 import { SimulationClock, type TickTelemetry } from './SimulationClock'
 import './pathfindingHandlers'
+import { handleReturnGroupBBoxes } from './aggregationHandlers'
 
 function bboxAt(
   bboxes: Int16Array,
@@ -71,6 +72,11 @@ self.onmessage = (e: MessageEvent<WorkerMessage>): void => {
           } satisfies WorkerMessage)
         }
       )
+      break
+    }
+
+    case 'returnGroupBBoxes': {
+      handleReturnGroupBBoxes(msg.buffer)
       break
     }
 

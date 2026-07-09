@@ -107,3 +107,6 @@ export type WorkerMessage =
   | { type: 'CALL'; id: number; method: string; params: unknown }
   | { type: 'RESULT'; id: number; result: unknown; snapshot?: unknown }
   | { type: 'ERROR'; id: number; errorName: string; message: string }
+  | { type: 'INIT_GROUPS'; maxGroups: number }
+  | { type: 'groupBBoxes'; buffer: Int16Array }
+  | { type: 'returnGroupBBoxes'; buffer: Int16Array }

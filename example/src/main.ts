@@ -6,7 +6,7 @@
  *   Events: sectorHover, sectorClick
  *   Methods: loadMap, setTickRate, setSectorColor, resetSectorColor, getSector, getSectorKeys,
  *            getBBox, getCentroid, getNeighbors, registerMapMode, setMapMode, on, off, destroy,
- *            setTraversalCosts, findPath
+ *            setTraversalCosts, findPath, setParentMapping, aggregateGroups, getGroupBBox
  */
 
 import { AppController } from './controller'

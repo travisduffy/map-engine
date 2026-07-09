@@ -20,6 +20,7 @@ import {
 } from './errors'
 import { RenderClock } from './RenderClock'
 import { SharedRegistryProxy } from './worker/SharedRegistryProxy'
+import { TransferableGroupPool } from './worker/transferablePool'
 
 export class MapEngine {
   private _loaded: boolean = false
@@ -42,6 +43,7 @@ export class MapEngine {
   private _mapModes: Map<MapModeId, Uint32Array> = new Map()
   private _currentMapMode: MapModeId | null = null
   private _costsReady: boolean = false
+  private _pool: TransferableGroupPool | null = null
 
   constructor() {
     this._parser = new SectorBitmapParser()
@@ -212,6 +214,8 @@ export class MapEngine {
       // session's in-flight proxy calls before re-bootstrapping.
       this._proxy?.rejectAll(new MapInvalidatedError())
       this._proxy = null
+      this._pool?.dispose()
+      this._pool = null
       this._renderer?.destroy()
       this._worker.terminate()
       this._worker = this._createWorker()
@@ -318,6 +322,10 @@ export class MapEngine {
 
       this._lastBootstrapAck = await ackPromise
       this._proxy = new SharedRegistryProxy(this._worker, registrySnapshot)
+      this._pool = new TransferableGroupPool(this._worker, () => {
+        renderer._dirty = true
+      })
+      renderer._postRenderHook = this._pool.flushBounces
       renderer._resumeLoop()
 
       this._canvas = config.canvas
@@ -344,6 +352,8 @@ export class MapEngine {
     // Step 0 (new): reject in-flight proxy calls before tearing anything down
     this._proxy?.rejectAll(new MapInvalidatedError())
     this._proxy = null
+    this._pool?.dispose()
+    this._pool = null
     // CA-7: discard the registered palette data (Epic 4 Task 4.3).
     this._mapModes.clear()
     this._currentMapMode = null
@@ -546,5 +556,59 @@ export class MapEngine {
       throw new Error('MapEngine: not loaded — call loadMap() first')
     if (!this._costsReady) throw new CostsRequiredError()
     return this._proxy!.call<Uint16Array>('findPath', { startId, endId })
+  }
+
+  /**
+   * Uploads a consumer-defined sector→group mapping (CA-5). `mapping` is
+   * indexed by numeric sector id; each entry is either `0xFFFF` (excluded
+   * from every group) or a group id in `[0, maxGroups)`. Transfers ownership
+   * of `mapping.buffer` itself (never a copy) to the Worker —
+   * `mapping.byteLength === 0` on Main once this resolves. A change to
+   * `maxGroups` reallocates the group-bbox ring pool.
+   */
+  async setParentMapping(
+    mapping: Uint16Array,
+    maxGroups: number
+  ): Promise<void> {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    if (
+      mapping.byteOffset !== 0 ||
+      mapping.byteLength !== mapping.buffer.byteLength
+    ) {
+      throw new Error(
+        'MapEngine.setParentMapping: mapping must be a Uint16Array over the whole of its own ArrayBuffer (byteOffset 0, byteLength === buffer.byteLength) — pass a fresh allocation, not a sub-view.'
+      )
+    }
+    await this._proxy!.call<void>('setParentMapping', { mapping, maxGroups }, [
+      mapping.buffer,
+    ])
+  }
+
+  /**
+   * Folds each group's member-sector bounding boxes into a single aggregate
+   * bbox per group (CA-5), computed in the Worker and delivered to Main via
+   * the Transferable ring pool. Rejects with `MappingRequiredError` if
+   * `setParentMapping` has never resolved.
+   */
+  async aggregateGroups(): Promise<void> {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    await this._proxy!.call<void>('aggregateGroups')
+  }
+
+  /**
+   * Synchronous read of a group's aggregate bounding box (CA-5), served from
+   * the ring pool's Main-current snapshot. Throws `MappingRequiredError` if
+   * `aggregateGroups()` has never resolved, or `RangeError` if `groupId` is
+   * out of range.
+   */
+  getGroupBBox(groupId: number): [number, number, number, number] {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    return this._pool!.getGroupBBox(groupId)
   }
 }

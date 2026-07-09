@@ -36,6 +36,16 @@ export class MapRenderer {
   /** @internal */
   public _preRenderHook: (() => void) | null
 
+  /**
+   * @internal Invoked immediately after `_backend.render(...)`, but only when
+   * a render actually happened (dirty-gated — unlike `_preRenderHook`, which
+   * runs unconditionally at the top of every frame). Aggregation's Transferable
+   * ring pool (F-C.7/F-C.8) uses this to flush bounce-back buffers to the
+   * Worker; receipt of a hot-path handoff sets `_dirty = true` so a render
+   * (and therefore a flush) always follows a handoff (Known Risk 3).
+   */
+  public _postRenderHook: (() => void) | null = null
+
   constructor(
     canvas: HTMLCanvasElement,
     registry: SectorRegistry,
@@ -138,6 +148,7 @@ export class MapRenderer {
     }
     if (this._dirty) {
       this._backend.render(this.scene, this.camera)
+      if (this._postRenderHook) this._postRenderHook()
       this._dirty = false
     }
   }
@@ -246,6 +257,7 @@ export class MapRenderer {
     this._destroyed = true
     cancelAnimationFrame(this._animFrameId)
     this._preRenderHook = null
+    this._postRenderHook = null
     this._input.destroy()
     this._backend.dispose()
   }

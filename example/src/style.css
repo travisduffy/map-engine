@@ -147,6 +147,12 @@ button:hover {
   color: #fff;
 }
 
+button.active {
+  background: #5c3d99;
+  border-color: #7c5db3;
+  color: #fff;
+}
+
 /* ── Toggle ───────────────────────────────────────────── */
 
 .toggle {
