@@ -21,6 +21,11 @@ const neighborOutputEl = document.getElementById('neighbor-output')!
 const pathOutputEl = document.getElementById('pathfinding-output')!
 const regionsButtonsEl = document.getElementById('regions-buttons')!
 const regionsOutputEl = document.getElementById('regions-output')!
+const mapContainerEl = document.getElementById('map-container')!
+const anchorsOutputEl = document.getElementById('anchors-output')!
+const btnAnchorsToggle = document.getElementById(
+  'btn-anchors-toggle'
+) as HTMLButtonElement
 
 // ─── Skeleton label sets ──────────────────────────────────────────────────────
 
@@ -281,4 +286,63 @@ export function setRegionOutput(
 export function clearRegionOutput(): void {
   regionsOutputEl.classList.add('empty-state')
   regionsOutputEl.textContent = 'Select a region to see its bounding box'
+}
+
+// ─── Anchors (Epic 7 Task 7.2 — Spatial anchoring demo) ────────────────────
+//
+// One `.anchor-marker` (red) + one `.centroid-marker` (blue) DOM overlay per
+// sector, appended into `#map-container` (the `#status` element above is the
+// existing precedent for an absolute-positioned overlay). Positions are set
+// by the controller every frame via `MapEngine.project()`, so these helpers
+// only own creation/removal/visibility, not layout.
+
+let anchorMarkerEls: HTMLElement[] = []
+let centroidMarkerEls: HTMLElement[] = []
+
+/** Creates one anchor + one centroid marker per sector; returns them index-aligned to numeric sector id. */
+export function renderAnchorMarkers(sectorCount: number): {
+  anchorEls: HTMLElement[]
+  centroidEls: HTMLElement[]
+} {
+  clearAnchorMarkers()
+  for (let i = 0; i < sectorCount; i++) {
+    const anchorEl = document.createElement('div')
+    anchorEl.className = 'anchor-marker'
+    mapContainerEl.appendChild(anchorEl)
+    anchorMarkerEls.push(anchorEl)
+
+    const centroidEl = document.createElement('div')
+    centroidEl.className = 'centroid-marker'
+    mapContainerEl.appendChild(centroidEl)
+    centroidMarkerEls.push(centroidEl)
+  }
+  return { anchorEls: anchorMarkerEls, centroidEls: centroidMarkerEls }
+}
+
+/** Removes all marker DOM elements (reload / toggle-off-and-forget teardown). */
+export function clearAnchorMarkers(): void {
+  for (const el of anchorMarkerEls) el.remove()
+  for (const el of centroidMarkerEls) el.remove()
+  anchorMarkerEls = []
+  centroidMarkerEls = []
+}
+
+export function setAnchorMarkersVisible(visible: boolean): void {
+  const display = visible ? '' : 'none'
+  for (const el of anchorMarkerEls) el.style.display = display
+  for (const el of centroidMarkerEls) el.style.display = display
+}
+
+export function setAnchorsToggleButton(active: boolean): void {
+  btnAnchorsToggle.textContent = active ? 'Hide anchors' : 'Show anchors'
+}
+
+export function setAnchorsOutput(msg: string): void {
+  anchorsOutputEl.classList.remove('empty-state')
+  anchorsOutputEl.textContent = msg
+}
+
+export function clearAnchorsOutput(): void {
+  anchorsOutputEl.classList.add('empty-state')
+  anchorsOutputEl.textContent = 'Toggle anchors to see computed label points'
 }

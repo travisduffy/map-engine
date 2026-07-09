@@ -110,3 +110,6 @@ export type WorkerMessage =
   | { type: 'INIT_GROUPS'; maxGroups: number }
   | { type: 'groupBBoxes'; buffer: Int16Array }
   | { type: 'returnGroupBBoxes'; buffer: Int16Array }
+  | { type: 'INIT_ANCHORS'; sectorCount: number }
+  | { type: 'anchors'; buffer: Int16Array }
+  | { type: 'returnAnchors'; buffer: Int16Array }

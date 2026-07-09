@@ -84,3 +84,82 @@ export class TransferableGroupPool {
     this._pending = null
   }
 }
+
+/**
+ * @internal Main-thread side of the Transferable ring-pool handoff (CA-8)
+ * for `anchors`. A separate pool from `TransferableGroupPool` (not a
+ * generalization of it) so each pool's `_onMessage` narrows `WorkerMessage`
+ * on its own literal message-type set without a cast.
+ *
+ * Mirrors `TransferableGroupPool` exactly except: stride 2 (not 4, `[x, y]`
+ * per sector rather than a 4-corner bbox), and `getAnchor` throws a plain
+ * `Error` when not yet ready -- unlike `getGroupBBox`'s `MappingRequiredError`,
+ * no canonical error class is assigned to this precondition (PRD, Epic 7
+ * Task 7.2 ruling).
+ */
+export class TransferableAnchorPool {
+  private readonly _worker: Worker
+  private readonly _markDirty: () => void
+  private _sectorCount: number | null = null
+  private _current: Int16Array | null = null
+  private _pending: Int16Array | null = null
+
+  constructor(worker: Worker, markDirty: () => void) {
+    this._worker = worker
+    this._markDirty = markDirty
+    this._worker.addEventListener('message', this._onMessage)
+  }
+
+  private _onMessage = (e: MessageEvent<WorkerMessage>): void => {
+    const msg = e.data
+    if (msg.type === 'INIT_ANCHORS') {
+      // A (re)allocation on the Worker side invalidates any buffers this
+      // pool already holds -- they belong to the old-sized pool.
+      this._sectorCount = msg.sectorCount
+      this._current = null
+      this._pending = null
+    } else if (msg.type === 'anchors') {
+      this._pending = this._current
+      this._current = msg.buffer
+      this._markDirty()
+    }
+  }
+
+  /** Wired as part of the composite `MapRenderer._postRenderHook`. Safe to call every frame. */
+  flushBounces = (): void => {
+    if (!this._pending) return
+    const buffer = this._pending
+    this._pending = null
+    this._worker.postMessage(
+      { type: 'returnAnchors', buffer } satisfies WorkerMessage,
+      [buffer.buffer]
+    )
+  }
+
+  getAnchor(sectorId: number): [number, number] {
+    if (!this._current) {
+      throw new Error(
+        'getAnchor: computeAnchors() must resolve at least once before getAnchor() is called.'
+      )
+    }
+    if (
+      !Number.isInteger(sectorId) ||
+      sectorId < 0 ||
+      sectorId >= this._sectorCount!
+    ) {
+      throw new RangeError(
+        `getAnchor: sectorId must be an integer in [0, ${this._sectorCount}) — got ${sectorId}`
+      )
+    }
+    const o = sectorId * 2
+    const b = this._current
+    return [b[o], b[o + 1]]
+  }
+
+  /** Torn down alongside `loadMap()`/`dispose()`, which also replace/terminate the Worker. */
+  dispose(): void {
+    this._worker.removeEventListener('message', this._onMessage)
+    this._current = null
+    this._pending = null
+  }
+}

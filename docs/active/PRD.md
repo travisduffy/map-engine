@@ -76,12 +76,13 @@ Cold-path registry arrays already transferred once at bootstrap in Phase 3. Hot-
 | `getGroupBBox(groupId): [number, number, number, number]`                  | sync snapshot |
 | `computeAnchors(): Promise<void>`                                          | async         |
 | `getAnchor(sectorId): [number, number]`                                    | sync snapshot |
+| `project(x: number, y: number): [number, number]`                          | sync          |
 | `recomputeBorders(): Promise<void>`                                        | async         |
 | `getBorderSegments(): Float32Array \| null`                                | sync snapshot |
 
 **Zero API Break Boundary:** `getNeighbors`, `getCentroid`, `getBBox`, and (as of v0.0.5) `pick()` all remain stable; this sprint adds only new methods, no signature changes to anything shipped.
 
-**Canonical errors (`src/errors.ts`, already exist from Phase 3 — this sprint is their first real consumer):** `MappingRequiredError` (thrown by `aggregateGroups()` before `setParentMapping`, and by `getGroupBBox` before the first `aggregateGroups` resolution — widened trigger per ROADMAP §12.5), `PathNotFoundError` (unreachable `findPath` pairs), `CostsRequiredError` (`findPath` before `setTraversalCosts` has resolved at least once). `getAnchor` before the first `computeAnchors` resolution throws, matching `getGroupBBox`'s behavior but **not** its error class — no canonical class is assigned to that trigger (plain `Error` by default, pending BDFL ruling; see Epic 7 Task 7.2). The cross-cutting rule from Phase 3 still applies: `loadMap()` and `dispose()` reject **all** in-flight async Promises — including this sprint's `recomputeBorders`/`aggregateGroups`/`computeAnchors`/`findPath`/`setTraversalCosts`/`setParentMapping` — with `MapInvalidatedError`.
+**Canonical errors (`src/errors.ts`, already exist from Phase 3 — this sprint is their first real consumer):** `MappingRequiredError` (thrown by `aggregateGroups()` before `setParentMapping`, and by `getGroupBBox` before the first `aggregateGroups` resolution — widened trigger per ROADMAP §12.5), `PathNotFoundError` (unreachable `findPath` pairs), `CostsRequiredError` (`findPath` before `setTraversalCosts` has resolved at least once). `getAnchor` before the first `computeAnchors` resolution throws, matching `getGroupBBox`'s behavior but **not** its error class — no canonical class is assigned to that trigger (plain `Error` by default — **BDFL ruling**, see Epic 7 Task 7.2). The cross-cutting rule from Phase 3 still applies: `loadMap()` and `dispose()` reject **all** in-flight async Promises — including this sprint's `recomputeBorders`/`aggregateGroups`/`computeAnchors`/`findPath`/`setTraversalCosts`/`setParentMapping` — with `MapInvalidatedError`.
 
 ### Process constraints
 
@@ -115,10 +116,12 @@ Falsifiable, per epic. Epic files (`docs/active/epics/`) break these into per-ta
 - `aggregateGroups()` before `setParentMapping` rejects with `MappingRequiredError`; `getGroupBBox` before the first `aggregateGroups` resolution throws `MappingRequiredError` (widened trigger, ROADMAP §12.5).
 - `getGroupBBox` is synchronous, served from the ring-pool snapshot; bounce-back occurs only in `_postRenderHook`; drift ≤ ±2 ms during aggregation.
 
-### Epic 7 — Anchoring (CA-8)
+### Epic 7 — Anchoring (CA-8) — COMPLETE
 
-- 100% pass on `test/fixtures/anchor-shapes.json` (all ≥ 20 fixtures, within a fixed 1.0 px tolerance — the fixture schema is `{id, type, points, expectedAnchor}` with no per-record `tolerancePx` field), using polylabel over B1.e contour segments (an unordered flat CSR segment list, not ordered rings — see Epic 7 Task 7.1) at default precision 1.0 px — **gated on regeneration of the fixture's `expectedAnchor` values**, which hardening found inconsistent with the polylabel definition for 13 of 20 records (see Epic 7 Task 7.3's fixture-data-defect note; regeneration method is a BDFL decision).
+- 100% pass on all 20 `test/fixtures/anchor-shapes.json` fixtures, using polylabel over B1.e contour segments (an unordered flat CSR segment list, not ordered rings — see Epic 7 Task 7.1) at default precision 1.0 px, plus synthesized map-edge cracks for bitmap-edge-touching sectors. **BDFL ruling (resolves the fixture-data defect flagged during hardening — 13/20 checked-in `expectedAnchor` values contradicted the polylabel definition):** acceptance is interiority + clearance-optimality (`d_max − d(anchor) ≤ 1.0 px` against an independent brute-force reference), not coordinate equality against `expectedAnchor` — `expectedAnchor` is not treated as authoritative and the implementation was never tuned to reproduce it.
 - `getAnchor` is synchronous from the latest snapshot; `anchors` arrive via Transferable handoff; computation yields at ≤ 8 ms; drift ≤ ±2 ms.
+- `getAnchor` before the first `computeAnchors()` resolution throws a plain `Error` (**BDFL ruling**: no canonical error class assigned, per the PRD's "Public API delta" note).
+- **BDFL ruling (resolves the Epic 7 Task 7.2 Projection API defect):** `MapEngine.project(x, y): [number, number]` and `MapRenderer.project(x, y): [number, number]` were added — a pure-number world→screen transform (no Three.js type crosses the public boundary, satisfying PR-4) computed from the camera's already-orthographic, 1-world-unit-per-pixel geometry. The example's anchor-marker showcase uses this to position DOM overlay markers.
 
 ### Epic 8 — Dynamic Borders + Finality (CA-6, F-4.10)
 

@@ -20,7 +20,10 @@ import {
 } from './errors'
 import { RenderClock } from './RenderClock'
 import { SharedRegistryProxy } from './worker/SharedRegistryProxy'
-import { TransferableGroupPool } from './worker/transferablePool'
+import {
+  TransferableGroupPool,
+  TransferableAnchorPool,
+} from './worker/transferablePool'
 
 export class MapEngine {
   private _loaded: boolean = false
@@ -44,6 +47,7 @@ export class MapEngine {
   private _currentMapMode: MapModeId | null = null
   private _costsReady: boolean = false
   private _pool: TransferableGroupPool | null = null
+  private _anchorPool: TransferableAnchorPool | null = null
 
   constructor() {
     this._parser = new SectorBitmapParser()
@@ -216,6 +220,8 @@ export class MapEngine {
       this._proxy = null
       this._pool?.dispose()
       this._pool = null
+      this._anchorPool?.dispose()
+      this._anchorPool = null
       this._renderer?.destroy()
       this._worker.terminate()
       this._worker = this._createWorker()
@@ -325,7 +331,15 @@ export class MapEngine {
       this._pool = new TransferableGroupPool(this._worker, () => {
         renderer._dirty = true
       })
-      renderer._postRenderHook = this._pool.flushBounces
+      this._anchorPool = new TransferableAnchorPool(this._worker, () => {
+        renderer._dirty = true
+      })
+      // Single _postRenderHook slot shared by both ring pools (F-C.7/F-C.8 +
+      // CA-8) -- a composite flushes each pool's bounce-back independently.
+      renderer._postRenderHook = (): void => {
+        this._pool!.flushBounces()
+        this._anchorPool!.flushBounces()
+      }
       renderer._resumeLoop()
 
       this._canvas = config.canvas
@@ -354,6 +368,8 @@ export class MapEngine {
     this._proxy = null
     this._pool?.dispose()
     this._pool = null
+    this._anchorPool?.dispose()
+    this._anchorPool = null
     // CA-7: discard the registered palette data (Epic 4 Task 4.3).
     this._mapModes.clear()
     this._currentMapMode = null
@@ -610,5 +626,42 @@ export class MapEngine {
     if (!this._loaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     return this._pool!.getGroupBBox(groupId)
+  }
+
+  /**
+   * Computes a guaranteed-interior label anchor (Pole of Inaccessibility,
+   * CA-8) for every sector, computed in the Worker from B1.e contour
+   * segments and delivered to Main via the Transferable ring pool.
+   */
+  async computeAnchors(): Promise<void> {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    await this._proxy!.call<void>('computeAnchors')
+  }
+
+  /**
+   * Synchronous read of a sector's anchor point (CA-8), served from the
+   * ring pool's Main-current snapshot, in bitmap pixel-space coordinates.
+   * Throws a plain `Error` if `computeAnchors()` has never resolved, or
+   * `RangeError` if `sectorId` is out of range.
+   */
+  getAnchor(sectorId: number): [number, number] {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    return this._anchorPool!.getAnchor(sectorId)
+  }
+
+  /**
+   * Projects a bitmap pixel-space coordinate to CSS screen-space coordinates
+   * (canvas-relative, top-left origin), honoring the live camera pan/zoom.
+   * A pure-number transform -- no Three.js type crosses this boundary (PR-4).
+   */
+  project(x: number, y: number): [number, number] {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    return this._renderer!.project(x, y)
   }
 }

@@ -47,6 +47,30 @@ body {
   pointer-events: none;
 }
 
+/* Anchors demo (Epic 7 Task 7.2): DOM overlay markers positioned via
+   MapEngine.project() and repositioned every frame during pan/zoom. */
+.anchor-marker,
+.centroid-marker {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+.anchor-marker {
+  width: 7px;
+  height: 7px;
+  background: #ff5252;
+}
+
+.centroid-marker {
+  width: 5px;
+  height: 5px;
+  background: #40c4ff;
+}
+
 /* ── Sidebar ──────────────────────────────────────────── */
 
 #sidebar {

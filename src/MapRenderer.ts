@@ -201,6 +201,33 @@ export class MapRenderer {
     return this._backend.readSectorIdAt(x, y)
   }
 
+  /**
+   * Projects a bitmap pixel-space coordinate `(x, y)` (pixel center) to CSS
+   * screen-space coordinates relative to the canvas's top-left corner,
+   * honoring the live camera pan/zoom (CA-8). This is the exact inverse of
+   * `MapEngine._resolvePixelCoords`'s screen→pixel raycast, expressed as a
+   * closed-form transform since the camera is orthographic — 1 world unit
+   * equals 1 bitmap pixel, and the map plane is centered at the world
+   * origin (`ThreeRenderBackend`'s `PlaneGeometry(mapWidth, mapHeight)`).
+   * All inputs are read live so panning/zooming/resizing between calls is
+   * always reflected.
+   */
+  project(x: number, y: number): [number, number] {
+    const w = this._registry.width
+    const h = this._registry.height
+    const worldX = x + 0.5 - w / 2
+    const worldY = h / 2 - (y + 0.5)
+    const ndcX =
+      ((worldX - this.camera.position.x) * this.camera.zoom) /
+      this._frustumHalfW
+    const ndcY =
+      ((worldY - this.camera.position.y) * this.camera.zoom) /
+      this._frustumHalfH
+    const screenX = ((ndcX + 1) / 2) * this._canvas.clientWidth
+    const screenY = ((1 - ndcY) / 2) * this._canvas.clientHeight
+    return [screenX, screenY]
+  }
+
   get isPanning(): boolean {
     return this._input.isPanning
   }

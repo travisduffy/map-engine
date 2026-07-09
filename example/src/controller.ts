@@ -26,6 +26,12 @@ import {
   setActiveRegionButton,
   setRegionOutput,
   clearRegionOutput,
+  renderAnchorMarkers,
+  clearAnchorMarkers,
+  setAnchorMarkersVisible,
+  setAnchorsToggleButton,
+  setAnchorsOutput,
+  clearAnchorsOutput,
 } from './ui'
 
 const PATH_START_COLOR = '#ffcc00'
@@ -60,6 +66,17 @@ export class AppController {
   private regionMembers: string[][] = []
   private regionSectors = new Set<string>()
   private selectedRegion: number | null = null
+
+  // Anchors demo (Epic 7 Task 7.2): computeAnchors() is lazy (fires on first
+  // toggle, not at startup); getAnchor(id) is the guaranteed-interior label
+  // point, contrasted against getCentroid(id) (which can fall outside
+  // concave/annulus/spiral shapes). engine.project() converts both from
+  // bitmap pixel-space to screen-space every frame so the DOM markers stay
+  // glued to their sectors during pan/zoom.
+  private anchorsComputed = false
+  private anchorsVisible = false
+  private anchorEls: HTMLElement[] = []
+  private centroidEls: HTMLElement[] = []
 
   private readonly canvas: HTMLCanvasElement
   private readonly chkHover: HTMLInputElement
@@ -249,6 +266,50 @@ export class AppController {
     clearRegionOutput()
   }
 
+  /**
+   * Anchors demo (Epic 7 Task 7.2): lazily computes anchors on first
+   * activation, then toggles the marker layer's visibility on every
+   * subsequent click without recomputing.
+   */
+  private async toggleAnchors(): Promise<void> {
+    if (!this.engine) return
+
+    if (!this.anchorsComputed) {
+      setAnchorsOutput('Computing anchors…')
+      await this.engine.computeAnchors()
+      this.anchorsComputed = true
+      const { anchorEls, centroidEls } = renderAnchorMarkers(
+        this.sectorKeys.length
+      )
+      this.anchorEls = anchorEls
+      this.centroidEls = centroidEls
+      setAnchorsOutput(
+        `${this.sectorKeys.length} anchors computed — red = anchor (guaranteed interior), blue = centroid (can fall outside concave/annulus/spiral shapes)`
+      )
+    }
+
+    this.anchorsVisible = !this.anchorsVisible
+    setAnchorMarkersVisible(this.anchorsVisible)
+    setAnchorsToggleButton(this.anchorsVisible)
+    if (this.anchorsVisible) this.updateAnchorPositions()
+  }
+
+  /** Reprojects every marker from bitmap pixel-space to screen-space (Epic 7 Task 7.2). */
+  private updateAnchorPositions(): void {
+    if (!this.engine || !this.anchorsVisible) return
+    for (let id = 0; id < this.sectorKeys.length; id++) {
+      const [ax, ay] = this.engine.getAnchor(id)
+      const [sx, sy] = this.engine.project(ax, ay)
+      this.anchorEls[id].style.left = `${sx}px`
+      this.anchorEls[id].style.top = `${sy}px`
+
+      const [cx, cy] = this.engine.getCentroid(id)
+      const [csx, csy] = this.engine.project(cx, cy)
+      this.centroidEls[id].style.left = `${csx}px`
+      this.centroidEls[id].style.top = `${csy}px`
+    }
+  }
+
   private stopEngine(): void {
     if (!this.engine) return
     // off() throws if engine is destroyed — must be called before destroy()
@@ -276,6 +337,10 @@ export class AppController {
     this.regionMembers = []
     this.regionSectors.clear()
     this.selectedRegion = null
+    this.anchorsComputed = false
+    this.anchorsVisible = false
+    this.anchorEls = []
+    this.centroidEls = []
     setFrameCounter(0)
     setTickCounter(0)
     setClockSpeed(1)
@@ -283,6 +348,9 @@ export class AppController {
     clearPathOutput()
     clearRegionOutput()
     clearRegionButtons()
+    clearAnchorMarkers()
+    clearAnchorsOutput()
+    setAnchorsToggleButton(false)
   }
 
   // Restores a sector to whichever highlight layer currently owns it
@@ -445,6 +513,10 @@ export class AppController {
       const hue = Math.round(this.pulsePhase * 360)
       this.engine.setSectorColor(this.pulseHexKey, `hsl(${hue}, 90%, 55%)`)
     }
+
+    if (this.anchorsVisible) {
+      this.updateAnchorPositions()
+    }
   }
 
   private applyNeighborHighlights(hexKey: string): void {
@@ -491,6 +563,7 @@ export class AppController {
       'btn-mapmode-grayscale'
     )!
     const btnPathClear = document.getElementById('btn-path-clear')!
+    const btnAnchorsToggle = document.getElementById('btn-anchors-toggle')!
 
     this.canvas.addEventListener('contextmenu', this.onContextMenu)
 
@@ -498,6 +571,10 @@ export class AppController {
       this.pathStartHex = null
       this.resetPathHighlights()
       clearPathOutput()
+    })
+
+    btnAnchorsToggle.addEventListener('click', () => {
+      void this.toggleAnchors()
     })
 
     this.chkHover.addEventListener('change', () => {
