@@ -136,9 +136,9 @@ describe('SimulationClock — drift re-verification (Epic 2 Task 2.4)', () => {
       const intervalMs = 1000 / fixture.hz
       const expectedTicks = fixture.ticks.length - 1
 
-      // Same accumulator-quantization allowance as the GameClock baseline
-      // (Task 1.1): fired-tick count may lag the ideal count by 1 at a
-      // sample boundary.
+      // Same accumulator-quantization allowance as the original fixed-tick
+      // clock baseline (Task 1.1): fired-tick count may lag the ideal count
+      // by 1 at a sample boundary.
       expect(clock.elapsed).toBeGreaterThanOrEqual(expectedTicks - 1)
       expect(clock.elapsed).toBeLessThanOrEqual(expectedTicks)
 

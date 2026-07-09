@@ -1,0 +1,14 @@
+{
+  "ff0000": {
+    "name": "Red"
+  },
+  "00ff00": {
+    "name": "Green"
+  },
+  "0000ff": {
+    "name": "Blue"
+  },
+  "ffff00": {
+    "name": "Yellow"
+  }
+}

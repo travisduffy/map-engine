@@ -2,6 +2,10 @@ import type { WorkerMessage, BootstrapAckPayload } from '../types'
 import { setWorkerState } from './state'
 import { getCallHandler, registerCallHandler } from './callHandlers'
 import { SimulationClock, type TickTelemetry } from './SimulationClock'
+import './pathfindingHandlers'
+import { handleReturnGroupBBoxes } from './aggregationHandlers'
+import { handleReturnAnchors } from './anchorHandlers'
+import { handleReturnBorderEdges } from './borderHandlers'
 
 function bboxAt(
   bboxes: Int16Array,
@@ -70,6 +74,21 @@ self.onmessage = (e: MessageEvent<WorkerMessage>): void => {
           } satisfies WorkerMessage)
         }
       )
+      break
+    }
+
+    case 'returnGroupBBoxes': {
+      handleReturnGroupBBoxes(msg.buffer)
+      break
+    }
+
+    case 'returnAnchors': {
+      handleReturnAnchors(msg.buffer)
+      break
+    }
+
+    case 'returnBorderEdges': {
+      handleReturnBorderEdges(msg.edges, msg.count)
       break
     }
 

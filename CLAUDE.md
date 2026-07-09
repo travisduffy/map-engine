@@ -83,6 +83,8 @@ All four must exit 0 before closing the phase.
 
 **When modifying the public API:** also update `example/src/main.ts` to reflect the change — the example must always demonstrate the current, accurate API surface.
 
+**When adding a new module file under `src/worker/` or `src/render/`:** also add its row to `.claude/rules/architecture.md`'s Module layout table in the same session. A vaguer version of this rule ("update relevant `.claude/rules/*.md` files if domain patterns changed") already existed but wasn't concrete enough to fire reliably — Epic 8's `borderHandlers.ts`, `BorderRenderer.ts`, and `TransferableBorderPool` went undocumented there for a full epic plus one intervening `/documentation-sync` pass before a later sync caught the gap.
+
 ## Dev dependencies (when installing)
 
 ```
@@ -145,7 +147,9 @@ These directives are derived from measured session overhead. Apply them on every
 
 ### 1. State files: Read once, Write once
 
-`docs/active/PROGRESS.md` routinely needs 2–3 changes per session (status field, task table, session log). **Determine all changes before touching the file, then do one Read → one Write.** Never make multiple Edit calls to the same file in one session — each extra Edit call is pure overhead with no benefit over a full Write. When compressing a Session Log or audit entry, cut conversational filler but keep every decision, discrepancy, and technical rationale — that detail costs more to reconstruct next session than it costs to keep now.
+`docs/active/PROGRESS.md` routinely needs 2–3 changes per session (status field, task table, session log). **Determine all changes before touching the file, then do one Read → one Write.** Never make multiple Edit calls to the same file in one session — each extra Edit call is pure overhead with no benefit over a full Write. When compressing a Session Log or audit entry, cut conversational filler but keep every decision, discrepancy, and technical rationale — that detail costs more to reconstruct next session than it costs to keep now. Treat a second `Edit` call to the same file as the signal to stop and fold every remaining change into one `Write` instead — a 2026-07-09 session made four sequential `Edit` calls to `PROGRESS.md` in one sitting despite this rule, losing the entire batching benefit the rule exists for.
+
+**Narrow exception for a large file with a few, well-separated changes:** once a file has grown past a few hundred lines and is already fully in context from an earlier Read/Write this session, 2 large, non-overlapping `Edit` calls (e.g., inserting one new dated Session Log entry, then appending one Lessons Learned bullet) are an acceptable, deliberate alternative to a full `Write` — retyping hundreds of unrelated lines into a `Write` call risks silently dropping or corrupting content that a targeted `Edit` cannot touch. This exception is narrow: it does not license 3+ edits, and it does not apply to small or scattered changes that a single `Write` handles just as safely.
 
 ### 2. Test research: Grep before broad reads
 
@@ -183,6 +187,14 @@ Files shown in system-reminder `Read` results at session start are already in yo
 ### 6. Targeted reads for known sections
 
 When only a named section of a large file is needed (e.g., PRD §A1, ROADMAP §2.1, a specific audit section), use `offset` + `limit` parameters. Thirty lines around the target is almost always sufficient. Reading a full 80-line PRD to extract a 10-line section wastes 70 lines of context budget every time.
+
+When editing a single row of a prettier-formatted markdown table, anchor the `Edit` on a short unique fragment rather than the full copied line — column-alignment padding often doesn't match what gets typed manually, and a full-line `old_string` fails on that whitespace mismatch.
+
+### 7. Plan Mode: verify before exiting
+
+Before calling `ExitPlanMode` on a non-trivial plan, re-read the exact source lines the plan depends on (method signatures, field names, call sites) instead of trusting Explore/Plan subagent summaries at face value — this repo's own tooling (`sprint-hardening` skill, phase-exit audits) treats a first draft as needing a dedicated verification pass, and a plan should meet that bar without being asked. A 2026-07-09 session's first `ExitPlanMode` call was rejected pending exactly this pass, which then found a redundant computation and an unresolved design question that the subagent summaries alone had missed.
+
+This kept getting skipped even with the rule in place: a second 2026-07-09 session's first `ExitPlanMode` call was rejected for the identical reason, catching two more defects (a wrong assumption about where a data field lives, a missing wiring path) before implementation began. A prose reminder is easy to skip because finishing the plan draft and calling `ExitPlanMode` feel like one continuous action. Make the pass produce a visible artifact instead of a private mental step: before the first `ExitPlanMode` call, add a short "Verified against source" note to the plan file itself, listing the specific file:line locations re-read and confirming each still matches the plan's key assumptions. A plan file with no such note is a visible signal — to you and to the user — that the pass was skipped, not just something to remember to do.
 
 ---
 

@@ -1,0 +1,51 @@
+[
+  {
+    "mapImage": "/test/fixtures/mappings/maps/identity.png",
+    "definition": "/test/fixtures/mappings/maps/identity.json",
+    "parentMapping": [0],
+    "maxGroups": 1,
+    "expectedGroupBBoxes": [[0, 0, 1, 1]]
+  },
+  {
+    "mapImage": "/test/fixtures/mappings/maps/all-to-one.png",
+    "definition": "/test/fixtures/mappings/maps/all-to-one.json",
+    "parentMapping": [0, 0, 0, 0],
+    "maxGroups": 1,
+    "expectedGroupBBoxes": [[0, 0, 3, 3]]
+  },
+  {
+    "mapImage": "/test/fixtures/mappings/maps/disjoint-groups.png",
+    "definition": "/test/fixtures/mappings/maps/disjoint-groups.json",
+    "parentMapping": [0, 1, 0, 1],
+    "maxGroups": 2,
+    "expectedGroupBBoxes": [
+      [0, 0, 1, 3],
+      [2, 0, 3, 3]
+    ]
+  },
+  {
+    "mapImage": "/test/fixtures/mappings/maps/sentinel-partial.png",
+    "definition": "/test/fixtures/mappings/maps/sentinel-partial.json",
+    "parentMapping": [0, 65535, 0, 65535],
+    "maxGroups": 1,
+    "expectedGroupBBoxes": [[0, 0, 1, 3]]
+  },
+  {
+    "mapImage": "/test/fixtures/mappings/maps/sentinel-all.png",
+    "definition": "/test/fixtures/mappings/maps/sentinel-all.json",
+    "parentMapping": [65535, 65535, 65535, 65535],
+    "maxGroups": 1,
+    "expectedGroupBBoxes": [[32767, 32767, -32768, -32768]]
+  },
+  {
+    "mapImage": "/test/fixtures/mappings/maps/single-pixel-groups.png",
+    "definition": "/test/fixtures/mappings/maps/single-pixel-groups.json",
+    "parentMapping": [0, 1, 2],
+    "maxGroups": 3,
+    "expectedGroupBBoxes": [
+      [0, 0, 0, 0],
+      [1, 0, 1, 0],
+      [2, 0, 2, 0]
+    ]
+  }
+]

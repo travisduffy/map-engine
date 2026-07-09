@@ -35,8 +35,9 @@ export interface SectorBBox {
   maxY: number
 }
 
-// elapsed is the 1-indexed count of ticks fired since this GameClock was constructed,
-// including the current one. The first tick's callback receives elapsed === 1.
+// elapsed is the 1-indexed count of ticks fired since the clock consuming
+// this callback type was constructed, including the current one. The first
+// tick's callback receives elapsed === 1.
 export type ClockTickCallback = (elapsed: number) => void
 
 // dt is elapsed wall-clock seconds since the previous frame (e.g. 0.01667 at 60fps).
@@ -107,3 +108,11 @@ export type WorkerMessage =
   | { type: 'CALL'; id: number; method: string; params: unknown }
   | { type: 'RESULT'; id: number; result: unknown; snapshot?: unknown }
   | { type: 'ERROR'; id: number; errorName: string; message: string }
+  | { type: 'INIT_GROUPS'; maxGroups: number }
+  | { type: 'groupBBoxes'; buffer: Int16Array }
+  | { type: 'returnGroupBBoxes'; buffer: Int16Array }
+  | { type: 'INIT_ANCHORS'; sectorCount: number }
+  | { type: 'anchors'; buffer: Int16Array }
+  | { type: 'returnAnchors'; buffer: Int16Array }
+  | { type: 'borderEdges'; edges: Float32Array; count: Uint32Array }
+  | { type: 'returnBorderEdges'; edges: Float32Array; count: Uint32Array }

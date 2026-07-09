@@ -54,6 +54,10 @@ export class NullRenderBackend
 
   uploadBorderEdges(_buffer: Float32Array, _count: number): void {}
 
+  getBorderVBO(): WebGLBuffer | null {
+    return null
+  }
+
   render(_scene: THREE.Scene, _camera: THREE.Camera): void {}
 
   setSize(_width: number, _height: number): void {}

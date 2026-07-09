@@ -9,10 +9,10 @@ export interface TickTelemetry {
 /**
  * Worker-side fixed-tick simulation clock (B3.b). Self-schedules via
  * `setInterval` at the tick period; the accumulator absorbs the resulting
- * scheduling jitter the same way `GameClock`'s rAF-driven accumulator does,
- * including the same `MAX_TICKS_PER_INTERVAL` catch-up cap (resetting the
- * accumulator when hit, so an unyielded Worker stall can't spiral into an
- * unbounded catch-up loop).
+ * scheduling jitter the same way a Main-thread rAF-driven fixed-tick
+ * accumulator does, including the same `MAX_TICKS_PER_INTERVAL` catch-up cap
+ * (resetting the accumulator when hit, so an unyielded Worker stall can't
+ * spiral into an unbounded catch-up loop).
  */
 export class SimulationClock {
   private readonly _tickHz: number

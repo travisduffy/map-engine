@@ -15,5 +15,15 @@
     "measurementMethod": "performance.now() bracketing ThreeRenderBackend._setPaletteUniformDirect() + forced render(), median of 10 swaps, test/fixtures/maps/large.png (4096x4096, single-sector) rendered to a 1920x1080 canvas (test/PalettePerf.gl.spec.ts)",
     "toleranceApplied": "5.0x software-rendering tolerance (ROADMAP §12.2) — SwiftShader (software) detected via WEBGL_debug_renderer_info; raw median (0.4ms) already passes the strict <1ms reference-hardware gate with margin",
     "note": "Unverified against reference hardware (ROADMAP §12.2 F-C.5: i7-12700K / RTX 3060 / Chrome 124) — this session has no dedicated GPU. Re-run on reference hardware or a GPU CI runner recommended before treating this as authoritative."
+  },
+  "b3.findpath_p95_ms": {
+    "value": 9.0,
+    "unit": "ms",
+    "capturedAt": "2026-07-08T10:21:57Z",
+    "hardware": "Linux x86_64 (containerized dev session — not reference hardware)",
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "measurementMethod": "performance.now() bracketing SpatialGraph.findPath() per fixture pair, P95 over the 49 reachable pairs of test/fixtures/pathfinding/grid-10k.json (100x100 grid, 10,000 nodes) run in a dedicated test Worker bypassing BOOTSTRAP (test/PathfindingPerf.gl.spec.ts, test/workers/pathfinding-perf-worker.ts). The >=500-node corridor pair (611 nodes) measured 5.4ms separately, also within tolerance.",
+    "toleranceApplied": "5.0x software-rendering tolerance (ROADMAP §12.2) — SwiftShader (software) detected via WEBGL_debug_renderer_info; raw P95 (9.0ms) is within the tolerance-adjusted 10ms bound (2ms reference-hardware gate x 5.0) but would not pass the strict <2ms reference-hardware gate untolerated",
+    "note": "Unverified against reference hardware (ROADMAP §12.2 F-C.5: i7-12700K / RTX 3060 / Chrome 124) — this session has no dedicated GPU and appears to be a busy/shared container (sample spread 0.1ms-11.7ms across 49 pairs). Re-run on reference hardware or a GPU CI runner recommended before treating this as authoritative. Drift during the burst: SimulationClock(60hz) meanDelta=16.545ms vs nominal 16.667ms (within +/-2ms bound, F-4.7)."
   }
 }

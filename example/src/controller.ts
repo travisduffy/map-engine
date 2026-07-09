@@ -1,4 +1,8 @@
-import MapEngine, { GameClock, toHexKey, type PickResult } from 'map-engine'
+import MapEngine, {
+  toHexKey,
+  PathNotFoundError,
+  type PickResult,
+} from 'map-engine'
 import type { SelectedRegistryData } from './ui'
 import {
   setStatus,
@@ -14,17 +18,88 @@ import {
   setNeighborOutput,
   clearNeighborOutput,
   setClockPauseButton,
+  setPathOutput,
+  clearPathOutput,
+  renderRegionButtons,
+  clearRegionButtons,
+  setActiveRegionButton,
+  setRegionOutput,
+  clearRegionOutput,
+  renderAnchorMarkers,
+  clearAnchorMarkers,
+  setAnchorMarkersVisible,
+  setAnchorsToggleButton,
+  setAnchorsOutput,
+  clearAnchorsOutput,
+  setBordersOutput,
+  clearBordersOutput,
+  setBordersToggleButton,
 } from './ui'
+
+const PATH_START_COLOR = '#ffcc00'
+const PATH_ROUTE_COLOR = '#ff6a00'
+const REGION_HL_COLOR = '#b39ddb'
+
+const CLOCK_MAX_TICKS_PER_FRAME = 10
 
 export class AppController {
   private engine: MapEngine | null = null
-  private gameClock: GameClock | null = null
   private lastHovered: string | null = null
   private selectedHex: string | null = null
   private frameCount = 0
   private pulseHexKey: string | null = null
   private pulsePhase = 0
   private previousNeighbors = new Set<string>()
+
+  // Pathfinding demo (Epic 5 Task 5.3): right-click sets start, then end;
+  // sectorKeys[numericId] resolves a findPath() result back to hex keys
+  // (array index === numeric id, since getSectorKeys() returns idToHex order).
+  private sectorKeys: string[] = []
+  private hexToId = new Map<string, number>()
+  private pathStartHex: string | null = null
+  private pathSectors = new Set<string>()
+  private pathHighlightColor = PATH_ROUTE_COLOR
+
+  // Aggregation demo (Epic 6 Task 6.3): sectors are grouped by the province
+  // suffix of their "County, Province" name into regions via a parentMapping
+  // built from sectorKeys (index === numeric id, same convention as the
+  // pathfinding bridge above). Selecting a region highlights its member
+  // sectors and reads the aggregate bbox from getGroupBBox().
+  private provinceNames: string[] = []
+  private regionMembers: string[][] = []
+  private regionSectors = new Set<string>()
+  private selectedRegion: number | null = null
+
+  // Anchors demo (Epic 7 Task 7.2): computeAnchors() is lazy (fires on first
+  // toggle, not at startup); getAnchor(id) is the guaranteed-interior label
+  // point, contrasted against getCentroid(id) (which can fall outside
+  // concave/annulus/spiral shapes). engine.project() converts both from
+  // bitmap pixel-space to screen-space every frame so the DOM markers stay
+  // glued to their sectors during pan/zoom.
+  private anchorsComputed = false
+  private anchorsVisible = false
+  private anchorEls: HTMLElement[] = []
+  private centroidEls: HTMLElement[] = []
+
+  // Borders demo (Epic 8 Task 8.3): recomputeBorders() is lazy (fires on
+  // first toggle, mirroring the anchors pattern above); setBordersVisible()
+  // then just flips the drawn GPU LineSegments on/off on every subsequent
+  // click, with no further Worker round-trip.
+  private bordersComputed = false
+  private bordersVisible = false
+
+  // Game clock demo (Epic 8 Task 8.5 — migrated off the sprint's now-removed
+  // fixed-tick clock helper class): a fixed-tick accumulator driven by
+  // `engine.onFrame(dt)` (already `RenderClock`-backed since Epic 2),
+  // reproducing that helper's exact tick-accounting: `speed === 0` pauses
+  // without losing `clockAccumulator`, `clockLastSpeed` remembers the
+  // pre-pause speed for resume, and `CLOCK_MAX_TICKS_PER_FRAME` bounds the
+  // catch-up burst after a long synchronous stall.
+  private clockSpeed = 1
+  private clockLastSpeed = 1
+  private clockElapsed = 0
+  private clockAccumulator = 0
+  private readonly clockIntervalSeconds = 1 // ticksPerSecond: 1
 
   private readonly canvas: HTMLCanvasElement
   private readonly chkHover: HTMLInputElement
@@ -67,18 +142,24 @@ export class AppController {
     }
 
     this.engine.onFrame(this.onFrameTick)
-
-    this.gameClock = new GameClock(this.engine, { ticksPerSecond: 1 })
-    this.gameClock.onTick(elapsed => {
-      setTickCounter(elapsed)
-      setClockSpeed(this.gameClock!.speed)
-    })
+    this.engine.onFrame(this.onClockFrame)
 
     setStatus('Ready — scroll to zoom, middle-mouse drag to pan')
     const keys = this.engine.getSectorKeys()
     renderSectorList(keys, key => this.engine!.getSector(key))
 
     this.registerMapModes(keys)
+
+    // Pathfinding demo (Epic 5 Task 5.3): uniform cost 1 so findPath()
+    // returns the fewest-hop route; hexToId/sectorKeys bridge the hex-key
+    // pick results to/from findPath()'s numeric sector ids.
+    this.sectorKeys = keys
+    this.hexToId.clear()
+    keys.forEach((key, id) => this.hexToId.set(key, id))
+    await this.engine.setTraversalCosts(new Uint8Array(keys.length).fill(1))
+
+    // Aggregation demo (Epic 6 Task 6.3): group sectors by province.
+    await this.setupRegions(keys)
 
     // Demonstrate toHexKey API: verify round-trip for first sector
     if (keys.length > 0) {
@@ -116,13 +197,172 @@ export class AppController {
     this.engine.setMapMode('default')
   }
 
+  /**
+   * Aggregation demo (Epic 6 Task 6.3): builds a parentMapping grouping every
+   * sector by the province suffix of its "County, Province" name, uploads it
+   * via setParentMapping/aggregateGroups, then renders one selector button
+   * per province. A name that doesn't parse (unexpected for this example's
+   * data) maps to the 0xFFFF sentinel and is excluded from every group.
+   */
+  private async setupRegions(keys: string[]): Promise<void> {
+    if (!this.engine) return
+
+    const provinceIndex = new Map<string, number>()
+    const members: string[][] = []
+    const mapping = new Uint16Array(keys.length)
+
+    keys.forEach((key, id) => {
+      const name = this.engine!.getSector(key)?.name ?? ''
+      const commaAt = name.lastIndexOf(',')
+      const province = commaAt >= 0 ? name.slice(commaAt + 1).trim() : ''
+
+      if (!province) {
+        mapping[id] = 0xffff
+        return
+      }
+      let groupId = provinceIndex.get(province)
+      if (groupId === undefined) {
+        groupId = provinceIndex.size
+        provinceIndex.set(province, groupId)
+        members.push([])
+      }
+      mapping[id] = groupId
+      members[groupId].push(key)
+    })
+
+    this.provinceNames = [...provinceIndex.keys()]
+    this.regionMembers = members
+
+    await this.engine.setParentMapping(mapping, this.provinceNames.length)
+    await this.engine.aggregateGroups()
+
+    renderRegionButtons(this.provinceNames, index => this.selectRegion(index))
+  }
+
+  private selectRegion(groupId: number): void {
+    if (!this.engine) return
+    if (this.selectedRegion === groupId) {
+      this.deselectRegion()
+      return
+    }
+    if (this.selectedRegion !== null) this.deselectRegion()
+
+    this.selectedRegion = groupId
+    for (const hex of this.regionMembers[groupId]) {
+      this.regionSectors.add(hex)
+      // Don't stomp a more specific overlay already owning this sector --
+      // same precedence as the rest of the demo (path > neighbor > region).
+      if (
+        hex !== this.selectedHex &&
+        hex !== this.lastHovered &&
+        !this.previousNeighbors.has(hex) &&
+        !this.pathSectors.has(hex)
+      ) {
+        this.engine.setSectorColor(hex, REGION_HL_COLOR)
+      }
+    }
+    setActiveRegionButton(groupId)
+
+    const [minX, minY, maxX, maxY] = this.engine.getGroupBBox(groupId)
+    setRegionOutput(
+      this.provinceNames[groupId],
+      [minX, minY, maxX, maxY],
+      maxX - minX + 1,
+      maxY - minY + 1
+    )
+  }
+
+  private deselectRegion(): void {
+    if (this.selectedRegion === null) return
+    const hexes = [...this.regionSectors]
+    this.regionSectors.clear()
+    this.selectedRegion = null
+    for (const hex of hexes) {
+      this.restoreSectorBaseColor(hex)
+    }
+    setActiveRegionButton(null)
+    clearRegionOutput()
+  }
+
+  /**
+   * Anchors demo (Epic 7 Task 7.2): lazily computes anchors on first
+   * activation, then toggles the marker layer's visibility on every
+   * subsequent click without recomputing.
+   */
+  private async toggleAnchors(): Promise<void> {
+    if (!this.engine) return
+
+    if (!this.anchorsComputed) {
+      setAnchorsOutput('Computing anchors…')
+      await this.engine.computeAnchors()
+      this.anchorsComputed = true
+      const { anchorEls, centroidEls } = renderAnchorMarkers(
+        this.sectorKeys.length
+      )
+      this.anchorEls = anchorEls
+      this.centroidEls = centroidEls
+      setAnchorsOutput(
+        `${this.sectorKeys.length} anchors computed — red = anchor (guaranteed interior), blue = centroid (can fall outside concave/annulus/spiral shapes)`
+      )
+    }
+
+    this.anchorsVisible = !this.anchorsVisible
+    setAnchorMarkersVisible(this.anchorsVisible)
+    setAnchorsToggleButton(this.anchorsVisible)
+    if (this.anchorsVisible) this.updateAnchorPositions()
+  }
+
+  /** Reprojects every marker from bitmap pixel-space to screen-space (Epic 7 Task 7.2). */
+  private updateAnchorPositions(): void {
+    if (!this.engine || !this.anchorsVisible) return
+    for (let id = 0; id < this.sectorKeys.length; id++) {
+      const [ax, ay] = this.engine.getAnchor(id)
+      const [sx, sy] = this.engine.project(ax, ay)
+      this.anchorEls[id].style.left = `${sx}px`
+      this.anchorEls[id].style.top = `${sy}px`
+
+      const [cx, cy] = this.engine.getCentroid(id)
+      const [csx, csy] = this.engine.project(cx, cy)
+      this.centroidEls[id].style.left = `${csx}px`
+      this.centroidEls[id].style.top = `${csy}px`
+    }
+  }
+
+  /**
+   * Borders demo (Epic 8 Task 8.3): draws group perimeters for the same
+   * province groups the Regions demo already builds via setParentMapping()
+   * in setupRegions() -- recomputeBorders() needs no further setup here.
+   * Lazily computes on first activation (mirroring toggleAnchors() above),
+   * then just flips visibility via setBordersVisible() on every subsequent
+   * click -- no re-computation, no further Worker round-trip. Map-edge
+   * perimeter is out of scope (CA-6 is interior-only), so provinces
+   * touching the bitmap boundary render with an open border there --
+   * expected, not a bug.
+   */
+  private async toggleBorders(): Promise<void> {
+    if (!this.engine) return
+
+    if (!this.bordersComputed) {
+      await this.engine.recomputeBorders()
+      this.bordersComputed = true
+      const segments = this.engine.getBorderSegments()
+      setBordersOutput(segments ? segments.length / 4 : 0)
+    }
+
+    this.bordersVisible = !this.bordersVisible
+    this.engine.setBordersVisible(this.bordersVisible)
+    setBordersToggleButton(this.bordersVisible)
+  }
+
   private stopEngine(): void {
     if (!this.engine) return
-    // off() throws if engine is destroyed — must be called before destroy()
+    // off() throws if the engine is already destroyed — must be called
+    // before destroy(); offFrame() is called here too (rather than relying
+    // on destroy()'s own internal cleanup) so the unregistration is
+    // explicit and doesn't depend on that internal detail.
     this.engine.off('sectorHover', this.onHover)
     this.engine.off('sectorClick', this.onClick)
-    this.gameClock?.destroy()
-    this.gameClock = null
+    this.engine.offFrame(this.onClockFrame)
     this.engine.destroy()
     this.engine = null
     this.resetState()
@@ -135,10 +375,52 @@ export class AppController {
     this.pulseHexKey = null
     this.pulsePhase = 0
     this.previousNeighbors.clear()
+    this.sectorKeys = []
+    this.hexToId.clear()
+    this.pathStartHex = null
+    this.pathSectors.clear()
+    this.provinceNames = []
+    this.regionMembers = []
+    this.regionSectors.clear()
+    this.selectedRegion = null
+    this.anchorsComputed = false
+    this.anchorsVisible = false
+    this.anchorEls = []
+    this.centroidEls = []
+    this.bordersComputed = false
+    this.bordersVisible = false
+    this.clockSpeed = 1
+    this.clockLastSpeed = 1
+    this.clockElapsed = 0
+    this.clockAccumulator = 0
     setFrameCounter(0)
     setTickCounter(0)
     setClockSpeed(1)
     clearNeighborOutput()
+    clearPathOutput()
+    clearRegionOutput()
+    clearRegionButtons()
+    clearAnchorMarkers()
+    clearAnchorsOutput()
+    setAnchorsToggleButton(false)
+    clearBordersOutput()
+    setBordersToggleButton(false)
+  }
+
+  // Restores a sector to whichever highlight layer currently owns it
+  // (path > neighbor > region > none), instead of unconditionally resetting
+  // to the map-mode default. Used anywhere a transient overlay (hover,
+  // selection) needs to hand a sector back to its underlying state.
+  private restoreSectorBaseColor(hexKey: string): void {
+    if (this.pathSectors.has(hexKey)) {
+      this.engine!.setSectorColor(hexKey, this.pathHighlightColor)
+    } else if (this.previousNeighbors.has(hexKey)) {
+      this.engine!.setSectorColor(hexKey, '#aaccff')
+    } else if (this.regionSectors.has(hexKey)) {
+      this.engine!.setSectorColor(hexKey, REGION_HL_COLOR)
+    } else {
+      this.engine!.resetSectorColor(hexKey)
+    }
   }
 
   private onHover = (result: PickResult | null): void => {
@@ -148,15 +430,13 @@ export class AppController {
         this.lastHovered !== result.hexKey &&
         this.lastHovered !== this.selectedHex
       ) {
-        if (this.previousNeighbors.has(this.lastHovered)) {
-          this.engine!.setSectorColor(this.lastHovered, '#aaccff')
-        } else {
-          this.engine!.resetSectorColor(this.lastHovered)
-        }
+        this.restoreSectorBaseColor(this.lastHovered)
       }
       if (
         result.hexKey !== this.selectedHex &&
-        !this.previousNeighbors.has(result.hexKey)
+        !this.previousNeighbors.has(result.hexKey) &&
+        !this.pathSectors.has(result.hexKey) &&
+        !this.regionSectors.has(result.hexKey)
       ) {
         this.engine!.setSectorColor(result.hexKey, '#e8e8d0')
       }
@@ -164,11 +444,7 @@ export class AppController {
       renderHoverPanel(result)
     } else {
       if (this.lastHovered && this.lastHovered !== this.selectedHex) {
-        if (this.previousNeighbors.has(this.lastHovered)) {
-          this.engine!.setSectorColor(this.lastHovered, '#aaccff')
-        } else {
-          this.engine!.resetSectorColor(this.lastHovered)
-        }
+        this.restoreSectorBaseColor(this.lastHovered)
       }
       this.lastHovered = null
       clearHoverPanel()
@@ -180,7 +456,7 @@ export class AppController {
       const wasSelected = this.selectedHex
       this.pulseHexKey = null
       this.pulsePhase = 0
-      this.engine!.resetSectorColor(wasSelected)
+      this.restoreSectorBaseColor(wasSelected)
       this.resetNeighborHighlights()
       this.selectedHex = null
       clearSelectedPanel()
@@ -188,7 +464,7 @@ export class AppController {
         this.engine!.setSectorColor(wasSelected, '#e8e8d0')
       }
     } else {
-      if (this.selectedHex) this.engine!.resetSectorColor(this.selectedHex)
+      if (this.selectedHex) this.restoreSectorBaseColor(this.selectedHex)
       this.resetNeighborHighlights(result.hexKey)
       this.pulseHexKey = result.hexKey
       this.pulsePhase = 0
@@ -202,6 +478,123 @@ export class AppController {
     }
   }
 
+  // Right-click sets the pathfinding start sector, then the end sector;
+  // left-click's select/neighbor-highlight behavior above is untouched.
+  private onContextMenu = (e: MouseEvent): void => {
+    e.preventDefault()
+    void this.handlePathPick(e.clientX, e.clientY)
+  }
+
+  private async handlePathPick(
+    clientX: number,
+    clientY: number
+  ): Promise<void> {
+    if (!this.engine) return
+    const result = await this.engine.pick({ clientX, clientY })
+    if (!result) return
+
+    if (!this.pathStartHex) {
+      this.resetPathHighlights()
+      this.pathStartHex = result.hexKey
+      this.pathHighlightColor = PATH_START_COLOR
+      this.engine.setSectorColor(result.hexKey, PATH_START_COLOR)
+      this.pathSectors.add(result.hexKey)
+      setPathOutput(`Start: #${result.hexKey} — right-click an end sector`)
+      return
+    }
+
+    const startHex = this.pathStartHex
+    const endHex = result.hexKey
+    this.pathStartHex = null
+
+    if (startHex === endHex) {
+      this.resetPathHighlights()
+      clearPathOutput()
+      return
+    }
+
+    const startId = this.hexToId.get(startHex)
+    const endId = this.hexToId.get(endHex)
+    if (startId === undefined || endId === undefined) return
+
+    setPathOutput(`Finding path from #${startHex} to #${endHex}…`)
+    try {
+      const path = await this.engine.findPath(startId, endId)
+      this.resetPathHighlights()
+      this.pathHighlightColor = PATH_ROUTE_COLOR
+      const hexPath = Array.from(path).map(id => this.sectorKeys[id])
+      for (const hex of hexPath) {
+        this.engine.setSectorColor(hex, PATH_ROUTE_COLOR)
+        this.pathSectors.add(hex)
+      }
+      setPathOutput(
+        `Path: ${hexPath.length} sectors — #${hexPath.join(' → #')}`
+      )
+    } catch (err) {
+      this.resetPathHighlights()
+      if (err instanceof PathNotFoundError) {
+        setPathOutput(`No path exists between #${startHex} and #${endHex}`)
+      } else {
+        setPathOutput(
+          `Pathfinding failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+    }
+  }
+
+  private resetPathHighlights(): void {
+    for (const hex of this.pathSectors) {
+      // pathSectors itself is being cleared below, so fall through to the
+      // next-highest overlay directly rather than via restoreSectorBaseColor
+      // (which would see this hex still in pathSectors and re-apply it).
+      if (this.previousNeighbors.has(hex)) {
+        this.engine!.setSectorColor(hex, '#aaccff')
+      } else if (this.regionSectors.has(hex)) {
+        this.engine!.setSectorColor(hex, REGION_HL_COLOR)
+      } else {
+        this.engine!.resetSectorColor(hex)
+      }
+    }
+    this.pathSectors.clear()
+  }
+
+  /**
+   * Fixed-tick accumulator (Epic 8 Task 8.5), reproducing the removed clock
+   * helper's own internal frame callback exactly: accumulate `dt * speed`, drain whole
+   * ticks up to `CLOCK_MAX_TICKS_PER_FRAME` per frame (discarding any
+   * remainder if that cap is hit, so a long stall doesn't queue an
+   * ever-growing catch-up burst), and skip accumulation entirely while
+   * paused (`speed === 0`) rather than banking elapsed time for later.
+   */
+  private onClockFrame = (dt: number): void => {
+    if (this.clockSpeed === 0) return
+
+    this.clockAccumulator += dt * this.clockSpeed
+    let ticks = 0
+    while (
+      this.clockAccumulator >= this.clockIntervalSeconds &&
+      ticks < CLOCK_MAX_TICKS_PER_FRAME
+    ) {
+      this.clockAccumulator -= this.clockIntervalSeconds
+      this.clockElapsed++
+      setTickCounter(this.clockElapsed)
+      setClockSpeed(this.clockSpeed)
+      ticks++
+    }
+    if (ticks === CLOCK_MAX_TICKS_PER_FRAME) {
+      this.clockAccumulator = 0
+    }
+  }
+
+  /** Sets clock speed and un-pauses (mirrors the removed clock helper's setSpeed + the pause-button's un-pause-on-speed-change behavior). */
+  private setClockSpeedValue(multiplier: number): void {
+    const speed = Math.max(0, multiplier)
+    this.clockSpeed = speed
+    if (speed > 0) this.clockLastSpeed = speed
+    setClockPauseButton(false)
+    setClockSpeed(this.clockSpeed)
+  }
+
   private onFrameTick = (dt: number): void => {
     this.frameCount++
     setFrameCounter(this.frameCount)
@@ -210,6 +603,10 @@ export class AppController {
       this.pulsePhase = (this.pulsePhase + dt * 1.5) % 1
       const hue = Math.round(this.pulsePhase * 360)
       this.engine.setSectorColor(this.pulseHexKey, `hsl(${hue}, 90%, 55%)`)
+    }
+
+    if (this.anchorsVisible) {
+      this.updateAnchorPositions()
     }
   }
 
@@ -229,7 +626,17 @@ export class AppController {
 
   private resetNeighborHighlights(exceptHex: string | null = null): void {
     for (const hex of this.previousNeighbors) {
-      if (hex !== exceptHex) this.engine!.resetSectorColor(hex)
+      if (hex !== exceptHex) {
+        // previousNeighbors itself is being cleared below -- same
+        // self-reference reason as resetPathHighlights above.
+        if (this.pathSectors.has(hex)) {
+          this.engine!.setSectorColor(hex, this.pathHighlightColor)
+        } else if (this.regionSectors.has(hex)) {
+          this.engine!.setSectorColor(hex, REGION_HL_COLOR)
+        } else {
+          this.engine!.resetSectorColor(hex)
+        }
+      }
     }
     this.previousNeighbors.clear()
     clearNeighborOutput()
@@ -246,6 +653,25 @@ export class AppController {
     const btnMapModeGrayscale = document.getElementById(
       'btn-mapmode-grayscale'
     )!
+    const btnPathClear = document.getElementById('btn-path-clear')!
+    const btnAnchorsToggle = document.getElementById('btn-anchors-toggle')!
+    const btnBordersShow = document.getElementById('btn-borders-show')!
+
+    this.canvas.addEventListener('contextmenu', this.onContextMenu)
+
+    btnPathClear.addEventListener('click', () => {
+      this.pathStartHex = null
+      this.resetPathHighlights()
+      clearPathOutput()
+    })
+
+    btnAnchorsToggle.addEventListener('click', () => {
+      void this.toggleAnchors()
+    })
+
+    btnBordersShow.addEventListener('click', () => {
+      void this.toggleBorders()
+    })
 
     this.chkHover.addEventListener('change', () => {
       if (!this.engine) return
@@ -253,7 +679,7 @@ export class AppController {
         this.engine.on('sectorHover', this.onHover)
       } else {
         if (this.lastHovered && this.lastHovered !== this.selectedHex) {
-          this.engine.resetSectorColor(this.lastHovered)
+          this.restoreSectorBaseColor(this.lastHovered)
           this.lastHovered = null
           clearHoverPanel()
         }
@@ -262,42 +688,35 @@ export class AppController {
     })
 
     btnClockPause.addEventListener('click', () => {
-      if (!this.gameClock) return
-      if (this.gameClock.paused) {
-        this.gameClock.resume()
+      if (!this.engine) return
+      if (this.clockSpeed === 0) {
+        this.clockSpeed = this.clockLastSpeed // resume
       } else {
-        this.gameClock.pause()
+        this.clockLastSpeed = this.clockSpeed
+        this.clockSpeed = 0 // pause
       }
-      setClockPauseButton(this.gameClock.paused)
-      setClockSpeed(this.gameClock.speed)
+      setClockPauseButton(this.clockSpeed === 0)
+      setClockSpeed(this.clockSpeed)
     })
 
     btnClockSpeedHalf.addEventListener('click', () => {
-      if (!this.gameClock) return
-      this.gameClock.setSpeed(0.5)
-      setClockPauseButton(false)
-      setClockSpeed(this.gameClock.speed)
+      if (!this.engine) return
+      this.setClockSpeedValue(0.5)
     })
 
     btnClockSpeed1.addEventListener('click', () => {
-      if (!this.gameClock) return
-      this.gameClock.setSpeed(1)
-      setClockPauseButton(false)
-      setClockSpeed(this.gameClock.speed)
+      if (!this.engine) return
+      this.setClockSpeedValue(1)
     })
 
     btnClockSpeed2.addEventListener('click', () => {
-      if (!this.gameClock) return
-      this.gameClock.setSpeed(2)
-      setClockPauseButton(false)
-      setClockSpeed(this.gameClock.speed)
+      if (!this.engine) return
+      this.setClockSpeedValue(2)
     })
 
     btnClockSpeed5.addEventListener('click', () => {
-      if (!this.gameClock) return
-      this.gameClock.setSpeed(5)
-      setClockPauseButton(false)
-      setClockSpeed(this.gameClock.speed)
+      if (!this.engine) return
+      this.setClockSpeedValue(5)
     })
 
     btnReload.addEventListener('click', async () => {

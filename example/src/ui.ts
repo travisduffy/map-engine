@@ -18,6 +18,18 @@ const tickCounterEl = document.getElementById('tick-counter')!
 const clockSpeedEl = document.getElementById('clock-speed')!
 const btnClockPause = document.getElementById('btn-clock-pause')!
 const neighborOutputEl = document.getElementById('neighbor-output')!
+const pathOutputEl = document.getElementById('pathfinding-output')!
+const regionsButtonsEl = document.getElementById('regions-buttons')!
+const regionsOutputEl = document.getElementById('regions-output')!
+const mapContainerEl = document.getElementById('map-container')!
+const anchorsOutputEl = document.getElementById('anchors-output')!
+const btnAnchorsToggle = document.getElementById(
+  'btn-anchors-toggle'
+) as HTMLButtonElement
+const bordersOutputEl = document.getElementById('borders-output')!
+const btnBordersToggle = document.getElementById(
+  'btn-borders-show'
+) as HTMLButtonElement
 
 // ─── Skeleton label sets ──────────────────────────────────────────────────────
 
@@ -220,4 +232,145 @@ export function clearNeighborOutput(): void {
 
 export function setClockPauseButton(paused: boolean): void {
   btnClockPause.textContent = paused ? 'Resume' : 'Pause'
+}
+
+export function setPathOutput(msg: string): void {
+  pathOutputEl.textContent = msg
+}
+
+export function clearPathOutput(): void {
+  pathOutputEl.textContent = 'Right-click two sectors to find a path'
+}
+
+// ─── Regions (Epic 6 Task 6.3 — Aggregation demo) ──────────────────────────
+
+let regionButtons: HTMLButtonElement[] = []
+
+/** Builds one button per region (province); buttons are generated at
+ * runtime since they depend on the loaded map's sector names. */
+export function renderRegionButtons(
+  names: string[],
+  onSelect: (index: number) => void
+): void {
+  regionButtons = names.map((name, index) => {
+    const btn = document.createElement('button')
+    btn.textContent = name
+    btn.addEventListener('click', () => onSelect(index))
+    return btn
+  })
+  regionsButtonsEl.replaceChildren(...regionButtons)
+}
+
+export function clearRegionButtons(): void {
+  regionButtons = []
+  regionsButtonsEl.replaceChildren()
+}
+
+/** Toggles the `.active` visual state; pass `null` to clear all. */
+export function setActiveRegionButton(index: number | null): void {
+  regionButtons.forEach((btn, i) => {
+    btn.classList.toggle('active', i === index)
+  })
+}
+
+export function setRegionOutput(
+  name: string,
+  bbox: [number, number, number, number],
+  width: number,
+  height: number
+): void {
+  regionsOutputEl.classList.remove('empty-state')
+  regionsOutputEl.replaceChildren(
+    makeInfoRow('region', name),
+    makeInfoRow('bbox', `${bbox[0]},${bbox[1]} → ${bbox[2]},${bbox[3]}`),
+    makeInfoRow('size', `${width} × ${height} px`)
+  )
+}
+
+export function clearRegionOutput(): void {
+  regionsOutputEl.classList.add('empty-state')
+  regionsOutputEl.textContent = 'Select a region to see its bounding box'
+}
+
+// ─── Anchors (Epic 7 Task 7.2 — Spatial anchoring demo) ────────────────────
+//
+// One `.anchor-marker` (red) + one `.centroid-marker` (blue) DOM overlay per
+// sector, appended into `#map-container` (the `#status` element above is the
+// existing precedent for an absolute-positioned overlay). Positions are set
+// by the controller every frame via `MapEngine.project()`, so these helpers
+// only own creation/removal/visibility, not layout.
+
+let anchorMarkerEls: HTMLElement[] = []
+let centroidMarkerEls: HTMLElement[] = []
+
+/** Creates one anchor + one centroid marker per sector; returns them index-aligned to numeric sector id. */
+export function renderAnchorMarkers(sectorCount: number): {
+  anchorEls: HTMLElement[]
+  centroidEls: HTMLElement[]
+} {
+  clearAnchorMarkers()
+  for (let i = 0; i < sectorCount; i++) {
+    const anchorEl = document.createElement('div')
+    anchorEl.className = 'anchor-marker'
+    mapContainerEl.appendChild(anchorEl)
+    anchorMarkerEls.push(anchorEl)
+
+    const centroidEl = document.createElement('div')
+    centroidEl.className = 'centroid-marker'
+    mapContainerEl.appendChild(centroidEl)
+    centroidMarkerEls.push(centroidEl)
+  }
+  return { anchorEls: anchorMarkerEls, centroidEls: centroidMarkerEls }
+}
+
+/** Removes all marker DOM elements (reload / toggle-off-and-forget teardown). */
+export function clearAnchorMarkers(): void {
+  for (const el of anchorMarkerEls) el.remove()
+  for (const el of centroidMarkerEls) el.remove()
+  anchorMarkerEls = []
+  centroidMarkerEls = []
+}
+
+export function setAnchorMarkersVisible(visible: boolean): void {
+  const display = visible ? '' : 'none'
+  for (const el of anchorMarkerEls) el.style.display = display
+  for (const el of centroidMarkerEls) el.style.display = display
+}
+
+export function setAnchorsToggleButton(active: boolean): void {
+  btnAnchorsToggle.textContent = active ? 'Hide anchors' : 'Show anchors'
+}
+
+export function setAnchorsOutput(msg: string): void {
+  anchorsOutputEl.classList.remove('empty-state')
+  anchorsOutputEl.textContent = msg
+}
+
+export function clearAnchorsOutput(): void {
+  anchorsOutputEl.classList.add('empty-state')
+  anchorsOutputEl.textContent = 'Toggle anchors to see computed label points'
+}
+
+// ─── Borders (Epic 8 Task 8.3 — Dynamic perimeter rendering demo) ──────────
+//
+// recomputeBorders() draws group perimeters directly on the GPU mesh via
+// BorderRenderer -- unlike anchors there's no DOM overlay, but
+// MapEngine.setBordersVisible() still toggles the drawn LineSegments on/off,
+// so this button behaves like the anchors toggle (lazy-compute on first
+// activation, then a plain show/hide on every subsequent click).
+
+export function setBordersOutput(segmentCount: number): void {
+  bordersOutputEl.classList.remove('empty-state')
+  bordersOutputEl.textContent = `${segmentCount} border segment${segmentCount === 1 ? '' : 's'} drawn`
+}
+
+export function clearBordersOutput(): void {
+  bordersOutputEl.classList.add('empty-state')
+  bordersOutputEl.textContent = 'Show borders to draw province perimeters'
+}
+
+export function setBordersToggleButton(active: boolean): void {
+  btnBordersToggle.textContent = active
+    ? 'Hide group borders'
+    : 'Show group borders'
 }

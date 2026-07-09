@@ -1,0 +1,57 @@
+[
+  {
+    "mapImage": "/test/fixtures/borders/maps/single-group.png",
+    "definition": "/test/fixtures/borders/maps/single-group.json",
+    "parentMapping": [0],
+    "maxGroups": 1,
+    "expectedEdgeCount": 0,
+    "expectedEdges": []
+  },
+  {
+    "mapImage": "/test/fixtures/borders/maps/two-adjacent-groups.png",
+    "definition": "/test/fixtures/borders/maps/two-adjacent-groups.json",
+    "parentMapping": [0, 1],
+    "maxGroups": 2,
+    "expectedEdgeCount": 4,
+    "expectedEdges": [
+      [2, 0, 2, 1],
+      [2, 1, 2, 2],
+      [2, 2, 2, 3],
+      [2, 3, 2, 4]
+    ]
+  },
+  {
+    "mapImage": "/test/fixtures/borders/maps/group-with-hole.png",
+    "definition": "/test/fixtures/borders/maps/group-with-hole.json",
+    "parentMapping": [0, 1],
+    "maxGroups": 2,
+    "expectedEdgeCount": 4,
+    "expectedEdges": [
+      [1, 1, 2, 1],
+      [1, 1, 1, 2],
+      [2, 1, 2, 2],
+      [1, 2, 2, 2]
+    ]
+  },
+  {
+    "mapImage": "/test/fixtures/borders/maps/sentinel-all.png",
+    "definition": "/test/fixtures/borders/maps/sentinel-all.json",
+    "parentMapping": [65535, 65535, 65535],
+    "maxGroups": 1,
+    "expectedEdgeCount": 0,
+    "expectedEdges": []
+  },
+  {
+    "mapImage": "/test/fixtures/borders/maps/single-pixel-group.png",
+    "definition": "/test/fixtures/borders/maps/single-pixel-group.json",
+    "parentMapping": [65535, 0],
+    "maxGroups": 1,
+    "expectedEdgeCount": 4,
+    "expectedEdges": [
+      [1, 1, 2, 1],
+      [1, 1, 1, 2],
+      [2, 1, 2, 2],
+      [1, 2, 2, 2]
+    ]
+  }
+]

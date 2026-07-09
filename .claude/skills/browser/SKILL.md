@@ -77,6 +77,8 @@ For anything numeric or stateful, read it via `browser_evaluate` against whateve
 
 If the project exposes no useful handles, add a small `window.__debug = { ... }` hook to the app's entry point wiring up the stores/objects you need to inspect; it pays for itself across a verification session. Read whatever the app already computed (a store selector, a memoized value) rather than re-deriving it yourself in the eval — re-derivation drifts from the app's real logic and gives you a green check on code that's actually broken.
 
+When what you need to verify is a mutation (a color change, a store update, a dispatched action) rather than a static value, monkey-patch the app's own public method that performs it — reassign it to a wrapper that records the call arguments, then calls through to the original — and assert on what was recorded. This confirms the real code path fired with the right arguments, which reading a value after the fact can't distinguish from a coincidentally-correct final state.
+
 ## 6. Debugging canvas/WebGL rendering bugs
 
 App-level `console.log()` tracing can miss the real failure when a canvas/WebGL bug is happening inside the browser's GPU upload path rather than in application logic — a buffer can look correctly sized in JS right up until the actual GL call, and the driver reports the mismatch as a console warning rather than a thrown JS error. When a rendering bug doesn't explain itself from app-level state, inject a small inline `<script>` before the app's module script (e.g. in `index.html`, ahead of the `type="module"` entry point) that monkey-patches the relevant `WebGL2RenderingContext.prototype` methods (`texImage2D`, `texSubImage2D`, `texStorage2D`, etc.) to log their arguments and `gl.getError()` immediately after calling through to the original — this surfaces the exact call, buffer size, and error code that produced the visual symptom. Revert the patch once you've captured what you need; it's debug-only instrumentation, not something to leave in the app.
@@ -87,6 +89,7 @@ App-level `console.log()` tracing can miss the real failure when a canvas/WebGL 
 - Native dialogs (`alert`/`confirm`/`beforeunload`) block the page and freeze every other tool until answered — pre-arm `browser_handle_dialog`, or the session hangs.
 - `<iframe>`, shadow DOM, and `<canvas>` content don't appear as normal nodes in the snapshot; reach into them via `browser_evaluate` or interact by coordinates.
 - Give async UI an explicit `browser_wait_for` (text/selector/state) instead of assuming the result is ready right after an action — but see §8, don't reach for a time-based wait.
+- Compute click/pick coordinates from real exposed geometry (a bounding box, a centroid, a data attribute) instead of guessing screen-percentage offsets and checking after the fact — the app usually already exposes the data needed to target a specific element precisely.
 
 ## 8. Headless timing caveat
 
@@ -108,3 +111,5 @@ Headless Chrome treats the MCP page as occluded and throttles `requestAnimationF
 
 - Dev command: `npm run example` (Vite, `example/` workspace) — normally serves on port 3000. This project's `example` script (`npm run dev -w example`) does not forward extra CLI args through the nested `npm run` layer — `npm run example -- --port 3100 --strictPort` produces npm CLI warnings ("Unknown cli config") and silently falls back to an auto-selected port instead of binding 3100. Launch it directly instead, from the `example/` workspace: `npx vite --port 3100 --strictPort`.
 - The example app (`example/`) is the canonical integration surface for the library (see root `CLAUDE.md`) — drive that, not `src/main.ts`, which is unused Vite boilerplate.
+- `ThreeRenderBackend` uses `preserveDrawingBuffer: false` — an external `gl.readPixels()` call (e.g. from `browser_evaluate` after the fact) reads a cleared buffer, not the last-rendered frame, since the browser clears the drawing buffer after compositing. Verify a color change by monkey-patching `MapEngine.setSectorColor`/`resetSectorColor` (see §5) instead, or by reading the DOM/UI state the color change drives.
+- To pick a specific sector by right-click/click from a script, don't guess canvas-percentage coordinates — read the sector's real bbox or centroid (`engine.getBBox(hexKey)`/`getCentroid(hexKey)`, or the source `sectors.json` + bitmap) and dispatch the event at that exact pixel.
