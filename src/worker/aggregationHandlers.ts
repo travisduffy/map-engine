@@ -45,6 +45,16 @@ export function handleReturnGroupBBoxes(buffer: Int16Array): void {
   freeBuffers.push(buffer)
 }
 
+/**
+ * Read access to the current `parentMapping` for `borderHandlers.ts` (CA-6):
+ * `mapping` is this module's own private state, not part of `getWorkerState()`,
+ * so border extraction has no other way to reach it. Returns `null` if
+ * `setParentMapping` has never resolved.
+ */
+export function getParentMapping(): Uint16Array | null {
+  return mapping
+}
+
 registerCallHandler('setParentMapping', (params): Promise<void> => {
   const { mapping: newMapping, maxGroups: newMaxGroups } = params as {
     mapping: Uint16Array

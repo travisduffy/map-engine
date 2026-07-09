@@ -26,6 +26,10 @@ const anchorsOutputEl = document.getElementById('anchors-output')!
 const btnAnchorsToggle = document.getElementById(
   'btn-anchors-toggle'
 ) as HTMLButtonElement
+const bordersOutputEl = document.getElementById('borders-output')!
+const btnBordersToggle = document.getElementById(
+  'btn-borders-show'
+) as HTMLButtonElement
 
 // ─── Skeleton label sets ──────────────────────────────────────────────────────
 
@@ -345,4 +349,28 @@ export function setAnchorsOutput(msg: string): void {
 export function clearAnchorsOutput(): void {
   anchorsOutputEl.classList.add('empty-state')
   anchorsOutputEl.textContent = 'Toggle anchors to see computed label points'
+}
+
+// ─── Borders (Epic 8 Task 8.3 — Dynamic perimeter rendering demo) ──────────
+//
+// recomputeBorders() draws group perimeters directly on the GPU mesh via
+// BorderRenderer -- unlike anchors there's no DOM overlay, but
+// MapEngine.setBordersVisible() still toggles the drawn LineSegments on/off,
+// so this button behaves like the anchors toggle (lazy-compute on first
+// activation, then a plain show/hide on every subsequent click).
+
+export function setBordersOutput(segmentCount: number): void {
+  bordersOutputEl.classList.remove('empty-state')
+  bordersOutputEl.textContent = `${segmentCount} border segment${segmentCount === 1 ? '' : 's'} drawn`
+}
+
+export function clearBordersOutput(): void {
+  bordersOutputEl.classList.add('empty-state')
+  bordersOutputEl.textContent = 'Show borders to draw province perimeters'
+}
+
+export function setBordersToggleButton(active: boolean): void {
+  btnBordersToggle.textContent = active
+    ? 'Hide group borders'
+    : 'Show group borders'
 }

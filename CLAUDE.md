@@ -147,6 +147,8 @@ These directives are derived from measured session overhead. Apply them on every
 
 `docs/active/PROGRESS.md` routinely needs 2–3 changes per session (status field, task table, session log). **Determine all changes before touching the file, then do one Read → one Write.** Never make multiple Edit calls to the same file in one session — each extra Edit call is pure overhead with no benefit over a full Write. When compressing a Session Log or audit entry, cut conversational filler but keep every decision, discrepancy, and technical rationale — that detail costs more to reconstruct next session than it costs to keep now. Treat a second `Edit` call to the same file as the signal to stop and fold every remaining change into one `Write` instead — a 2026-07-09 session made four sequential `Edit` calls to `PROGRESS.md` in one sitting despite this rule, losing the entire batching benefit the rule exists for.
 
+**Narrow exception for a large file with a few, well-separated changes:** once a file has grown past a few hundred lines and is already fully in context from an earlier Read/Write this session, 2 large, non-overlapping `Edit` calls (e.g., inserting one new dated Session Log entry, then appending one Lessons Learned bullet) are an acceptable, deliberate alternative to a full `Write` — retyping hundreds of unrelated lines into a `Write` call risks silently dropping or corrupting content that a targeted `Edit` cannot touch. This exception is narrow: it does not license 3+ edits, and it does not apply to small or scattered changes that a single `Write` handles just as safely.
+
 ### 2. Test research: Grep before broad reads
 
 Never load a full test file to find setup patterns. Grep first:
@@ -189,6 +191,8 @@ When editing a single row of a prettier-formatted markdown table, anchor the `Ed
 ### 7. Plan Mode: verify before exiting
 
 Before calling `ExitPlanMode` on a non-trivial plan, re-read the exact source lines the plan depends on (method signatures, field names, call sites) instead of trusting Explore/Plan subagent summaries at face value — this repo's own tooling (`sprint-hardening` skill, phase-exit audits) treats a first draft as needing a dedicated verification pass, and a plan should meet that bar without being asked. A 2026-07-09 session's first `ExitPlanMode` call was rejected pending exactly this pass, which then found a redundant computation and an unresolved design question that the subagent summaries alone had missed.
+
+This kept getting skipped even with the rule in place: a second 2026-07-09 session's first `ExitPlanMode` call was rejected for the identical reason, catching two more defects (a wrong assumption about where a data field lives, a missing wiring path) before implementation began. A prose reminder is easy to skip because finishing the plan draft and calling `ExitPlanMode` feel like one continuous action. Make the pass produce a visible artifact instead of a private mental step: before the first `ExitPlanMode` call, add a short "Verified against source" note to the plan file itself, listing the specific file:line locations re-read and confirming each still matches the plan's key assumptions. A plan file with no such note is a visible signal — to you and to the user — that the pass was skipped, not just something to remember to do.
 
 ---
 

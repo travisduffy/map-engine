@@ -29,4 +29,6 @@ export interface ThreeRenderBackendInternalAccess {
   reuploadIndexTexture(mirror: Uint16Array): void
   /** @internal exposed for the Epic 4 palette shader; null on backends with no GPU index texture. */
   getIndexTexture(): Texture | null
+  /** @internal exposed so `BorderRenderer` (CA-6) can bind a `GLBufferAttribute` to the managed VBO; null before the first `uploadBorderEdges` call or on backends with no GPU border VBO. */
+  getBorderVBO(): WebGLBuffer | null
 }

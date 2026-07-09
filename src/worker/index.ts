@@ -5,6 +5,7 @@ import { SimulationClock, type TickTelemetry } from './SimulationClock'
 import './pathfindingHandlers'
 import { handleReturnGroupBBoxes } from './aggregationHandlers'
 import { handleReturnAnchors } from './anchorHandlers'
+import { handleReturnBorderEdges } from './borderHandlers'
 
 function bboxAt(
   bboxes: Int16Array,
@@ -83,6 +84,11 @@ self.onmessage = (e: MessageEvent<WorkerMessage>): void => {
 
     case 'returnAnchors': {
       handleReturnAnchors(msg.buffer)
+      break
+    }
+
+    case 'returnBorderEdges': {
+      handleReturnBorderEdges(msg.edges, msg.count)
       break
     }
 

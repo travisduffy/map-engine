@@ -23,6 +23,7 @@ import { SharedRegistryProxy } from './worker/SharedRegistryProxy'
 import {
   TransferableGroupPool,
   TransferableAnchorPool,
+  TransferableBorderPool,
 } from './worker/transferablePool'
 
 export class MapEngine {
@@ -48,6 +49,13 @@ export class MapEngine {
   private _costsReady: boolean = false
   private _pool: TransferableGroupPool | null = null
   private _anchorPool: TransferableAnchorPool | null = null
+  private _borderPool: TransferableBorderPool | null = null
+  /** In-flight `recomputeBorders()` Worker CALL (CA-6 coalescing). */
+  private _borderInFlight: Promise<void> | null = null
+  /** At most one coalesced call queued behind `_borderInFlight` — every
+   * caller that arrives while something is in flight shares this same
+   * Promise (≤ 2 Worker computations total, regardless of caller count). */
+  private _borderQueued: Promise<void> | null = null
 
   constructor() {
     this._parser = new SectorBitmapParser()
@@ -222,6 +230,10 @@ export class MapEngine {
       this._pool = null
       this._anchorPool?.dispose()
       this._anchorPool = null
+      this._borderPool?.dispose()
+      this._borderPool = null
+      this._borderInFlight = null
+      this._borderQueued = null
       this._renderer?.destroy()
       this._worker.terminate()
       this._worker = this._createWorker()
@@ -334,11 +346,19 @@ export class MapEngine {
       this._anchorPool = new TransferableAnchorPool(this._worker, () => {
         renderer._dirty = true
       })
-      // Single _postRenderHook slot shared by both ring pools (F-C.7/F-C.8 +
-      // CA-8) -- a composite flushes each pool's bounce-back independently.
+      this._borderPool = new TransferableBorderPool(
+        this._worker,
+        (edges, count) => {
+          renderer._receiveBorderEdges(edges, count)
+        }
+      )
+      // Single _postRenderHook slot shared by all three ring pools (F-C.7/
+      // F-C.8 + CA-8/CA-6) -- a composite flushes each pool's bounce-back
+      // independently.
       renderer._postRenderHook = (): void => {
         this._pool!.flushBounces()
         this._anchorPool!.flushBounces()
+        this._borderPool!.flushBounces()
       }
       renderer._resumeLoop()
 
@@ -370,6 +390,10 @@ export class MapEngine {
     this._pool = null
     this._anchorPool?.dispose()
     this._anchorPool = null
+    this._borderPool?.dispose()
+    this._borderPool = null
+    this._borderInFlight = null
+    this._borderQueued = null
     // CA-7: discard the registered palette data (Epic 4 Task 4.3).
     this._mapModes.clear()
     this._currentMapMode = null
@@ -651,6 +675,102 @@ export class MapEngine {
     if (!this._loaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     return this._anchorPool!.getAnchor(sectorId)
+  }
+
+  /**
+   * Recomputes group-perimeter border segments (CA-6) from the current
+   * `parentMapping`, computed in the Worker from B1.e contour segments and
+   * delivered to Main via the Transferable ring pool + a managed GPU VBO.
+   * Rejects with `MappingRequiredError` if `setParentMapping` has never
+   * resolved. Does NOT require `aggregateGroups()` to have run.
+   *
+   * Concurrent calls coalesce: at most one computation is in flight and at
+   * most one more is queued behind it (≤ 2 Worker computations regardless of
+   * caller count); every caller coalesced into the same queued computation
+   * shares its resolution (resolve together, reject together). The queued
+   * computation is not given an explicit "invalidate and resnapshot" signal
+   * — it doesn't need one, since it hasn't dispatched its Worker CALL yet,
+   * so it naturally reads whatever `parentMapping` is current at the moment
+   * it actually runs, picking up any `setParentMapping` calls made while it
+   * waited. The already-in-flight computation keeps computing against the
+   * mapping it captured when *it* started, per the Worker-side snapshot in
+   * `borderHandlers.ts`.
+   *
+   * Deliberately NOT declared `async`: an `async` method always wraps its
+   * return value in a *new* Promise per call, even when returning an
+   * already-existing Promise — which would defeat the "coalesced callers
+   * share the exact same Promise" property this method relies on. Returning
+   * `this._borderQueued`/the proxy call directly, from a plain method,
+   * preserves that identity.
+   */
+  recomputeBorders(): Promise<void> {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+
+    if (this._borderInFlight) {
+      if (!this._borderQueued) {
+        this._borderQueued = this._borderInFlight
+          .catch(() => {
+            // The queued run's own outcome (below) is what callers sharing
+            // this slot observe — the in-flight run's rejection, if any, is
+            // deliberately swallowed here so the queued run still attempts.
+          })
+          .then(() => {
+            this._borderQueued = null
+            // loadMap()/dispose() may have invalidated this session while
+            // we were waiting — don't dereference a torn-down proxy.
+            if (this._destroyed || !this._loaded || !this._proxy) {
+              throw new MapInvalidatedError()
+            }
+            return this._startBorderComputation()
+          })
+      }
+      return this._borderQueued
+    }
+
+    return this._startBorderComputation()
+  }
+
+  private _startBorderComputation(): Promise<void> {
+    const run = this._proxy!.call<void>('recomputeBorders')
+    this._borderInFlight = run
+    // `run` itself (returned below) is what callers actually observe/handle;
+    // this cleanup-only chain needs its own no-op `.catch` so a rejecting
+    // `run` doesn't surface as a separate *unhandled* rejection here.
+    run
+      .finally(() => {
+        if (this._borderInFlight === run) this._borderInFlight = null
+      })
+      .catch(() => {})
+    return run
+  }
+
+  /**
+   * Synchronous read of the last-resolved border segments (CA-6), as a flat
+   * `[x1, y1, x2, y2, ...]` pixel-space array — a retained Main-side private
+   * copy (independent of the pooled buffer bounced back to the Worker after
+   * GPU upload). `null` before `recomputeBorders()` has ever resolved; a
+   * zero-edge (sentinel) resolution returns `Float32Array(0)`, not `null`.
+   */
+  getBorderSegments(): Float32Array | null {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    return this._renderer!.getBorderSegments()
+  }
+
+  /**
+   * Toggles border-line visibility (CA-6) without recomputing or
+   * re-uploading anything. Safe to call before `recomputeBorders()` has
+   * ever resolved -- the choice is remembered and applied once borders
+   * exist.
+   */
+  setBordersVisible(visible: boolean): void {
+    if (this._destroyed) throw new Error('MapEngine: destroyed')
+    if (!this._loaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    this._renderer!.setBordersVisible(visible)
   }
 
   /**

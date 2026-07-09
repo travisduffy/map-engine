@@ -68,6 +68,15 @@ export class ThreeRenderBackend
   private readonly _sectorCount: number
   /** Retained for the picking pipeline (Epic 3 Task 3.4). */
   private readonly _pixelIndicesSnapshot: Uint32Array
+  /**
+   * Managed GPU VBO for `BorderRenderer`'s `GLBufferAttribute` (CA-6, F-C.9).
+   * Allocated at construction/first upload, sized to the fixed max capacity
+   * (the caller's buffer length never changes across calls). Destroyed on
+   * context loss (`webglcontextlost` nulls this out below) so the next
+   * `uploadBorderEdges` reallocates via `gl.bufferData` (F-4.10) instead of
+   * writing into a stale handle with `gl.bufferSubData`.
+   */
+  private _borderVBO: WebGLBuffer | null = null
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -116,7 +125,15 @@ export class ThreeRenderBackend
     this._indexTexture.flipY = false
     this._indexTexture.needsUpdate = true
 
-    canvas.addEventListener('webglcontextlost', e => e.preventDefault())
+    canvas.addEventListener('webglcontextlost', e => {
+      e.preventDefault()
+      // The raw WebGLBuffer is destroyed along with the rest of the GPU
+      // context -- three.js has no automatic recovery path for it (unlike
+      // its own-managed textures/geometries), so drop the reference here.
+      // The next `uploadBorderEdges` call sees `_borderVBO === null` and
+      // reallocates via `gl.bufferData` (F-4.10).
+      this._borderVBO = null
+    })
 
     // Texture-width guard (F-3.4): sectorCount can reach 65,535, which may
     // exceed MAX_TEXTURE_SIZE on integrated/mobile GPUs — wrap into a 2D
@@ -225,7 +242,33 @@ export class ThreeRenderBackend
     return this._indexTexture
   }
 
-  uploadBorderEdges(_buffer: Float32Array, _count: number): void {}
+  /**
+   * Copies `4*count` floats into the managed GPU VBO via `gl.bufferSubData`.
+   * `buffer` is always the fixed-max-capacity pooled array (only the leading
+   * `count*4` floats are meaningful — `BorderRenderer`'s draw range clips
+   * the rest); the VBO is sized once to that same capacity so steady-state
+   * uploads never need `gl.bufferData` again, except immediately after a
+   * context loss (see the `webglcontextlost` listener above), which is
+   * exactly when `_borderVBO` is `null` here.
+   */
+  uploadBorderEdges(buffer: Float32Array, count: number): void {
+    const gl = this._renderer.getContext()
+    if (!this._borderVBO) {
+      this._borderVBO = gl.createBuffer()
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._borderVBO)
+      gl.bufferData(gl.ARRAY_BUFFER, buffer.byteLength, gl.DYNAMIC_DRAW)
+    } else {
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._borderVBO)
+    }
+    const floatsNeeded = count * 4
+    if (floatsNeeded > 0) {
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, buffer.subarray(0, floatsNeeded))
+    }
+  }
+
+  getBorderVBO(): WebGLBuffer | null {
+    return this._borderVBO
+  }
 
   render(scene: THREE.Scene, camera: THREE.Camera): void {
     this._renderer.render(scene, camera)

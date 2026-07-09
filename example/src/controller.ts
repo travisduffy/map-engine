@@ -1,5 +1,4 @@
 import MapEngine, {
-  GameClock,
   toHexKey,
   PathNotFoundError,
   type PickResult,
@@ -32,15 +31,19 @@ import {
   setAnchorsToggleButton,
   setAnchorsOutput,
   clearAnchorsOutput,
+  setBordersOutput,
+  clearBordersOutput,
+  setBordersToggleButton,
 } from './ui'
 
 const PATH_START_COLOR = '#ffcc00'
 const PATH_ROUTE_COLOR = '#ff6a00'
 const REGION_HL_COLOR = '#b39ddb'
 
+const CLOCK_MAX_TICKS_PER_FRAME = 10
+
 export class AppController {
   private engine: MapEngine | null = null
-  private gameClock: GameClock | null = null
   private lastHovered: string | null = null
   private selectedHex: string | null = null
   private frameCount = 0
@@ -77,6 +80,26 @@ export class AppController {
   private anchorsVisible = false
   private anchorEls: HTMLElement[] = []
   private centroidEls: HTMLElement[] = []
+
+  // Borders demo (Epic 8 Task 8.3): recomputeBorders() is lazy (fires on
+  // first toggle, mirroring the anchors pattern above); setBordersVisible()
+  // then just flips the drawn GPU LineSegments on/off on every subsequent
+  // click, with no further Worker round-trip.
+  private bordersComputed = false
+  private bordersVisible = false
+
+  // Game clock demo (Epic 8 Task 8.5 — migrated off the sprint's now-removed
+  // fixed-tick clock helper class): a fixed-tick accumulator driven by
+  // `engine.onFrame(dt)` (already `RenderClock`-backed since Epic 2),
+  // reproducing that helper's exact tick-accounting: `speed === 0` pauses
+  // without losing `clockAccumulator`, `clockLastSpeed` remembers the
+  // pre-pause speed for resume, and `CLOCK_MAX_TICKS_PER_FRAME` bounds the
+  // catch-up burst after a long synchronous stall.
+  private clockSpeed = 1
+  private clockLastSpeed = 1
+  private clockElapsed = 0
+  private clockAccumulator = 0
+  private readonly clockIntervalSeconds = 1 // ticksPerSecond: 1
 
   private readonly canvas: HTMLCanvasElement
   private readonly chkHover: HTMLInputElement
@@ -119,12 +142,7 @@ export class AppController {
     }
 
     this.engine.onFrame(this.onFrameTick)
-
-    this.gameClock = new GameClock(this.engine, { ticksPerSecond: 1 })
-    this.gameClock.onTick(elapsed => {
-      setTickCounter(elapsed)
-      setClockSpeed(this.gameClock!.speed)
-    })
+    this.engine.onFrame(this.onClockFrame)
 
     setStatus('Ready — scroll to zoom, middle-mouse drag to pan')
     const keys = this.engine.getSectorKeys()
@@ -310,13 +328,41 @@ export class AppController {
     }
   }
 
+  /**
+   * Borders demo (Epic 8 Task 8.3): draws group perimeters for the same
+   * province groups the Regions demo already builds via setParentMapping()
+   * in setupRegions() -- recomputeBorders() needs no further setup here.
+   * Lazily computes on first activation (mirroring toggleAnchors() above),
+   * then just flips visibility via setBordersVisible() on every subsequent
+   * click -- no re-computation, no further Worker round-trip. Map-edge
+   * perimeter is out of scope (CA-6 is interior-only), so provinces
+   * touching the bitmap boundary render with an open border there --
+   * expected, not a bug.
+   */
+  private async toggleBorders(): Promise<void> {
+    if (!this.engine) return
+
+    if (!this.bordersComputed) {
+      await this.engine.recomputeBorders()
+      this.bordersComputed = true
+      const segments = this.engine.getBorderSegments()
+      setBordersOutput(segments ? segments.length / 4 : 0)
+    }
+
+    this.bordersVisible = !this.bordersVisible
+    this.engine.setBordersVisible(this.bordersVisible)
+    setBordersToggleButton(this.bordersVisible)
+  }
+
   private stopEngine(): void {
     if (!this.engine) return
-    // off() throws if engine is destroyed — must be called before destroy()
+    // off() throws if the engine is already destroyed — must be called
+    // before destroy(); offFrame() is called here too (rather than relying
+    // on destroy()'s own internal cleanup) so the unregistration is
+    // explicit and doesn't depend on that internal detail.
     this.engine.off('sectorHover', this.onHover)
     this.engine.off('sectorClick', this.onClick)
-    this.gameClock?.destroy()
-    this.gameClock = null
+    this.engine.offFrame(this.onClockFrame)
     this.engine.destroy()
     this.engine = null
     this.resetState()
@@ -341,6 +387,12 @@ export class AppController {
     this.anchorsVisible = false
     this.anchorEls = []
     this.centroidEls = []
+    this.bordersComputed = false
+    this.bordersVisible = false
+    this.clockSpeed = 1
+    this.clockLastSpeed = 1
+    this.clockElapsed = 0
+    this.clockAccumulator = 0
     setFrameCounter(0)
     setTickCounter(0)
     setClockSpeed(1)
@@ -351,6 +403,8 @@ export class AppController {
     clearAnchorMarkers()
     clearAnchorsOutput()
     setAnchorsToggleButton(false)
+    clearBordersOutput()
+    setBordersToggleButton(false)
   }
 
   // Restores a sector to whichever highlight layer currently owns it
@@ -504,6 +558,43 @@ export class AppController {
     this.pathSectors.clear()
   }
 
+  /**
+   * Fixed-tick accumulator (Epic 8 Task 8.5), reproducing the removed clock
+   * helper's own internal frame callback exactly: accumulate `dt * speed`, drain whole
+   * ticks up to `CLOCK_MAX_TICKS_PER_FRAME` per frame (discarding any
+   * remainder if that cap is hit, so a long stall doesn't queue an
+   * ever-growing catch-up burst), and skip accumulation entirely while
+   * paused (`speed === 0`) rather than banking elapsed time for later.
+   */
+  private onClockFrame = (dt: number): void => {
+    if (this.clockSpeed === 0) return
+
+    this.clockAccumulator += dt * this.clockSpeed
+    let ticks = 0
+    while (
+      this.clockAccumulator >= this.clockIntervalSeconds &&
+      ticks < CLOCK_MAX_TICKS_PER_FRAME
+    ) {
+      this.clockAccumulator -= this.clockIntervalSeconds
+      this.clockElapsed++
+      setTickCounter(this.clockElapsed)
+      setClockSpeed(this.clockSpeed)
+      ticks++
+    }
+    if (ticks === CLOCK_MAX_TICKS_PER_FRAME) {
+      this.clockAccumulator = 0
+    }
+  }
+
+  /** Sets clock speed and un-pauses (mirrors the removed clock helper's setSpeed + the pause-button's un-pause-on-speed-change behavior). */
+  private setClockSpeedValue(multiplier: number): void {
+    const speed = Math.max(0, multiplier)
+    this.clockSpeed = speed
+    if (speed > 0) this.clockLastSpeed = speed
+    setClockPauseButton(false)
+    setClockSpeed(this.clockSpeed)
+  }
+
   private onFrameTick = (dt: number): void => {
     this.frameCount++
     setFrameCounter(this.frameCount)
@@ -564,6 +655,7 @@ export class AppController {
     )!
     const btnPathClear = document.getElementById('btn-path-clear')!
     const btnAnchorsToggle = document.getElementById('btn-anchors-toggle')!
+    const btnBordersShow = document.getElementById('btn-borders-show')!
 
     this.canvas.addEventListener('contextmenu', this.onContextMenu)
 
@@ -575,6 +667,10 @@ export class AppController {
 
     btnAnchorsToggle.addEventListener('click', () => {
       void this.toggleAnchors()
+    })
+
+    btnBordersShow.addEventListener('click', () => {
+      void this.toggleBorders()
     })
 
     this.chkHover.addEventListener('change', () => {
@@ -592,42 +688,35 @@ export class AppController {
     })
 
     btnClockPause.addEventListener('click', () => {
-      if (!this.gameClock) return
-      if (this.gameClock.paused) {
-        this.gameClock.resume()
+      if (!this.engine) return
+      if (this.clockSpeed === 0) {
+        this.clockSpeed = this.clockLastSpeed // resume
       } else {
-        this.gameClock.pause()
+        this.clockLastSpeed = this.clockSpeed
+        this.clockSpeed = 0 // pause
       }
-      setClockPauseButton(this.gameClock.paused)
-      setClockSpeed(this.gameClock.speed)
+      setClockPauseButton(this.clockSpeed === 0)
+      setClockSpeed(this.clockSpeed)
     })
 
     btnClockSpeedHalf.addEventListener('click', () => {
-      if (!this.gameClock) return
-      this.gameClock.setSpeed(0.5)
-      setClockPauseButton(false)
-      setClockSpeed(this.gameClock.speed)
+      if (!this.engine) return
+      this.setClockSpeedValue(0.5)
     })
 
     btnClockSpeed1.addEventListener('click', () => {
-      if (!this.gameClock) return
-      this.gameClock.setSpeed(1)
-      setClockPauseButton(false)
-      setClockSpeed(this.gameClock.speed)
+      if (!this.engine) return
+      this.setClockSpeedValue(1)
     })
 
     btnClockSpeed2.addEventListener('click', () => {
-      if (!this.gameClock) return
-      this.gameClock.setSpeed(2)
-      setClockPauseButton(false)
-      setClockSpeed(this.gameClock.speed)
+      if (!this.engine) return
+      this.setClockSpeedValue(2)
     })
 
     btnClockSpeed5.addEventListener('click', () => {
-      if (!this.gameClock) return
-      this.gameClock.setSpeed(5)
-      setClockPauseButton(false)
-      setClockSpeed(this.gameClock.speed)
+      if (!this.engine) return
+      this.setClockSpeedValue(5)
     })
 
     btnReload.addEventListener('click', async () => {

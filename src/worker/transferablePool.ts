@@ -163,3 +163,63 @@ export class TransferableAnchorPool {
     this._pending = null
   }
 }
+
+/**
+ * @internal Main-thread side of the Transferable ring-pool handoff (CA-6)
+ * for `borderEdges`. Structurally different from `TransferableGroupPool`/
+ * `TransferableAnchorPool`: those retain a `_current` buffer to serve later
+ * indexed reads (`getGroupBBox`/`getAnchor`); here, the GPU VBO upload and
+ * the private `.slice()` copy backing `MapEngine.getBorderSegments()` both
+ * happen synchronously on receipt (via the injected `onEdges` callback,
+ * owned by `MapRenderer` -- see `MapRenderer._receiveBorderEdges`), so this
+ * class only needs to hold the `(edges, count)` pair between receipt and the
+ * next bounce-back flush. It also cycles a PAIR of buffers per handoff
+ * (edges + its paired count), unlike the single-buffer group/anchor pools.
+ */
+export class TransferableBorderPool {
+  private readonly _worker: Worker
+  private readonly _onEdges: (edges: Float32Array, count: number) => void
+  private _pendingEdges: Float32Array | null = null
+  private _pendingCount: Uint32Array | null = null
+
+  constructor(
+    worker: Worker,
+    onEdges: (edges: Float32Array, count: number) => void
+  ) {
+    this._worker = worker
+    this._onEdges = onEdges
+    this._worker.addEventListener('message', this._onMessage)
+  }
+
+  private _onMessage = (e: MessageEvent<WorkerMessage>): void => {
+    const msg = e.data
+    if (msg.type === 'borderEdges') {
+      // Runs on every resolution, including the zero-edge sentinel -- GPU
+      // upload, private-copy retention, and the dirty flag do not depend on
+      // `BorderRenderer`'s (lazy, non-empty-only) scene construction.
+      this._onEdges(msg.edges, msg.count[0])
+      this._pendingEdges = msg.edges
+      this._pendingCount = msg.count
+    }
+  }
+
+  /** Wired as part of the composite `MapRenderer._postRenderHook`. Safe to call every frame. */
+  flushBounces = (): void => {
+    if (!this._pendingEdges || !this._pendingCount) return
+    const edges = this._pendingEdges
+    const count = this._pendingCount
+    this._pendingEdges = null
+    this._pendingCount = null
+    this._worker.postMessage(
+      { type: 'returnBorderEdges', edges, count } satisfies WorkerMessage,
+      [edges.buffer, count.buffer]
+    )
+  }
+
+  /** Torn down alongside `loadMap()`/`dispose()`, which also replace/terminate the Worker. */
+  dispose(): void {
+    this._worker.removeEventListener('message', this._onMessage)
+    this._pendingEdges = null
+    this._pendingCount = null
+  }
+}

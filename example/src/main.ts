@@ -7,7 +7,8 @@
  *   Methods: loadMap, setTickRate, setSectorColor, resetSectorColor, getSector, getSectorKeys,
  *            getBBox, getCentroid, getNeighbors, registerMapMode, setMapMode, on, off, destroy,
  *            setTraversalCosts, findPath, setParentMapping, aggregateGroups, getGroupBBox,
- *            computeAnchors, getAnchor, project
+ *            computeAnchors, getAnchor, project, recomputeBorders, getBorderSegments,
+ *            setBordersVisible
  */
 
 import { AppController } from './controller'
