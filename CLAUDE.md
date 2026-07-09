@@ -145,7 +145,7 @@ These directives are derived from measured session overhead. Apply them on every
 
 ### 1. State files: Read once, Write once
 
-`docs/active/PROGRESS.md` routinely needs 2–3 changes per session (status field, task table, session log). **Determine all changes before touching the file, then do one Read → one Write.** Never make multiple Edit calls to the same file in one session — each extra Edit call is pure overhead with no benefit over a full Write. When compressing a Session Log or audit entry, cut conversational filler but keep every decision, discrepancy, and technical rationale — that detail costs more to reconstruct next session than it costs to keep now.
+`docs/active/PROGRESS.md` routinely needs 2–3 changes per session (status field, task table, session log). **Determine all changes before touching the file, then do one Read → one Write.** Never make multiple Edit calls to the same file in one session — each extra Edit call is pure overhead with no benefit over a full Write. When compressing a Session Log or audit entry, cut conversational filler but keep every decision, discrepancy, and technical rationale — that detail costs more to reconstruct next session than it costs to keep now. Treat a second `Edit` call to the same file as the signal to stop and fold every remaining change into one `Write` instead — a 2026-07-09 session made four sequential `Edit` calls to `PROGRESS.md` in one sitting despite this rule, losing the entire batching benefit the rule exists for.
 
 ### 2. Test research: Grep before broad reads
 
@@ -183,6 +183,12 @@ Files shown in system-reminder `Read` results at session start are already in yo
 ### 6. Targeted reads for known sections
 
 When only a named section of a large file is needed (e.g., PRD §A1, ROADMAP §2.1, a specific audit section), use `offset` + `limit` parameters. Thirty lines around the target is almost always sufficient. Reading a full 80-line PRD to extract a 10-line section wastes 70 lines of context budget every time.
+
+When editing a single row of a prettier-formatted markdown table, anchor the `Edit` on a short unique fragment rather than the full copied line — column-alignment padding often doesn't match what gets typed manually, and a full-line `old_string` fails on that whitespace mismatch.
+
+### 7. Plan Mode: verify before exiting
+
+Before calling `ExitPlanMode` on a non-trivial plan, re-read the exact source lines the plan depends on (method signatures, field names, call sites) instead of trusting Explore/Plan subagent summaries at face value — this repo's own tooling (`sprint-hardening` skill, phase-exit audits) treats a first draft as needing a dedicated verification pass, and a plan should meet that bar without being asked. A 2026-07-09 session's first `ExitPlanMode` call was rejected pending exactly this pass, which then found a redundant computation and an unresolved design question that the subagent summaries alone had missed.
 
 ---
 

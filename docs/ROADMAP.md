@@ -617,35 +617,40 @@ The BDFL (User) is the sole authority on versioning. The project is currently in
 | `MapEngine` | `onFrame` | `onFrame(cb: (dt: number) => void): void` |
 | `MapEngine` | `offFrame` | `offFrame(cb: (dt: number) => void): void` |
 | `MapEngine` | `destroy` | `destroy(): void` |
+| `MapEngine` | `setTickRate` | `setTickRate(hz: number): void` |
 
 **Canonical Exports (Planned):**
 | Module | Export | Signature | Phase |
 | --- | --- | --- | --- |
-| `MapEngine` | `setTickRate` | `setTickRate(hz: number): void` | Phase 3 |
 | `MapEngine` | `onMappingChanged` | `onMappingChanged(cb: () => void): () => void` | Phase 4 |
+
+**Canonical Errors (Shipped):**
+| Error | Path | Rationale |
+| --- | --- | --- |
+| `WebGL2NotSupportedError` | `src/errors.ts` | Thrown if WebGL2 is unavailable. |
+| `SectorLimitExceededError` | `src/errors.ts` | Thrown if map exceeds 65,534 sectors. |
+| `ModeNotReadyError` | `src/errors.ts` | Thrown if `registerMapMode`/`setMapMode` called before `loadMap()` resolves. |
+| `MapInvalidatedError` | `src/errors.ts` | Thrown when in-flight async calls are invalidated by `loadMap()` or `destroy()`/`dispose()`. |
 
 **Canonical Errors (Planned):**
 | Error | Path | Rationale | Phase |
 | --- | --- | --- | --- |
-| `WebGL2NotSupportedError` | `src/errors.ts` | Thrown if WebGL2 is unavailable. | Phase 3 |
-| `SectorLimitExceededError` | `src/errors.ts` | Thrown if map exceeds 65,534 sectors. | Phase 2 |
 | `MappingRequiredError` | `src/errors.ts` | Thrown when a mapping/aggregation precondition is unmet: methods called before `setParentMapping`, or group accessors (`getGroupBBox`) before the first `aggregateGroups` resolution. | Phase 4 |
 | `PathNotFoundError` | `src/errors.ts` | Thrown if pathfinding fails. | Phase 4 |
 | `CostsRequiredError` | `src/errors.ts` | Thrown by `findPath` before `setTraversalCosts` has resolved at least once. | Phase 4 |
-| `ModeNotReadyError` | `src/errors.ts` | Thrown if `registerMapMode`/`setMapMode` called before `loadMap()` resolves. | Phase 3 |
-| `MapInvalidatedError` | `src/errors.ts` | Thrown when in-flight async calls are invalidated by `loadMap()` or `destroy()`/`dispose()`. | Phase 3 |
 
 **Common Types:**
 
 - `type PickResult = { hexKey: string, sectorData: SectorData, pixelX: number, pixelY: number }`
-- `type MapModeId = string` (Planned, Phase 3)
-- `type WorkerMessage = ...` (Planned, Phase 3)
-- `type BootstrapAckPayload = ...` (Planned, Phase 3)
+- `type MapModeId = string` (Shipped)
+- `type WorkerMessage = ...` (Shipped)
+- `type BootstrapAckPayload = ...` (Shipped)
 
 ---
 
 ## 13. Revision History
 
+- **2026-07-09-documentation-sync:** Documentation Sync (PR-5, Reversibility — truthful status markers keep the cost of resuming/auditing work low). §12.5's "Planned" tables had drifted stale in the direction the sync skill's own gotcha list warns about: several items had already shipped without ever being moved out of "Planned." Moved `setTickRate` (Canonical Exports) and `WebGL2NotSupportedError`/`SectorLimitExceededError`/`ModeNotReadyError`/`MapInvalidatedError` (Canonical Errors) to their respective "Shipped" tables, and `MapModeId`/`WorkerMessage`/`BootstrapAckPayload` (Common Types) to `(Shipped)` — all confirmed present in `src/types.ts`/`src/errors.ts` and established by the already-merged, archived Phase 2 (`v0.0.4`) and Phase 3 (`v0.0.5`) `[PASS]` audits. Left `MappingRequiredError`/`PathNotFoundError`/`CostsRequiredError` and `onMappingChanged` as "Planned, Phase 4": their classes exist (pre-wired since v0.0.5 per the archived Phase 3 PRD) but the behavior the Rationale column describes is wired by the still-in-progress, unaudited, unmerged Phase 4 sprint — moving them to Shipped would get ahead of that phase's own exit audit. This is a status-sync correction only; it does not decide the open `onMappingChanged` scope question flagged in `docs/active/PROGRESS.md`'s Lessons Learned.
 - **2026-07-07-phase-3-close:** Documentation Sync (PR-5, Reversibility — keeping status markers truthful minimizes the cost of resuming or auditing work later). Marked Phase 3 `[COMPLETE]` in both the §5 dependency graph and the §8 prose header following the `phase-3-audit.md` `[PASS]` verdict and its merge to `main` as v0.0.5. Corrected the Phase 2 (§7) header, which still read `[DOCUMENTATION FREEZE]` after the freeze was already lifted per the traceability matrix's own closing note — a stale-status drift, not a new decision.
 - **2026-07-07-hardening-sync:** Code-Truth Synchronization (pre-implementation sprint hardening). Resolved 5 BDFL rulings and 6 doc/code drift defects surfaced by the per-epic hardening pass. Synchronized §4/F-3.1/B3.c to Main-resident `hexColors`/`sectorIds` — `BOOTSTRAP_ACK` carries verification scalars only (PR-3). Replaced the `pick()` binary-search mandate with the O(1) Main-resident `idToHex` table (PR-3). Rewrote F-3.6 as Registration Atomicity — removed unreachable `pendingMapMode` buffering and the `'mapModeRegistrationFailed'` event (PR-4). Added `CostsRequiredError` for the `findPath` precondition (P-4); widened `MappingRequiredError` to aggregation preconditions; scoped `ModeNotReadyError` to pre-`loadMap` guards (PR-2). Gated the deprecated `MapEngine.registry` getter post-transfer with snapshot-backed replacement surface (§12.4, PR-2). Corrected B1.e/CA-8/§4 contour descriptions to the shipped unordered segment list and fixed the `contourPoints` sizing row (Code-Truth). Specified the `yieldIfNeeded` signature (B3.b). Corrected A0.3 tolerance wording (test constant, not a fixture field). Added the CA-5 fixture `definition` field fixing the numeric-ID space.
 - **2026-05-07-pass-12:** Technical Hardening. Removed all specific git commit SHAs from the document to improve robustness and prevent agent confusion. Codified the "No Commit SHAs in Roadmap" standard in `GEMINI.md`.
