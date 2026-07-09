@@ -40,10 +40,10 @@
 
 ## Current Status
 
-**Phase:** Phase 3 (The Concurrent Kernel) — COMPLETE, audited `[PASS]`, archived as v0.0.5 (`docs/archive/v0.0.5/`) | Phase 4 (GSG Logic) — **implementation COMPLETE**, awaiting Master Auditor review (`docs/audits/phase-4-audit.md`, Status: `[PENDING]`).
+**Phase:** Phase 3 (The Concurrent Kernel) — COMPLETE, audited `[PASS]`, archived as v0.0.5 (`docs/archive/v0.0.5/`) | Phase 4 (GSG Logic) — implementation COMPLETE, Master Auditor verdict **`[PASS]`** recorded in `docs/audits/phase-4-audit.md` §9. Phase not yet formally closed — awaiting merge to `main` per `.claude/rules/roadmap-governance.md` step 4.
 **Active version:** targets v0.0.6 (named by BDFL 2026-07-07)
-**Next task:** None for implementation. Per `.claude/rules/roadmap-governance.md`'s Phase Exit Self-Audit Protocol, Phase 4 closes only once `docs/audits/phase-4-audit.md` carries a merged `[PASS]` verdict from an independent Master Auditor pass (`docs/processes/audit-only.md`). Do not begin a new phase/sprint until then.
-**Blocking issues:** None for implementation. Phase 4 close is gated on the Master Auditor's independent verdict being recorded and merged to `main`.
+**Next task:** None for implementation. `docs/audits/phase-4-audit.md` carries a `[PASS]` verdict; Phase 4 closes once this branch (or the audit document) merges to `main`. A follow-up `/documentation-sync` pass is recommended post-merge to move CA-4/CA-5/CA-6/CA-8 ROADMAP §12.5 entries from "Planned, Phase 4" to "Shipped."
+**Blocking issues:** None. Phase 4 close is gated only on merging to `main`, per `.claude/rules/roadmap-governance.md`'s "Close on merge only" rule.
 
 ---
 
@@ -99,6 +99,52 @@
 ## Session Log
 
 > Entries are prepended (newest first). Each entry records the date, what was attempted, what was completed, and any decisions made that aren't captured elsewhere.
+
+### 2026-07-09 — `/documentation-sync` pass (post-audit, pre-merge)
+
+**Tasks touched:** none (documentation sync only; Task Registry untouched)
+**Outcome:** completed
+
+**What happened:**
+BDFL explicitly ran `/documentation-sync`, immediately following the Master Auditor `[PASS]` verdict recorded earlier this same day. Phase 0 ground truth: branch `v0.0.6` still 7 commits ahead of `main` (unmerged), `package.json` at `0.0.6`, no `docs/archive/v0.0.6/` yet — per `.claude/rules/roadmap-governance.md`'s "close on merge only" rule, Phase 4 is audited but not closed. Scoped this pass accordingly:
+
+1. **`.claude/rules/architecture.md`** (code-truth, no phase-closure gating): found the Module layout table missing two Epic 8 modules entirely (`src/worker/borderHandlers.ts`, `src/render/BorderRenderer.ts`) and the `transferablePool` row omitting `TransferableBorderPool` (confirmed present in source via `grep -n 'class Transferable' src/worker/transferablePool.ts`) — added all three. Updated Key Data Flow §4/§5 to list `recomputeBorders`/`getBorderSegments` in the round-trip/ring-pool description and removed the now-stale "future feature (e.g. CA-6 borderEdges)" framing, since it shipped this phase.
+2. **`docs/ROADMAP_TRACEABILITY_MATRIX.md`**: appended row 337 recording the Master Auditor's one finding (flaky-perf-gate filename misattribution, non-blocking) per the existing pattern set by Phase 3's rows 334-336.
+3. **`docs/ROADMAP.md`**: added a `2026-07-09-documentation-sync-2` Revision History entry (PR-5) documenting the above and explicitly recording what was deliberately _not_ done and why.
+
+**Explicitly out of scope, and why:** did not promote `MappingRequiredError`/`PathNotFoundError`/`CostsRequiredError`/`onMappingChanged` (ROADMAP §12.5) from "Planned, Phase 4" to "Shipped," and did not add a `Status:` line to Phase 4's §5 ASCII box or §9 prose header — an audited `[PASS]` on an unmerged branch is not a closed phase per governance's own rule; that promotion is correctly deferred to the sync that runs after this branch (or the audit doc) merges to `main`. `README.md`/`CHANGELOG.md` re-checked and left untouched for the same reason already established by the 2026-07-09 mid-sprint sync (both correctly still describe released `v0.0.5`).
+
+**Verification:** re-ran the full battery independently rather than trusting prior numbers: `npm run typecheck` + `:example` clean; `npm run build` succeeds; full suite 329/331 pass on this run (2 transient timeouts, `AnchorPerf.gl.spec.ts`/`BorderPerf.gl.spec.ts`, both under the concurrent typecheck+test+build load this very sync mandates) — reran both in isolation, both green (`meanDelta` 16.06ms/16.54ms vs. 16.667ms nominal, ±10ms tolerance) — same Known Risk #2 contention category already documented, not a regression from doc-only edits; all four `bin/check-*.sh` exit 0 (checked before and after edits); `npm run format` applied (table-whitespace reflow only, no content change, re-verified scripts still green after).
+
+**Decisions made:**
+
+- Treated "audited `[PASS]` but unmerged" as still on the "waits" side of the skill's own dividing line ("established by a closed, audited, archived phase" syncs now; "true only because of code on an unmerged branch" waits) — consistent with `roadmap-governance.md`'s explicit "close on merge only" rule, even though this phase now has one more piece of evidence (an audit verdict) than the prior mid-sprint sync did.
+
+**Left off at:**
+All documentation surfaces reconciled to current code-truth within the above scope. Remaining action is the BDFL's merge of `v0.0.6` to `main`, which formally closes Phase 4 and unblocks the next sync's ROADMAP §12.5 promotions plus README/CHANGELOG v0.0.6 backfill.
+
+### 2026-07-09 — Master Auditor pass on Phase 4: `[PASS]` verdict recorded
+
+**Tasks touched:** none in the Task Registry (Epic 8 already complete; this is the audit step of the Phase Exit Self-Audit Protocol, not implementation work)
+**Outcome:** completed — `[PASS]`
+
+**What happened:**
+BDFL explicitly instructed conducting the Master Audit and authorized assigning the PASS verdict. Ran an independent read-only pass per `docs/processes/audit-only.md`, re-executing the full verification battery rather than trusting the Engineer Summary's (§1-8) reported numbers: `npm run test` (330/331 — one transient timeout), `npm run build`, `npm run size` (10,548 bytes gzipped, matches exactly), `npm run typecheck` + `:example`, all four `bin/check-*.sh` scripts, and a `git grep` re-confirmation of the `GameClock` deletion. Also spot-checked source directly against the Engineer Summary's specific technical claims (not taken on faith): `MapEngine.ts`'s full Phase 4 public method list, `recomputeBorders()`'s non-`async` coalescing implementation and its documented `.catch(() => {})` guards, `BorderRenderer.ts`'s `GLBufferAttribute`/`frustumCulled`/`boundingSphere` fix, `getBorderVBO`'s placement on the internal-access interface only (absent from `src/index.ts`'s public exports), and `example/src/main.ts`'s updated API-surface doc comment.
+
+Found one factual discrepancy: the Engineer Summary named `test/PathfindingPerf.gl.spec.ts` as the run's one pre-existing flaky perf gate, but this session's independent `npm run test` run actually timed out on `test/PalettePerf.gl.spec.ts` instead (a Phase 2/3 test, unrelated to Phase 4). Investigated rather than accepting either claim at face value: re-ran both perf gates together in isolation (both green), and confirmed via `docs/audits/phase-3-audit.md` Finding 3 and `docs/archive/v0.0.5/PROGRESS.md` that `PalettePerf.gl.spec.ts` has an independently-documented history of exactly this flake (15s Vitest timeout under concurrent `npm run build` load) dating back two phases. Concluded this is a documentation-accuracy nit in the Engineer Summary (wrong filename), not a substantive defect — the underlying category (Known Risk #2, non-blocking, pre-existing, unrelated to this phase's own changes) is correct and, if anything, better-supported than originally stated. Did not affect the verdict.
+
+No other discrepancies found. All five Documented Deviations (§5) and all three Discrepancy Log entries (§7) in the Engineer Summary were assessed as proportionate and already resolved/accepted. PR-1 through PR-5 and P-1 through P-9 scorecards held up under independent re-verification.
+
+**Verification:** see `docs/audits/phase-4-audit.md` §9 "Master Auditor Verdict" for the full re-run table and code-truth spot-check list.
+
+**Decisions made:**
+
+- Assigned **`[PASS]`** to `docs/audits/phase-4-audit.md` (§9), per the BDFL's explicit authorization to record the verdict in this session.
+- Per `.claude/rules/roadmap-governance.md`'s "Close on merge only" rule, did not mark Phase 4 as closed in Current Status above — only recorded that the verdict exists and is pending a merge to `main`.
+- Recommended (not executed, since archiving and doc-sync are separately gated) a follow-up `/documentation-sync` pass once this merges, to move the CA-4/CA-5/CA-6/CA-8-related ROADMAP §12.5 error-table rows from "Planned, Phase 4" to "Shipped" — the 2026-07-09 mid-sprint sync correctly deferred exactly this update pending this verdict.
+
+**Left off at:**
+Phase 4 audited `[PASS]`. Remaining step to formally close the phase is merging `v0.0.6` (or at minimum `docs/audits/phase-4-audit.md`) to `main`, per `.claude/rules/roadmap-governance.md` step 4 — a BDFL-gated action, not autonomous.
 
 ### 2026-07-09 — Borders demo: added toggle visibility (user-reported bug, follow-up to Epic 8)
 

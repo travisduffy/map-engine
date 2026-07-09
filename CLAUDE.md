@@ -83,6 +83,8 @@ All four must exit 0 before closing the phase.
 
 **When modifying the public API:** also update `example/src/main.ts` to reflect the change — the example must always demonstrate the current, accurate API surface.
 
+**When adding a new module file under `src/worker/` or `src/render/`:** also add its row to `.claude/rules/architecture.md`'s Module layout table in the same session. A vaguer version of this rule ("update relevant `.claude/rules/*.md` files if domain patterns changed") already existed but wasn't concrete enough to fire reliably — Epic 8's `borderHandlers.ts`, `BorderRenderer.ts`, and `TransferableBorderPool` went undocumented there for a full epic plus one intervening `/documentation-sync` pass before a later sync caught the gap.
+
 ## Dev dependencies (when installing)
 
 ```
