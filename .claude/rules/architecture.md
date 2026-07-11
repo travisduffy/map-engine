@@ -76,7 +76,7 @@ Separately: `THREE.BufferGeometry`'s opaque-object Z-sort pass calls `geometry.c
 
 ## Build configuration
 
-`vite.config.ts` serves dual purpose: library build (`rollupOptions.external: ['three']` is mandatory — omitting it bundles Three.js and silently blows the 15 KB gzipped size budget) and Vitest browser-mode testing. See PRD "Dev Dependencies" for the exact config block.
+`vite.config.ts` serves dual purpose: library build (`rollupOptions.external: ['three']` is mandatory — omitting it bundles Three.js and silently blows the 15 KB gzipped size budget) and Vitest browser-mode testing. See CLAUDE.md "Dev dependencies" for the pinned versions.
 
 ## Test fixtures
 
@@ -92,7 +92,7 @@ A same-thread sequence of many fast calls chained via `await` can starve a co-re
 
 Compare a computed tolerance with `toBeLessThanOrEqual`, not `toBeLessThan` — an exact tie at the boundary is a reachable value, not an edge case to ignore.
 
-Stop once best-of-N sampling and environment-aware tolerance are in place and a few stress-test runs — including one concurrent with `npm run build` — look reasonable. ROADMAP §12.2 already treats a slow or contended box as non-authoritative for a perf gate; chasing zero residual flakiness past that point costs far more than the policy asks for.
+Stop once best-of-N sampling and environment-aware tolerance are in place and a few stress-test runs — including one concurrent with `npm run build` — look reasonable. A slow or contended box is non-authoritative for a perf gate; chasing zero residual flakiness past that point costs far more than it is worth.
 
 ## Example app assets
 

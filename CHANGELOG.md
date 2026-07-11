@@ -6,8 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 > **Versioning era:** The project is in early development (`v0.0.y`). All releases
-> increment the patch version only, regardless of change type. No MINOR or MAJOR
-> bumps will occur without explicit BDFL instruction.
+> increment the patch version only, regardless of change type. MINOR or MAJOR
+> bumps are a deliberate, manually-chosen step, not an automatic consequence of
+> any change.
 
 ---
 

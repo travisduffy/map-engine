@@ -1,20 +1,20 @@
 # CLAUDE.md
 
-## Documentation Architecture — Read Before Anything Else
+## Where persistent context lives
 
-This repo uses a strict three-tier documentation system. **All persistent AI context lives inside the repo, version-controlled, in one of exactly three places:**
+All persistent AI context for this project lives inside the repo, version-controlled, in
+one of exactly two places:
 
 1. `CLAUDE.md` — global directives, loaded every session
 2. `.claude/rules/*.md` — path-scoped domain rules
-3. `docs/` — project docs (active sprint workspace, ROADMAP, templates, archive)
 
-**Never create any external or machine-local persistence for this project.** This means:
+Project documentation lives in `docs/` (see the Documentation section below).
 
-- No `memory/` directory anywhere in the repo
-- No harness memory files (e.g., `~/.claude/projects/*/memory/`)
-- No notes, scratchpads, or state files outside the three tiers above
-
-If a rule or convention is worth preserving, it goes in `CLAUDE.md` (global) or `.claude/rules/*.md` (domain-scoped). If it is not worth encoding in one of those two places, it is not worth preserving at all.
+**Never create any external or machine-local persistence for this project.** No `memory/`
+directory anywhere in the repo, no harness memory files (e.g., `~/.claude/projects/*/memory/`),
+no notes, scratchpads, or state files outside the repo. If a convention is worth preserving,
+it goes in `CLAUDE.md` (global) or `.claude/rules/*.md` (domain-scoped). If it is not worth
+encoding in one of those two places, it is not worth preserving at all.
 
 ## Commands
 
@@ -28,7 +28,6 @@ npm run typecheck:example # tsc --noEmit for the example workspace
 npm run format            # prettier --write .
 npm run test              # run full test suite (vitest run — all test files, single pass)
 npm run size              # gzip -c dist/index.js | wc -c  (verify <15 KB gzipped)
-npm run knowledge         # repomix CLAUDE.md + README.md + docs/** → stdout (pipe to clipboard etc.)
 ```
 
 Tests requiring browser APIs (`OffscreenCanvas`, `createImageBitmap`, DOM) run under Vitest browser mode with the Playwright provider. Tests without browser API dependencies may use Vitest in Node mode.
@@ -67,23 +66,11 @@ Before concluding any task, run in two parallel batches then update state:
 **State + format (once, at end of session — not after each individual task):**
 
 - Update relevant `.claude/rules/*.md` files if domain patterns changed.
-- Write `docs/active/PROGRESS.md` (see Efficiency Directives below).
 - `npm run format`
-
-**Before any phase exit**, also run the consistency scripts (see `.claude/rules/roadmap-governance.md`):
-
-```bash
-./bin/check-finding-codes.sh
-./bin/check-roadmap-cross-refs.sh
-./bin/check-matrix-vs-roadmap.sh
-./bin/check-roadmap-consistency.sh
-```
-
-All four must exit 0 before closing the phase.
 
 **When modifying the public API:** also update `example/src/main.ts` to reflect the change — the example must always demonstrate the current, accurate API surface.
 
-**When adding a new module file under `src/worker/` or `src/render/`:** also add its row to `.claude/rules/architecture.md`'s Module layout table in the same session. A vaguer version of this rule ("update relevant `.claude/rules/*.md` files if domain patterns changed") already existed but wasn't concrete enough to fire reliably — Epic 8's `borderHandlers.ts`, `BorderRenderer.ts`, and `TransferableBorderPool` went undocumented there for a full epic plus one intervening `/documentation-sync` pass before a later sync caught the gap.
+**When adding a new module file under `src/worker/` or `src/render/`:** also add its row to `.claude/rules/architecture.md`'s Module layout table in the same session. A vaguer version of this rule ("update relevant `.claude/rules/*.md` files if domain patterns changed") is not concrete enough to fire reliably — several `src/render/` modules once went undocumented in that table for a long stretch before a later pass caught the gap, so treat the concrete rule as the operative one.
 
 ## Dev dependencies (when installing)
 
@@ -95,7 +82,7 @@ playwright@^1.59.0
 sharp@^0.33.0           # fixture generation only
 ```
 
-## PRD Constraints
+## Engineering Constraints
 
 - **ESM only** — no UMD/CJS bundles
 - `SectorRegistry` must have **zero Three.js imports** (enforced by static analysis)
@@ -103,55 +90,20 @@ sharp@^0.33.0           # fixture generation only
 - `MapRenderer` and `MapEngine` are **main-thread only**
 - JSON hex keys are **not** normalized — `"FF0000"` ≠ `"ff0000"`; consumer's responsibility
 - `createImageBitmap` called without options (safe because bitmap guarantees alpha=255)
-- Do not implement anything in the "explicitly does not include" list (see `docs/active/PRD.md` §"What This Version Explicitly Does Not Include")
+- Do not implement anything in the current release's out-of-scope list (see README.md §"What this version does not include")
 
 ## Documentation
 
-- `docs/active/PROGRESS.md` — **read this first at the start of every session**; tracks task completion status, session logs, and lessons learned. If the Task Registry is empty or the active version is `None`, do not begin implementation — wait for the user to start a new cycle.
-- `docs/active/PRD.md` — full implementation spec for the active version. If the Status is `DRAFT` or the Overview section is empty or marked `TODO`, do not infer requirements — stop and ask.
-- `docs/active/epics/` — epic files for the active version; each task has a full work spec and done-when criteria. Empty between development cycles.
-- `docs/archive/` — completed versions organized by SemVer tag (e.g., `v0.0.1/`). Treat as read-only historical reference; never modify archive contents.
-- `docs/templates/` — blank starter templates (`PRD_TEMPLATE.md`, `PROGRESS_TEMPLATE.md`) used to initialize a new sprint's `docs/active/` workspace.
-- `.claude/rules/roadmap-governance.md` — roadmap stewardship, the Phase Exit Self-Audit Protocol, and the process registry. Read this before any phase exit.
+- `docs/vision.md` — the project's design charter: North Star, the veto-bearing First-Class Principles, architectural invariants, current capability surface, settled non-goals, and uncommitted future directions. Read this to keep new work on-track; a change that conflicts with a First-Class Principle is wrong by default.
 - `.claude/rules/architecture.md` — module breakdown, data flow, sector identity, rendering, and resize implementation details. Loads automatically when touching `src/`, `example/`, or `test/` TypeScript files.
-
-> **Archiving is a human-triggered event.** Never move files into `docs/archive/` autonomously. Only execute an archive sequence when the user explicitly instructs you to do so in that session.
-
-## Versioning Policy
-
-### Era: v0.0.y — Patch-Only Development
-
-The project is in early development. **All releases increment the PATCH version only.**
-This applies regardless of change type — bugfixes, new features, and breaking changes
-all bump `v0.0.y` while this era is active.
-
-**Rules for AI agents:**
-
-1. **Never modify `package.json` version autonomously.** Version increments are
-   BDFL-only decisions, announced explicitly in the session that releases.
-2. **Never write specific future version targets** in code, comments, documentation,
-   or PRD/epic files. Use "a future version", "a future release", or "see ROADMAP"
-   instead of `v0.1.0`, `v1.0.0`, etc. Specific targets create false timeline pressure.
-3. **Never plan a sprint around a named future version.** Sprint PRDs target
-   "the next patch release." The BDFL names the version number at release time.
-4. **The jump from v0.0.y to v0.1.0 is a BDFL-only decision.** Do not assume,
-   suggest, or plan for it.
-5. **Each archived phase locks in its own version.** When a sprint's phase is split
-   out and archived mid-sprint, that archive gets a new, distinct SemVer patch
-   version — never a `-phase-N` suffix on a version already used elsewhere. See
-   `docs/processes/version-archive-split.md` for the full procedure.
+- `docs/research/` — architecture/engineering reference PDFs (RGB index-map rendering, GSG engine architecture, WASM/UI binding, etc.), indexed by `docs/research/README.md`.
+- `docs/archive/` — **frozen, read-only** historical record of the retired sprint/phase project-management system (per-version snapshots, the former roadmap, traceability matrix, and phase audits). Not governed or updated; kept for provenance. See `docs/archive/README.md`.
 
 ## Operational Efficiency
 
 These directives are derived from measured session overhead. Apply them on every task.
 
-### 1. State files: Read once, Write once
-
-`docs/active/PROGRESS.md` routinely needs 2–3 changes per session (status field, task table, session log). **Determine all changes before touching the file, then do one Read → one Write.** Never make multiple Edit calls to the same file in one session — each extra Edit call is pure overhead with no benefit over a full Write. When compressing a Session Log or audit entry, cut conversational filler but keep every decision, discrepancy, and technical rationale — that detail costs more to reconstruct next session than it costs to keep now. Treat a second `Edit` call to the same file as the signal to stop and fold every remaining change into one `Write` instead — a 2026-07-09 session made four sequential `Edit` calls to `PROGRESS.md` in one sitting despite this rule, losing the entire batching benefit the rule exists for.
-
-**Narrow exception for a large file with a few, well-separated changes:** once a file has grown past a few hundred lines and is already fully in context from an earlier Read/Write this session, 2 large, non-overlapping `Edit` calls (e.g., inserting one new dated Session Log entry, then appending one Lessons Learned bullet) are an acceptable, deliberate alternative to a full `Write` — retyping hundreds of unrelated lines into a `Write` call risks silently dropping or corrupting content that a targeted `Edit` cannot touch. This exception is narrow: it does not license 3+ edits, and it does not apply to small or scattered changes that a single `Write` handles just as safely.
-
-### 2. Test research: Grep before broad reads
+### 1. Test research: Grep before broad reads
 
 Never load a full test file to find setup patterns. Grep first:
 
@@ -163,57 +115,26 @@ Only escalate to a full Read if the grep result is insufficient. Test files in t
 
 A specific signal: if a `beforeEach` in an existing test does `cancelAnimationFrame(renderer['_animFrameId'])`, the test harness bypasses the rAF loop entirely and calls `_preRenderHook` directly. This means it **cannot** test logic inside the loop body (e.g., render gating). Recognize this pattern immediately rather than reading `testUtils.ts` to confirm it.
 
-### 3. Verification: maximize parallelism
+### 2. Verification: maximize parallelism
 
-The post-task checklist explicitly requires two parallel batches. The additional rule for phase exit:
+The post-task checklist requires two parallel batches. `npm run test` runs against source (no build dependency) and `npm run build` is independent of tests, so typecheck, test, and build never need to run sequentially — batch them per the checklist above.
 
-```bash
-# Run these three in parallel (one shell message, three calls):
-npm run test
-npm run build && ./bin/check-finding-codes.sh && ./bin/check-roadmap-cross-refs.sh && ./bin/check-matrix-vs-roadmap.sh && ./bin/check-roadmap-consistency.sh
-npm run typecheck && npm run typecheck:example
-```
+When a verification step filters `grep -r` output by path (e.g. reference sweeps that exclude `docs/archive/`), anchor the exclusion on `(^|/)`, not `\./` — recursive grep emits paths with no leading `./`, so a `\./`-anchored `grep -v` matches nothing and silently leaks the entire result instead of narrowing it.
 
-`npm run test` runs against source (no build dependency). `npm run build` is independent of tests. There is no reason these ever run sequentially.
-
-### 4. Trust CLAUDE.md; do not verify via config reads
+### 3. Trust CLAUDE.md; do not verify via config reads
 
 If CLAUDE.md documents a behavior, treat it as authoritative. Do **not** read `vite.config.ts`, `tsconfig.json`, or `package.json` to verify information already stated here. Concretely: the test runner is Vitest browser mode (Playwright/Chromium), `vi.spyOn` works on window-level globals, `three` is external in the build — these are all stated here and do not require config file confirmation.
 
-### 5. System-reminder preloads are live context
+### 4. System-reminder preloads are live context
 
 Files shown in system-reminder `Read` results at session start are already in your context window. Check what is preloaded before issuing any Read call. Re-reading a preloaded file costs a full round-trip for zero new information.
 
-### 6. Targeted reads for known sections
+### 5. Targeted reads for known sections
 
-When only a named section of a large file is needed (e.g., PRD §A1, ROADMAP §2.1, a specific audit section), use `offset` + `limit` parameters. Thirty lines around the target is almost always sufficient. Reading a full 80-line PRD to extract a 10-line section wastes 70 lines of context budget every time.
+When only a named section of a large file is needed, use `offset` + `limit` parameters. Thirty lines around the target is almost always sufficient. Reading a full file to extract a 10-line section wastes context budget every time.
 
-When editing a single row of a prettier-formatted markdown table, anchor the `Edit` on a short unique fragment rather than the full copied line — column-alignment padding often doesn't match what gets typed manually, and a full-line `old_string` fails on that whitespace mismatch. When that same edit expands one row into several (or merges several into one), emit every resulting row in `new_string` — the short anchor shrinks only what you match, not what you must output, so a replacement that names one row while the source row covered three silently drops the other two and costs a follow-up edit to restore them (2026-07-09: splitting one combined error row into three emitted only one, losing two).
+When editing a single row of a prettier-formatted markdown table, anchor the `Edit` on a short unique fragment rather than the full copied line — column-alignment padding often doesn't match what gets typed manually, and a full-line `old_string` fails on that whitespace mismatch. When that same edit expands one row into several (or merges several into one), emit every resulting row in `new_string` — the short anchor shrinks only what you match, not what you must output, so a replacement that names one row while the source covered three silently drops the other two and costs a follow-up edit to restore them.
 
-### 7. Plan Mode: verify before exiting
+### 6. Plan Mode: verify before exiting
 
-Before calling `ExitPlanMode` on a non-trivial plan, re-read the exact source lines the plan depends on (method signatures, field names, call sites) instead of trusting Explore/Plan subagent summaries at face value — this repo's own tooling (`sprint-hardening` skill, phase-exit audits) treats a first draft as needing a dedicated verification pass, and a plan should meet that bar without being asked. A 2026-07-09 session's first `ExitPlanMode` call was rejected pending exactly this pass, which then found a redundant computation and an unresolved design question that the subagent summaries alone had missed.
-
-This kept getting skipped even with the rule in place: a second 2026-07-09 session's first `ExitPlanMode` call was rejected for the identical reason, catching two more defects (a wrong assumption about where a data field lives, a missing wiring path) before implementation began. A prose reminder is easy to skip because finishing the plan draft and calling `ExitPlanMode` feel like one continuous action. Make the pass produce a visible artifact instead of a private mental step: before the first `ExitPlanMode` call, add a short "Verified against source" note to the plan file itself, listing the specific file:line locations re-read and confirming each still matches the plan's key assumptions. A plan file with no such note is a visible signal — to you and to the user — that the pass was skipped, not just something to remember to do.
-
----
-
-## Session Workflow
-
-**Every session must follow this protocol:**
-
-1. **Read `docs/active/PROGRESS.md` first.** It tells you exactly what has been done, what is in progress, what is blocked, and where the last session left off. Never start implementation work without reading it.
-2. **Check if a development cycle is active.** If the Task Registry is empty or the active version is `None`, stop — do not begin implementation. Wait for the user to explicitly start the sprint (see Sprint Activation rule below).
-3. **Find the next task.** The Task Registry lists all tasks with their current status. Pick up from the first `[ ]` (not started) or `[~]` (in progress) task.
-4. **Read the epic file for that task.** Epic files are in `docs/active/epics/`. They contain the full work spec, PRD references, and done-when criteria for every task.
-5. **Cross-reference the PRD.** `docs/active/PRD.md` is the canonical authority. Epic files cite specific PRD sections — go there for algorithm details and acceptance criteria.
-6. **Update `docs/active/PROGRESS.md` when done.** Before closing a session: mark completed tasks `[x]`, mark any blocked task `[!]`, append a Session Log entry (date, tasks touched, outcome, decisions made, where you left off), and add any non-obvious discoveries to Lessons Learned.
-
-### Sprint Activation — BDFL-Only
-
-**The BDFL (user) is the sole authority on when a sprint starts. This rule has no exceptions.**
-
-- **Epic files existing in `docs/active/epics/` does NOT mean a sprint is active.** They are preparation artifacts — written ahead of time so the sprint is ready to start, not a signal that it has started.
-- **Never autonomously populate the Task Registry** in `docs/active/PROGRESS.md` or change the Current Status from `NO ACTIVE SPRINT` to active. These edits must only happen when the BDFL gives explicit, intentional instruction to start the sprint in the current session.
-- **Never infer sprint start from context.** The presence of epic files, a finalized PRD, or any other preparation work is not authorization to begin. Wait for the explicit "start the sprint" instruction.
-- When the BDFL does start the sprint, the activation sequence is: update Current Status, populate the Task Registry with all epics and tasks, then begin Task 1.1 of Epic 1.
+Before calling `ExitPlanMode` on a non-trivial plan, re-read the exact source lines the plan depends on (method signatures, field names, call sites) instead of trusting Explore/Plan subagent summaries at face value — a first draft should be treated as needing a dedicated verification pass without being asked. Make the pass produce a visible artifact instead of a private mental step: before the first `ExitPlanMode` call, add a short "Verified against source" note to the plan file itself, listing the specific file:line locations re-read and confirming each still matches the plan's key assumptions. A plan file with no such note is a visible signal — to you and to the user — that the pass was skipped.

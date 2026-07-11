@@ -8,9 +8,9 @@ interface AnchorFixture {
   expectedAnchor: number[]
 }
 
-// Per the Epic 7 Task 7.3 BDFL ruling: `expectedAnchor` is NOT authoritative
-// (13/20 checked-in values contradict the polylabel definition -- verified
-// during sprint hardening) and is intentionally never read below. Acceptance
+// Per project decision: `expectedAnchor` is NOT authoritative
+// (13/20 checked-in values contradict the polylabel definition) and is
+// intentionally never read below. Acceptance
 // is re-specified as interiority + clearance-optimality against an
 // independent reference, not coordinate equality.
 const fixtures: AnchorFixture[] = await fetch(
@@ -139,7 +139,7 @@ describe('anchor-shapes.json fixture acceptance — Epic 7 Task 7.3', () => {
       // self-intersecting spirals and the degenerate concave-2 ring.
       expect(pole.distance).toBeGreaterThan(0)
 
-      // Clearance-optimality (BDFL ruling, supersedes coordinate equality
+      // Clearance-optimality (project decision, supersedes coordinate equality
       // against the fixture's `expectedAnchor`): the anchor's clearance must
       // be within precision of the true maximum, not equal to a specific
       // coordinate. The 1.1 tolerance is the 1.0px CA-8 precision plus a

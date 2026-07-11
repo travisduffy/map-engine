@@ -520,7 +520,7 @@ These are documented constraints in the current version. See the Future work sec
 `SectorBitmapParser.parse()` and the `SectorRegistry` O(W×H) scan both still run on the Main thread inside `loadMap()`, before the registry is transferred to the Worker. For an 8192×4096 bitmap, this can block the main thread for 200–500 ms. There is no built-in mitigation yet — the Worker relocation shipped in this release only covers post-construction state and computation, not the initial parse/scan.
 
 **Mobile heap budget:**
-At the 4096×4096 mobile size cap, total base heap (source buffer + `pixelIndices` + auxiliary buffers including the `pixelIndicesMirror` context-loss recovery copy) runs to roughly 192 MB — see `docs/ROADMAP.md` §12.3 for the full sizing table by map dimension. `sourceBuffer` is disposed immediately after `pixelIndices` extraction to keep this bounded; plan capacity accordingly for large maps.
+At the 4096×4096 mobile size cap, total base heap (source buffer + `pixelIndices` + auxiliary buffers including the `pixelIndicesMirror` context-loss recovery copy) runs to roughly 192 MB — see `docs/archive/ROADMAP.md` §12.3 for the full sizing table by map dimension. `sourceBuffer` is disposed immediately after `pixelIndices` extraction to keep this bounded; plan capacity accordingly for large maps.
 
 **`gl.MAX_TEXTURE_SIZE` hardware cap (bitmap dimensions):**
 The main index texture cannot exceed the device's `gl.MAX_TEXTURE_SIZE` limit — commonly 4096 px on mobile GPUs and 8192 px on desktop. A bitmap exceeding this limit throws a fatal WebGL error. The engine does not query or tile around this limit for the index texture (the GPU palette LUT itself does 2D-wrap automatically past `MAX_TEXTURE_SIZE` sector counts — a separate, already-solved constraint). If targeting mobile, keep bitmaps within 4096×4096.
@@ -536,7 +536,7 @@ Camera controls are mouse/wheel only (middle-click drag to pan, scroll wheel to 
 
 ## What this version does not include
 
-The following are explicitly out of scope for the current release (see `docs/ROADMAP.md` for what's planned and when):
+The following are explicitly out of scope for the current release:
 
 - River layer or heightmap rendering
 - CSV definition format — JSON only
@@ -550,7 +550,7 @@ The following are explicitly out of scope for the current release (see `docs/ROA
 
 ## Future work
 
-See `docs/ROADMAP.md` for the full, versioned plan. This release (`v0.0.6`) shipped the Worker-side grand-strategy primitives — pathfinding, hierarchical (group-level) aggregation, dynamic border rendering, and spatial anchoring — on top of the earlier Off-Main-Thread kernel. Beyond it, the roadmap's Phase 5 sketches framework bindings, a modding script boundary, and group-scope palettes; that scope is gated on an explicit review and is not yet committed.
+This release (`v0.0.6`) shipped the Worker-side grand-strategy primitives — pathfinding, hierarchical (group-level) aggregation, dynamic border rendering, and spatial anchoring — on top of the earlier Off-Main-Thread kernel. The now-frozen historical roadmap (`docs/archive/ROADMAP.md`) sketched framework bindings, a modding script boundary, and group-scope palettes as possible future directions; none are committed.
 
 ## Bundle size
 
