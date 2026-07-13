@@ -11,7 +11,7 @@ import {
   SimulationClock,
   type TickTelemetry,
 } from '../../src/worker/SimulationClock'
-import { PathNotFoundError } from '../../src/errors'
+import { PathNotFoundError } from '../../src/shared/errors'
 
 interface FixturePair {
   start: number

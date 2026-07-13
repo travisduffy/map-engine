@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { SectorRegistry } from '../src/SectorRegistry'
-import { MapEngine } from '../src/MapEngine'
-import { toHexKey } from '../src/utils'
+import { SectorRegistry } from '../src/sector/SectorRegistry'
+import { MapEngine } from '../src/core/MapEngine'
+import { toHexKey } from '../src/shared/utils'
 import { buildTestBuffer, makeCanvas } from './testUtils'
-import type { SectorDefinitionFile } from '../src/types'
+import type { SectorDefinitionFile } from '../src/shared/types'
 
 describe('AdjacencyGraph — Epic 3', () => {
   it("AC 3.1 — bidirectionality: each sector in the other's neighbor list", () => {

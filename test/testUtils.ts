@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { MapRenderer } from '../src/MapRenderer'
+import type { MapRenderer } from '../src/core/MapRenderer'
 
 // Import-isolation verification commands (AC 1.10):
 //   grep -rn 'internal/color' src/SectorRegistry.ts src/SectorBitmapParser.ts   # must return empty

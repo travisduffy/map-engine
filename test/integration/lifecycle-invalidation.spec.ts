@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { MapEngine } from '../../src/MapEngine'
-import { MapInvalidatedError } from '../../src/errors'
+import { MapEngine } from '../../src/core/MapEngine'
+import { MapInvalidatedError } from '../../src/shared/errors'
 import type { SharedRegistryProxy } from '../../src/worker/SharedRegistryProxy'
 import { makeCanvas } from '../testUtils'
 

@@ -1,4 +1,4 @@
-import { PathNotFoundError } from '../errors'
+import { PathNotFoundError } from '../shared/errors'
 import { yieldIfNeeded } from './yield'
 
 /** Sentinel for "no predecessor" in `cameFrom` (§12.3) -- also the start node's own entry. */
@@ -47,6 +47,11 @@ export class SpatialGraph {
   private readonly _heapScore: Float32Array
   private _heapSize = 0
 
+  /**
+   * Preallocates all per-search scratch (gScore/cameFrom/visited/heap) sized
+   * from the CSR buffers and computes the admissible heuristic multiplier
+   * once -- no allocation happens during `findPath` afterwards.
+   */
   constructor(
     adjacencyPointers: Uint32Array,
     adjacencyNeighbors: Uint16Array,
@@ -68,116 +73,6 @@ export class SpatialGraph {
     this._heapScore = new Float32Array(heapCapacity)
 
     this._heuristicMultiplier = this._computeHeuristicMultiplier()
-  }
-
-  /**
-   * `h(n) = euclideanDistance(centroid(n), centroid(goal)) * multiplier` --
-   * multiply, never divide (dividing by cost would divide-by-zero if a 0
-   * cost ever appeared). Admissibility (`h(n) <= true remaining cost`)
-   * constrains the multiplier by distance, not just cost: on a real map,
-   * adjacent centroids can be many pixels apart while edge costs stay near
-   * 1, so a naive multiplier of 1 wildly overestimates. The multiplier
-   * computed here -- `minEdgeCost / maxAdjacentCentroidDistance`, in one
-   * O(E) pass -- keeps the heuristic admissible for any edge in the graph.
-   * Clamped to 0 if the graph has no adjacent-centroid distance (empty
-   * graph, or all-coincident centroids), preventing `Infinity`.
-   */
-  private _computeHeuristicMultiplier(): number {
-    let minEdgeCost = Infinity
-    let maxAdjacentCentroidDistance = 0
-    for (let node = 0; node < this._sectorCount; node++) {
-      const from = this._adjacencyPointers[node]
-      const to = this._adjacencyPointers[node + 1]
-      for (let k = from; k < to; k++) {
-        const neighbor = this._adjacencyNeighbors[k]
-        const cost = this._traversalCosts[neighbor]
-        if (cost < minEdgeCost) minEdgeCost = cost
-        const dist = this._centroidDistance(node, neighbor)
-        if (dist > maxAdjacentCentroidDistance)
-          maxAdjacentCentroidDistance = dist
-      }
-    }
-    return maxAdjacentCentroidDistance === 0
-      ? 0
-      : minEdgeCost / maxAdjacentCentroidDistance
-  }
-
-  private _centroidDistance(a: number, b: number): number {
-    const dx = this._centroids[a * 2] - this._centroids[b * 2]
-    const dy = this._centroids[a * 2 + 1] - this._centroids[b * 2 + 1]
-    return Math.sqrt(dx * dx + dy * dy)
-  }
-
-  private _heuristic(node: number, goal: number): number {
-    return this._centroidDistance(node, goal) * this._heuristicMultiplier
-  }
-
-  // ---- binary heap over parallel typed arrays (node id, f-score) ----
-  // Comparator: lower score first; ties broken by lower node id (explicit,
-  // documented tie-break -- raw heap ordering is otherwise unstable).
-
-  private _heapLess(i: number, j: number): boolean {
-    const si = this._heapScore[i]
-    const sj = this._heapScore[j]
-    if (si !== sj) return si < sj
-    return this._heapNode[i] < this._heapNode[j]
-  }
-
-  private _heapSwap(i: number, j: number): void {
-    const tn = this._heapNode[i]
-    this._heapNode[i] = this._heapNode[j]
-    this._heapNode[j] = tn
-    const ts = this._heapScore[i]
-    this._heapScore[i] = this._heapScore[j]
-    this._heapScore[j] = ts
-  }
-
-  private _heapPush(node: number, score: number): void {
-    let i = this._heapSize++
-    this._heapNode[i] = node
-    this._heapScore[i] = score
-    while (i > 0) {
-      const parent = (i - 1) >> 1
-      if (!this._heapLess(i, parent)) break
-      this._heapSwap(i, parent)
-      i = parent
-    }
-  }
-
-  private _heapPop(): number {
-    const topNode = this._heapNode[0]
-    const last = --this._heapSize
-    this._heapNode[0] = this._heapNode[last]
-    this._heapScore[0] = this._heapScore[last]
-    let i = 0
-    for (;;) {
-      const l = i * 2 + 1
-      const r = i * 2 + 2
-      let smallest = i
-      if (l < this._heapSize && this._heapLess(l, smallest)) smallest = l
-      if (r < this._heapSize && this._heapLess(r, smallest)) smallest = r
-      if (smallest === i) break
-      this._heapSwap(i, smallest)
-      i = smallest
-    }
-    return topNode
-  }
-
-  private _reconstructPath(start: number, end: number): Uint16Array {
-    let length = 1
-    let cur = end
-    while (cur !== start) {
-      cur = this._cameFrom[cur]
-      length++
-    }
-    const path = new Uint16Array(length)
-    path[length - 1] = end
-    cur = end
-    for (let i = length - 2; i >= 0; i--) {
-      cur = this._cameFrom[cur]
-      path[i] = cur
-    }
-    return path
   }
 
   /**
@@ -225,5 +120,120 @@ export class SpatialGraph {
     }
 
     throw new PathNotFoundError(start, end)
+  }
+
+  /**
+   * `h(n) = euclideanDistance(centroid(n), centroid(goal)) * multiplier` --
+   * multiply, never divide (dividing by cost would divide-by-zero if a 0
+   * cost ever appeared). Admissibility (`h(n) <= true remaining cost`)
+   * constrains the multiplier by distance, not just cost: on a real map,
+   * adjacent centroids can be many pixels apart while edge costs stay near
+   * 1, so a naive multiplier of 1 wildly overestimates. The multiplier
+   * computed here -- `minEdgeCost / maxAdjacentCentroidDistance`, in one
+   * O(E) pass -- keeps the heuristic admissible for any edge in the graph.
+   * Clamped to 0 if the graph has no adjacent-centroid distance (empty
+   * graph, or all-coincident centroids), preventing `Infinity`.
+   */
+  private _computeHeuristicMultiplier(): number {
+    let minEdgeCost = Infinity
+    let maxAdjacentCentroidDistance = 0
+    for (let node = 0; node < this._sectorCount; node++) {
+      const from = this._adjacencyPointers[node]
+      const to = this._adjacencyPointers[node + 1]
+      for (let k = from; k < to; k++) {
+        const neighbor = this._adjacencyNeighbors[k]
+        const cost = this._traversalCosts[neighbor]
+        if (cost < minEdgeCost) minEdgeCost = cost
+        const dist = this._centroidDistance(node, neighbor)
+        if (dist > maxAdjacentCentroidDistance)
+          maxAdjacentCentroidDistance = dist
+      }
+    }
+    return maxAdjacentCentroidDistance === 0
+      ? 0
+      : minEdgeCost / maxAdjacentCentroidDistance
+  }
+
+  /** Euclidean distance between the centroids of nodes `a` and `b`, in pixel space. */
+  private _centroidDistance(a: number, b: number): number {
+    const dx = this._centroids[a * 2] - this._centroids[b * 2]
+    const dy = this._centroids[a * 2 + 1] - this._centroids[b * 2 + 1]
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+
+  /** Admissible A* heuristic: centroid distance from `node` to `goal` scaled by the precomputed multiplier. */
+  private _heuristic(node: number, goal: number): number {
+    return this._centroidDistance(node, goal) * this._heuristicMultiplier
+  }
+
+  // ---- binary heap over parallel typed arrays (node id, f-score) ----
+
+  /** True when heap entry `i` orders before entry `j`: lower f-score first, ties broken by lower node id (explicit -- raw heap ordering is otherwise unstable). */
+  private _isHeapLess(i: number, j: number): boolean {
+    const si = this._heapScore[i]
+    const sj = this._heapScore[j]
+    if (si !== sj) return si < sj
+    return this._heapNode[i] < this._heapNode[j]
+  }
+
+  /** Swaps heap entries `i` and `j` across both parallel arrays (node id and f-score). */
+  private _heapSwap(i: number, j: number): void {
+    const tn = this._heapNode[i]
+    this._heapNode[i] = this._heapNode[j]
+    this._heapNode[j] = tn
+    const ts = this._heapScore[i]
+    this._heapScore[i] = this._heapScore[j]
+    this._heapScore[j] = ts
+  }
+
+  /** Pushes `node` with `score` onto the open set and sifts it up to restore the heap invariant. */
+  private _heapPush(node: number, score: number): void {
+    let i = this._heapSize++
+    this._heapNode[i] = node
+    this._heapScore[i] = score
+    while (i > 0) {
+      const parent = (i - 1) >> 1
+      if (!this._isHeapLess(i, parent)) break
+      this._heapSwap(i, parent)
+      i = parent
+    }
+  }
+
+  /** Pops and returns the minimum-score node, sifting the last entry down to restore the heap invariant. */
+  private _heapPop(): number {
+    const topNode = this._heapNode[0]
+    const last = --this._heapSize
+    this._heapNode[0] = this._heapNode[last]
+    this._heapScore[0] = this._heapScore[last]
+    let i = 0
+    for (;;) {
+      const l = i * 2 + 1
+      const r = i * 2 + 2
+      let smallest = i
+      if (l < this._heapSize && this._isHeapLess(l, smallest)) smallest = l
+      if (r < this._heapSize && this._isHeapLess(r, smallest)) smallest = r
+      if (smallest === i) break
+      this._heapSwap(i, smallest)
+      i = smallest
+    }
+    return topNode
+  }
+
+  /** Walks `cameFrom` from `end` back to `start`, returning the forward-ordered path (`path[0] === start`). */
+  private _reconstructPath(start: number, end: number): Uint16Array {
+    let length = 1
+    let cur = end
+    while (cur !== start) {
+      cur = this._cameFrom[cur]
+      length++
+    }
+    const path = new Uint16Array(length)
+    path[length - 1] = end
+    cur = end
+    for (let i = length - 2; i >= 0; i--) {
+      cur = this._cameFrom[cur]
+      path[i] = cur
+    }
+    return path
   }
 }

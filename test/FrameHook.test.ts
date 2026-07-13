@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { MapEngine } from '../src/MapEngine'
-import type { MapRenderer } from '../src/MapRenderer'
+import { MapEngine } from '../src/core/MapEngine'
+import type { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
-import { parseColorToRgb } from '../src/internal/color'
+import { parseColorToRgb } from '../src/shared/color'
 import { makeCanvas, advanceFrame } from './testUtils'
 
 describe('FrameHook — Epic 1', () => {

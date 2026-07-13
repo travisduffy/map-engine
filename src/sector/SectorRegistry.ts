@@ -2,9 +2,9 @@ import type {
   SectorData,
   SectorDefinitionFile,
   ISpatialRegistry,
-} from './types'
-import { SectorLimitExceededError } from './errors'
-import { toHexKey, packRgb } from './utils'
+} from '../shared/types'
+import { SectorLimitExceededError } from '../shared/errors'
+import { toHexKey, packRgb } from '../shared/utils'
 
 const VOID_ID = 0xffff
 

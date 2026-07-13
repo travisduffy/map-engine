@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { MapEngine } from '../src/MapEngine'
+import { MapEngine } from '../src/core/MapEngine'
 import { makeCanvas } from './testUtils'
-import type { WorkerMessage } from '../src/types'
+import type { WorkerMessage } from '../src/shared/types'
 import type { TickTelemetry } from '../src/worker/SimulationClock'
 
 const REFERENCE_TOLERANCE_MS = 2.0

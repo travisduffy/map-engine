@@ -1,9 +1,9 @@
-import type { WorkerMessage } from '../types'
-import { registerCallHandler } from './callHandlers'
+import type { WorkerMessage } from '../shared/types'
+import { registerCallHandler } from './call-handlers'
 import { getWorkerState } from './state'
 import { yieldIfNeeded } from './yield'
-import { getParentMapping } from './aggregationHandlers'
-import { MappingRequiredError } from '../errors'
+import { getParentMapping } from './aggregation-handlers'
+import { MappingRequiredError } from '../shared/errors'
 
 const VOID_ID = 0xffff
 const VOID_GROUP = 0xffff

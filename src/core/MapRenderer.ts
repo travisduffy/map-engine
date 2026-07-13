@@ -2,13 +2,13 @@ import type { OrthographicCamera, Scene, Mesh, Vector2 } from 'three'
 import type {
   IThreeRenderBackend,
   ThreeRenderBackendInternalAccess,
-} from './render/IThreeRenderBackend'
-import { ThreeRenderBackend } from './render/ThreeRenderBackend'
-import { BorderRenderer } from './render/BorderRenderer'
-import type { SectorRegistry } from './SectorRegistry'
-import type { PickEvent } from './types'
-import { parseColorToRgb } from './internal/color'
-import { InputController } from './input/InputController'
+} from '../render/IThreeRenderBackend'
+import { ThreeRenderBackend } from '../render/ThreeRenderBackend'
+import { BorderRenderer } from '../render/BorderRenderer'
+import type { SectorRegistry } from '../sector/SectorRegistry'
+import type { PickEvent } from '../shared/types'
+import { parseColorToRgb } from '../shared/color'
+import { InputController } from '../input/InputController'
 
 export class MapRenderer {
   readonly scene: Scene

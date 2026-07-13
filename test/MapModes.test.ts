@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { MapEngine } from '../src/MapEngine'
-import { ModeNotReadyError } from '../src/errors'
-import type { MapRenderer } from '../src/MapRenderer'
+import { MapEngine } from '../src/core/MapEngine'
+import { ModeNotReadyError } from '../src/shared/errors'
+import type { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
 import { makeCanvas } from './testUtils'
 

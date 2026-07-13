@@ -1,11 +1,11 @@
-import type { WorkerMessage, BootstrapAckPayload } from '../types'
+import type { WorkerMessage, BootstrapAckPayload } from '../shared/types'
 import { setWorkerState } from './state'
-import { getCallHandler, registerCallHandler } from './callHandlers'
+import { getCallHandler, registerCallHandler } from './call-handlers'
 import { SimulationClock, type TickTelemetry } from './SimulationClock'
-import './pathfindingHandlers'
-import { handleReturnGroupBBoxes } from './aggregationHandlers'
-import { handleReturnAnchors } from './anchorHandlers'
-import { handleReturnBorderEdges } from './borderHandlers'
+import './pathfinding-handlers'
+import { handleReturnGroupBBoxes } from './aggregation-handlers'
+import { handleReturnAnchors } from './anchor-handlers'
+import { handleReturnBorderEdges } from './border-handlers'
 
 function bboxAt(
   bboxes: Int16Array,

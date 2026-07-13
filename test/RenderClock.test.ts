@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { RenderClock } from '../src/RenderClock'
+import { RenderClock } from '../src/core/RenderClock'
 
 describe('RenderClock — Epic 2 Task 2.1', () => {
   beforeEach(() => {

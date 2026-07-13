@@ -1,6 +1,6 @@
 import * as THREE from 'three'
-import { SectorBitmapParser } from './SectorBitmapParser'
-import { SectorRegistry } from './SectorRegistry'
+import { SectorBitmapParser } from '../sector/SectorBitmapParser'
+import { SectorRegistry } from '../sector/SectorRegistry'
 import { MapRenderer } from './MapRenderer'
 import type {
   MapConfig,
@@ -12,19 +12,19 @@ import type {
   BootstrapAckPayload,
   WorkerMessage,
   MapModeId,
-} from './types'
+} from '../shared/types'
 import {
   MapInvalidatedError,
   ModeNotReadyError,
   CostsRequiredError,
-} from './errors'
+} from '../shared/errors'
 import { RenderClock } from './RenderClock'
-import { SharedRegistryProxy } from './worker/SharedRegistryProxy'
+import { SharedRegistryProxy } from '../worker/SharedRegistryProxy'
 import {
   TransferableGroupPool,
   TransferableAnchorPool,
   TransferableBorderPool,
-} from './worker/transferablePool'
+} from '../worker/transferable-pool'
 
 export class MapEngine {
   private _loaded: boolean = false
@@ -66,7 +66,7 @@ export class MapEngine {
   }
 
   private _createWorker(): Worker {
-    return new Worker(new URL('./worker/index.ts', import.meta.url), {
+    return new Worker(new URL('../worker/index.ts', import.meta.url), {
       type: 'module',
     })
   }

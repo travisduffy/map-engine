@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { MapEngine } from '../src/MapEngine'
-import type { WorkerMessage } from '../src/types'
+import { MapEngine } from '../src/core/MapEngine'
+import type { WorkerMessage } from '../src/shared/types'
 import {
   SimulationClock,
   type TickTelemetry,

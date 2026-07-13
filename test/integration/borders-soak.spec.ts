@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { MapEngine } from '../../src/MapEngine'
-import type { MapRenderer } from '../../src/MapRenderer'
+import { MapEngine } from '../../src/core/MapEngine'
+import type { MapRenderer } from '../../src/core/MapRenderer'
 import { makeCanvas } from '../testUtils'
-import type { WorkerMessage } from '../../src/types'
+import type { WorkerMessage } from '../../src/shared/types'
 
 const TEST4X4_BITMAP = '/test/fixtures/test-4x4.png'
 const TEST4X4_DEFINITION = '/test/fixtures/test-4x4.json'

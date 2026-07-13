@@ -1,4 +1,4 @@
-import type { WorkerMessage } from '../types'
+import type { WorkerMessage } from '../shared/types'
 import {
   MapInvalidatedError,
   WebGL2NotSupportedError,
@@ -7,7 +7,7 @@ import {
   CostsRequiredError,
   ModeNotReadyError,
   SectorLimitExceededError,
-} from '../errors'
+} from '../shared/errors'
 
 /** Canonical error constructors keyed by `.name`, for `ERROR` rehydration. */
 const ERROR_CTORS: Record<string, new (...args: never[]) => Error> = {

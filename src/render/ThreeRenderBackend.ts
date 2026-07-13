@@ -3,7 +3,7 @@ import type {
   IThreeRenderBackend,
   ThreeRenderBackendInternalAccess,
 } from './IThreeRenderBackend'
-import { WebGL2NotSupportedError } from '../errors'
+import { WebGL2NotSupportedError } from '../shared/errors'
 
 const VOID_ID = 0xffff
 

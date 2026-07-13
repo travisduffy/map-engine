@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { MapEngine } from '../src/MapEngine'
+import { MapEngine } from '../src/core/MapEngine'
 import { makeCanvas } from './testUtils'
 
 const BITMAP_URL = '/test/fixtures/test-4x4.png'

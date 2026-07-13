@@ -1,7 +1,7 @@
-import { registerCallHandler } from './callHandlers'
+import { registerCallHandler } from './call-handlers'
 import { getWorkerState } from './state'
 import { SpatialGraph } from './SpatialGraph'
-import { CostsRequiredError } from '../errors'
+import { CostsRequiredError } from '../shared/errors'
 
 let graph: SpatialGraph | null = null
 

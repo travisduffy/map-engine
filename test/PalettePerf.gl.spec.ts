@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { SectorBitmapParser } from '../src/SectorBitmapParser'
-import { SectorRegistry } from '../src/SectorRegistry'
-import { MapRenderer } from '../src/MapRenderer'
+import { SectorBitmapParser } from '../src/sector/SectorBitmapParser'
+import { SectorRegistry } from '../src/sector/SectorRegistry'
+import { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
 import { makeCanvas } from './testUtils'
 

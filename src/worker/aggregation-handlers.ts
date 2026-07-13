@@ -1,8 +1,8 @@
-import type { WorkerMessage } from '../types'
-import { registerCallHandler } from './callHandlers'
+import type { WorkerMessage } from '../shared/types'
+import { registerCallHandler } from './call-handlers'
 import { getWorkerState } from './state'
 import { yieldIfNeeded } from './yield'
-import { MappingRequiredError } from '../errors'
+import { MappingRequiredError } from '../shared/errors'
 
 const VOID_GROUP = 0xffff
 

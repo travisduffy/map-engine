@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { MapRenderer } from '../src/MapRenderer'
+import { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
-import { SectorRegistry } from '../src/SectorRegistry'
-import type { SectorDefinitionFile } from '../src/types'
+import { SectorRegistry } from '../src/sector/SectorRegistry'
+import type { SectorDefinitionFile } from '../src/shared/types'
 import { makeCanvas } from './testUtils'
 
 function make4x4Buffer(): Uint8ClampedArray {

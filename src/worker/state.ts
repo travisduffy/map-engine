@@ -1,4 +1,4 @@
-import type { BootstrapPayload } from '../types'
+import type { BootstrapPayload } from '../shared/types'
 
 /**
  * Worker-side registry state constructed from the BOOTSTRAP transfer.

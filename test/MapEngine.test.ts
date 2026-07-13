@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { MapEngine } from '../src/MapEngine'
-import { MapInvalidatedError } from '../src/errors'
+import { MapEngine } from '../src/core/MapEngine'
+import { MapInvalidatedError } from '../src/shared/errors'
 import { makeCanvas } from './testUtils'
 
 describe('MapEngine — constructor and event subscription', () => {

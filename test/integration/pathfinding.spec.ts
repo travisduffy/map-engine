@@ -1,6 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { MapEngine } from '../../src/MapEngine'
-import { CostsRequiredError, MapInvalidatedError } from '../../src/errors'
+import { MapEngine } from '../../src/core/MapEngine'
+import {
+  CostsRequiredError,
+  MapInvalidatedError,
+} from '../../src/shared/errors'
 import { makeCanvas } from '../testUtils'
 
 const BITMAP_URL = '/test/fixtures/test-4x4.png'

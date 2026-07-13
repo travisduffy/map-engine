@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { MapEngine } from '../src/MapEngine'
-import type { MapRenderer } from '../src/MapRenderer'
+import { MapEngine } from '../src/core/MapEngine'
+import type { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
 import { makeCanvas } from './testUtils'
 

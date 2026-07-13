@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SectorBitmapParser } from '../src/SectorBitmapParser'
+import { SectorBitmapParser } from '../src/sector/SectorBitmapParser'
 
 const parser = new SectorBitmapParser()
 

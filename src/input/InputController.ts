@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { PickEvent } from '../types'
+import type { PickEvent } from '../shared/types'
 
 interface InputControllerOptions {
   onDirty: () => void

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { MapEngine } from '../../src/MapEngine'
-import { SectorBitmapParser } from '../../src/SectorBitmapParser'
-import { SectorRegistry } from '../../src/SectorRegistry'
+import { MapEngine } from '../../src/core/MapEngine'
+import { SectorBitmapParser } from '../../src/sector/SectorBitmapParser'
+import { SectorRegistry } from '../../src/sector/SectorRegistry'
 import { makeCanvas } from '../testUtils'
 
 const BITMAP_URL = '/test/fixtures/test-4x4.png'

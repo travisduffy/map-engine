@@ -1,4 +1,4 @@
-import type { FrameCallback } from './types'
+import type { FrameCallback } from '../shared/types'
 
 /**
  * Main-thread raw per-frame dt dispatch (Epic 2, B3.b). Owns dt-tracking and
