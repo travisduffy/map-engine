@@ -56,17 +56,13 @@ describe('MapEngine — constructor and event subscription', () => {
   })
 
   it('_emit delivers payload to all registered handlers', () => {
-    // Access private _emit via type cast to verify internal wiring
+    // Reach the engine's event registry to verify on()/emit wiring.
     const engine = new MapEngine()
     const h1 = vi.fn()
     const h2 = vi.fn()
     engine.on('sectorHover', h1)
     engine.on('sectorHover', h2)
-    // Trigger _emit via the private method using type cast
-    ;(engine as unknown as { _emit: (e: string, p: unknown) => void })._emit(
-      'sectorHover',
-      null
-    )
+    engine['_events'].emit('sectorHover', null)
     expect(h1).toHaveBeenCalledWith(null)
     expect(h2).toHaveBeenCalledWith(null)
   })
@@ -78,10 +74,7 @@ describe('MapEngine — constructor and event subscription', () => {
     engine.on('sectorHover', h1)
     engine.on('sectorHover', h2)
     engine.off('sectorHover', h1)
-    ;(engine as unknown as { _emit: (e: string, p: unknown) => void })._emit(
-      'sectorHover',
-      null
-    )
+    engine['_events'].emit('sectorHover', null)
     expect(h1).not.toHaveBeenCalled()
     expect(h2).toHaveBeenCalledWith(null)
   })
@@ -89,10 +82,7 @@ describe('MapEngine — constructor and event subscription', () => {
   it('_emit is a no-op for events with no registered handlers', () => {
     const engine = new MapEngine()
     expect(() => {
-      ;(engine as unknown as { _emit: (e: string, p: unknown) => void })._emit(
-        'sectorClick',
-        null
-      )
+      engine['_events'].emit('sectorClick', null)
     }).not.toThrow()
   })
 })

@@ -1,7 +1,9 @@
-import * as THREE from 'three'
 import { SectorBitmapParser } from '../sector/SectorBitmapParser'
 import { SectorRegistry } from '../sector/SectorRegistry'
 import { MapRenderer } from './MapRenderer'
+import { EventEmitter } from './EventEmitter'
+import { BorderCoalescer } from './BorderCoalescer'
+import { PointerPickResolver } from './PointerPickResolver'
 import type {
   MapConfig,
   PickEvent,
@@ -30,13 +32,11 @@ export class MapEngine {
   private _loaded: boolean = false
   private _destroyed: boolean = false
   private _loading: boolean = false
-  private _lastHexKey: string | null = null
   private _parser: SectorBitmapParser
-  private _handlers: Map<string, Set<Function>>
-  private _canvas: HTMLCanvasElement | null = null
+  private readonly _events: EventEmitter
   private _registry: SectorRegistry | null = null
   private _renderer: MapRenderer | null = null
-  private readonly _raycaster: THREE.Raycaster
+  private _picker: PointerPickResolver | null = null
   private _frameCallbacks: FrameCallback[] = []
   private readonly _renderClock: RenderClock
   private _tickRate: number = 60
@@ -50,19 +50,17 @@ export class MapEngine {
   private _pool: TransferableGroupPool | null = null
   private _anchorPool: TransferableAnchorPool | null = null
   private _borderPool: TransferableBorderPool | null = null
-  /** In-flight `recomputeBorders()` Worker CALL (CA-6 coalescing). */
-  private _borderInFlight: Promise<void> | null = null
-  /** At most one coalesced call queued behind `_borderInFlight` — every
-   * caller that arrives while something is in flight shares this same
-   * Promise (≤ 2 Worker computations total, regardless of caller count). */
-  private _borderQueued: Promise<void> | null = null
+  private readonly _borderCoalescer: BorderCoalescer
 
   constructor() {
     this._parser = new SectorBitmapParser()
-    this._handlers = new Map<string, Set<Function>>()
-    this._raycaster = new THREE.Raycaster()
+    this._events = new EventEmitter()
     this._renderClock = new RenderClock()
     this._worker = this._createWorker()
+    this._borderCoalescer = new BorderCoalescer(
+      () => this._proxy!.call<void>('recomputeBorders'),
+      () => !this._destroyed && this._loaded && !!this._proxy
+    )
   }
 
   private _createWorker(): Worker {
@@ -73,20 +71,14 @@ export class MapEngine {
 
   on(event: 'sectorClick', handler: (result: PickResult) => void): void
   on(event: 'sectorHover', handler: (result: PickResult | null) => void): void
-  on(_event: string, _handler: Function): void {
+  on(event: string, handler: Function): void {
     if (this._destroyed) throw new Error('MapEngine: destroyed')
-    const event = _event
-    const handler = _handler
-    if (!this._handlers.has(event)) {
-      this._handlers.set(event, new Set())
-    }
-    this._handlers.get(event)!.add(handler)
+    this._events.on(event, handler)
   }
 
-  off(_event: 'sectorClick' | 'sectorHover', _handler: Function): void {
+  off(event: 'sectorClick' | 'sectorHover', handler: Function): void {
     if (this._destroyed) throw new Error('MapEngine: destroyed')
-    const set = this._handlers.get(_event)
-    if (set) set.delete(_handler)
+    this._events.off(event, handler)
   }
 
   onFrame(callback: FrameCallback): void {
@@ -100,86 +92,6 @@ export class MapEngine {
     if (idx !== -1) this._frameCallbacks.splice(idx, 1)
   }
 
-  private _emit(event: string, payload: unknown): void {
-    const set = this._handlers.get(event)
-    if (set) {
-      for (const handler of set) {
-        handler(payload)
-      }
-    }
-  }
-
-  /**
-   * NDC conversion → raycast → UV → clamped, Y-inverted bitmap pixel coords.
-   * Shared by the hover/click pipeline and `pick()` (Epic 3 Task 3.4).
-   * Returns null on a mesh-miss (ray did not hit the map plane).
-   */
-  private _resolvePixelCoords(
-    event: PickEvent
-  ): { pixelX: number; pixelY: number } | null {
-    if (!this._renderer || !this._registry || !this._canvas) return null
-
-    const rect = this._canvas.getBoundingClientRect()
-    const ndc = new THREE.Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1
-    )
-
-    this._raycaster.setFromCamera(ndc, this._renderer.camera)
-    const intersections = this._raycaster.intersectObject(this._renderer.mesh)
-    if (intersections.length === 0) return null
-
-    const uv = intersections[0].uv!
-    const width = this._registry.width
-    const height = this._registry.height
-    const pixelX = Math.max(0, Math.min(width - 1, Math.floor(uv.x * width)))
-    const pixelY = Math.max(
-      0,
-      Math.min(height - 1, Math.floor((1 - uv.y) * height))
-    )
-    return { pixelX, pixelY }
-  }
-
-  /** Resolves a bitmap pixel + numeric ID into a `PickResult`, or null on a void/unknown sector. */
-  private _resolveHexPick(pixelX: number, pixelY: number): PickResult | null {
-    const numId = this._renderer!.readSectorIdAt(pixelX, pixelY)
-    if (numId >= this._registry!.idToHex.length) return null
-    const hexKey = this._registry!.idToHex[numId]
-    const sectorData = this._registry!.getSector(hexKey)
-    if (sectorData === undefined) return null
-    return { hexKey, sectorData, pixelX, pixelY }
-  }
-
-  private _handlePointerEvent(event: PickEvent, isClick: boolean): void {
-    if (!this._renderer || !this._registry || !this._canvas) return
-
-    const coords = this._resolvePixelCoords(event)
-    const result = coords
-      ? this._resolveHexPick(coords.pixelX, coords.pixelY)
-      : null
-
-    if (result === null) {
-      if (!isClick && this._lastHexKey !== null) {
-        this._lastHexKey = null
-        this._emit('sectorHover', null)
-      }
-      return
-    }
-
-    if (!isClick) {
-      // Suppress hover during middle-button pan OR left-button drag.
-      if (this._renderer.isPanning || this._renderer.isLeftDragging) return
-      if (result.hexKey !== this._lastHexKey) {
-        this._lastHexKey = result.hexKey
-        this._emit('sectorHover', result)
-      }
-    } else {
-      // Suppress synthesized click that follows a left-button drag.
-      if (this._renderer.leftHasDragged) return
-      this._emit('sectorClick', result)
-    }
-  }
-
   /**
    * Resolves the sector under `point` (async — the sole sanctioned public
    * API signature break, ROADMAP §12.4). Resolves `null` before a successful
@@ -188,9 +100,7 @@ export class MapEngine {
   async pick(point: PickEvent): Promise<PickResult | null> {
     if (this._destroyed) throw new Error('MapEngine: destroyed')
     if (!this._loaded) return null
-    const coords = this._resolvePixelCoords(point)
-    if (!coords) return null
-    return this._resolveHexPick(coords.pixelX, coords.pixelY)
+    return this._picker!.pick(point)
   }
 
   /**
@@ -232,17 +142,15 @@ export class MapEngine {
       this._anchorPool = null
       this._borderPool?.dispose()
       this._borderPool = null
-      this._borderInFlight = null
-      this._borderQueued = null
+      this._borderCoalescer.reset()
       this._renderer?.destroy()
       this._worker.terminate()
       this._worker = this._createWorker()
       this._renderClock.reset()
       this._registry = null
       this._renderer = null
-      this._canvas = null
+      this._picker = null
       this._registryInvalidated = false
-      this._lastHexKey = null
       this._loaded = false
       // CA-7: discard the registered palette data (Epic 4 Task 4.3).
       this._mapModes.clear()
@@ -275,8 +183,8 @@ export class MapEngine {
         config.canvas,
         registry,
         hook,
-        e => this._handlePointerEvent(e, false),
-        e => this._handlePointerEvent(e, true)
+        e => this._picker?.handlePointer(e, false),
+        e => this._picker?.handlePointer(e, true)
       )
       // Suspend rendering across the Worker bootstrap round-trip — a real
       // rAF tick here would consume the render loop's "priming" frame before
@@ -362,9 +270,14 @@ export class MapEngine {
       }
       renderer._resumeLoop()
 
-      this._canvas = config.canvas
       this._registry = registry
       this._renderer = renderer
+      this._picker = new PointerPickResolver(
+        renderer,
+        registry,
+        config.canvas,
+        (event, payload) => this._events.emit(event, payload)
+      )
 
       this._loaded = true
       this._loading = false
@@ -392,8 +305,7 @@ export class MapEngine {
     this._anchorPool = null
     this._borderPool?.dispose()
     this._borderPool = null
-    this._borderInFlight = null
-    this._borderQueued = null
+    this._borderCoalescer.reset()
     // CA-7: discard the registered palette data (Epic 4 Task 4.3).
     this._mapModes.clear()
     this._currentMapMode = null
@@ -406,12 +318,12 @@ export class MapEngine {
     }
 
     // Step 3: clear event handler map
-    this._handlers.clear()
+    this._events.clear()
 
     // Step 5: null out refs
     this._registry = null
     this._renderer = null
-    this._canvas = null
+    this._picker = null
     this._loading = false
 
     // Steps 6–7: conditionally mark destroyed
@@ -699,51 +611,14 @@ export class MapEngine {
    * Deliberately NOT declared `async`: an `async` method always wraps its
    * return value in a *new* Promise per call, even when returning an
    * already-existing Promise — which would defeat the "coalesced callers
-   * share the exact same Promise" property this method relies on. Returning
-   * `this._borderQueued`/the proxy call directly, from a plain method,
-   * preserves that identity.
+   * share the exact same Promise" property this method relies on. Delegating
+   * to `BorderCoalescer.request()` from a plain method preserves that identity.
    */
   recomputeBorders(): Promise<void> {
     if (this._destroyed) throw new Error('MapEngine: destroyed')
     if (!this._loaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
-
-    if (this._borderInFlight) {
-      if (!this._borderQueued) {
-        this._borderQueued = this._borderInFlight
-          .catch(() => {
-            // The queued run's own outcome (below) is what callers sharing
-            // this slot observe — the in-flight run's rejection, if any, is
-            // deliberately swallowed here so the queued run still attempts.
-          })
-          .then(() => {
-            this._borderQueued = null
-            // loadMap()/dispose() may have invalidated this session while
-            // we were waiting — don't dereference a torn-down proxy.
-            if (this._destroyed || !this._loaded || !this._proxy) {
-              throw new MapInvalidatedError()
-            }
-            return this._startBorderComputation()
-          })
-      }
-      return this._borderQueued
-    }
-
-    return this._startBorderComputation()
-  }
-
-  private _startBorderComputation(): Promise<void> {
-    const run = this._proxy!.call<void>('recomputeBorders')
-    this._borderInFlight = run
-    // `run` itself (returned below) is what callers actually observe/handle;
-    // this cleanup-only chain needs its own no-op `.catch` so a rejecting
-    // `run` doesn't surface as a separate *unhandled* rejection here.
-    run
-      .finally(() => {
-        if (this._borderInFlight === run) this._borderInFlight = null
-      })
-      .catch(() => {})
-    return run
+    return this._borderCoalescer.request()
   }
 
   /**
