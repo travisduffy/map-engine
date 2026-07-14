@@ -61,6 +61,8 @@ Give every method a JSDoc summary block — public and private alike. Co-located
 
 Give every public or exported non-method member — an exported `const`, a public field — a JSDoc summary too. Comment a private field with a single line comment where its intent is not obvious from its name.
 
+In test files, a `describe`/`it`/`beforeEach` block's description string is its documentation — write no JSDoc on those callbacks. Reserve JSDoc for exported test helpers (e.g. `test-utils.ts`), and add an inline comment only where a test's intent is not clear from its description. Every other rule in this file — file/test naming, boolean naming, imports, member and type conventions — applies to `test/**` in full.
+
 ## Exports
 
 Export by name from every module; write no `export default` inside `src`. The package entry `src/index.ts` alone provides `export { MapEngine as default }` as a convenience alias — add no other default export, and do not churn this one. Named exports keep import sites explicit and every symbol greppable.

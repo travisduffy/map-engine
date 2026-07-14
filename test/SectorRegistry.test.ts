@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
 import { SectorRegistry } from '../src/sector/SectorRegistry'
 import { SectorLimitExceededError } from '../src/shared/errors'
 import type { SectorDefinitionFile } from '../src/shared/types'

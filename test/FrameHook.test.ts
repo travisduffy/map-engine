@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
 import { MapEngine } from '../src/core/MapEngine'
-import type { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
 import { parseColorToRgb } from '../src/shared/color'
-import { makeCanvas, advanceFrame } from './testUtils'
+import { makeCanvas, advanceFrame } from './test-utils'
+import type { MapRenderer } from '../src/core/MapRenderer'
 
 describe('FrameHook — Epic 1', () => {
   let engine: MapEngine
@@ -181,16 +182,16 @@ describe('FrameHook — Epic 1', () => {
     )
 
     // In-tick path
-    let threw = false
+    let hasThrown = false
     engine.onFrame(() => {
       try {
         engine.setSectorColor('0000ff', '###not-valid###')
       } catch {
-        threw = true
+        hasThrown = true
       }
     })
     advanceFrame(renderer, 16)
-    expect(threw).toBe(false)
+    expect(hasThrown).toBe(false)
     expect(spy).toHaveBeenLastCalledWith(
       registry.getNumericId('0000ff'),
       0,
@@ -201,13 +202,18 @@ describe('FrameHook — Epic 1', () => {
 
   it('AC 1.10: color utility import isolation', async () => {
     const [srText, sbpText, colorText] = await Promise.all([
-      fetch('/src/SectorRegistry.ts').then(r => r.text()),
-      fetch('/src/SectorBitmapParser.ts').then(r => r.text()),
-      fetch('/src/internal/color.ts').then(r => r.text()),
+      fetch('/src/sector/SectorRegistry.ts').then(r => r.text()),
+      fetch('/src/sector/SectorBitmapParser.ts').then(r => r.text()),
+      fetch('/src/shared/color.ts').then(r => r.text()),
     ])
-    expect(srText).not.toMatch(/internal\/color/)
-    expect(sbpText).not.toMatch(/internal\/color/)
-    expect(colorText).not.toMatch(/SectorRegistry|SectorBitmapParser/)
+    expect(srText).not.toMatch(/shared\/color/)
+    expect(sbpText).not.toMatch(/shared\/color/)
+    // Match an actual import specifier, not a bare identifier — color.ts's
+    // guard comment legitimately names these modules (mirrors the import-scoped
+    // check in AdjacencyGraph's "no forbidden imports" test).
+    expect(colorText).not.toMatch(
+      /import[^\n]*(SectorRegistry|SectorBitmapParser)/
+    )
   })
 
   it('AC 1.11 (Epic 4 B2): error in callback does not stop subsequent callbacks; LUT patch still applied', () => {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { makeCanvas } from './testUtils'
+
+import { makeCanvas } from './test-utils'
 import type { PerfWorkerResult } from './workers/pathfinding-perf-worker'
 
 const FIXTURE_URL = '/test/fixtures/pathfinding/grid-10k.json'

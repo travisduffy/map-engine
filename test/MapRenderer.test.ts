@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as THREE from 'three'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { MapRenderer } from '../src/core/MapRenderer'
-import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
 import { NullRenderBackend } from '../src/render/NullRenderBackend'
+import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
 import { SectorRegistry } from '../src/sector/SectorRegistry'
 import type { SectorDefinitionFile } from '../src/shared/types'
 

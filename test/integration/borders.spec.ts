@@ -1,10 +1,11 @@
 import { describe, it, expect, afterEach } from 'vitest'
+
 import { MapEngine } from '../../src/core/MapEngine'
 import {
   MappingRequiredError,
   MapInvalidatedError,
 } from '../../src/shared/errors'
-import { makeCanvas } from '../testUtils'
+import { makeCanvas } from '../test-utils'
 import type { WorkerMessage } from '../../src/shared/types'
 
 interface PerimeterFixture {

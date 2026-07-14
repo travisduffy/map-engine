@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
+
+import { MapEngine } from '../src/core/MapEngine'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
 import { WebGL2NotSupportedError } from '../src/shared/errors'
-import { MapEngine } from '../src/core/MapEngine'
+import { makeCanvas } from './test-utils'
 import type { MapRenderer } from '../src/core/MapRenderer'
-import { makeCanvas } from './testUtils'
 
 function makeIndices(width: number, height: number): Uint32Array {
   return new Uint32Array(width * height).fill(0xffff)

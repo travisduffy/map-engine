@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
+
 import { MapEngine } from '../src/core/MapEngine'
-import type { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
-import { makeCanvas } from './testUtils'
+import { makeCanvas } from './test-utils'
+import type { MapRenderer } from '../src/core/MapRenderer'
 
 const BORDERS_BITMAP = '/test/fixtures/borders/maps/two-adjacent-groups.png'
 const BORDERS_DEFINITION =

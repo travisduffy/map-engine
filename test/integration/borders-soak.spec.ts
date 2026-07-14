@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
+
 import { MapEngine } from '../../src/core/MapEngine'
+import { makeCanvas } from '../test-utils'
 import type { MapRenderer } from '../../src/core/MapRenderer'
-import { makeCanvas } from '../testUtils'
 import type { WorkerMessage } from '../../src/shared/types'
 
 const TEST4X4_BITMAP = '/test/fixtures/test-4x4.png'
@@ -18,7 +19,7 @@ const TEST4X4_DEFINITION = '/test/fixtures/test-4x4.json'
  * 1,000 iterations without yielding to it would only produce a couple of
  * coalesced extractions and never soak the bounce-back loop). Critically,
  * `_postRenderHook` is called explicitly here -- `advanceFrame` in
- * testUtils.ts only drives `_preRenderHook`, so reusing that helper alone
+ * test-utils.ts only drives `_preRenderHook`, so reusing that helper alone
  * would never exercise the bounce-back path this soak exists to stress
  * (Known Risk 3: an unflushed pending buffer starves the Worker's free
  * list, which would eventually surface as a hang or a detached-buffer

@@ -1,11 +1,12 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
+
 import { MapEngine } from '../src/core/MapEngine'
-import type { WorkerMessage } from '../src/shared/types'
 import {
   SimulationClock,
   type TickTelemetry,
 } from '../src/worker/SimulationClock'
-import { makeCanvas } from './testUtils'
+import { makeCanvas } from './test-utils'
+import type { WorkerMessage } from '../src/shared/types'
 
 let nextCallId = 1
 

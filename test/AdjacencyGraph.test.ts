@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { SectorRegistry } from '../src/sector/SectorRegistry'
+
 import { MapEngine } from '../src/core/MapEngine'
+import { SectorRegistry } from '../src/sector/SectorRegistry'
 import { toHexKey } from '../src/shared/utils'
-import { buildTestBuffer, makeCanvas } from './testUtils'
+import { buildTestBuffer, makeCanvas } from './test-utils'
 import type { SectorDefinitionFile } from '../src/shared/types'
 
 describe('AdjacencyGraph — Epic 3', () => {
@@ -116,13 +117,15 @@ describe('AdjacencyGraph — Epic 3', () => {
   })
 
   it('AC 3.9 — P-1/P-2: SectorRegistry.ts has no forbidden imports', async () => {
-    const text = await fetch('/src/SectorRegistry.ts').then(r => r.text())
+    const text = await fetch('/src/sector/SectorRegistry.ts').then(r =>
+      r.text()
+    )
     expect(text).not.toMatch(/import.*three/)
     expect(text).not.toMatch(/\bdocument\b/)
     expect(text).not.toMatch(/\bwindow\b/)
     expect(text).not.toMatch(/HTMLCanvasElement/)
     expect(text).not.toMatch(/OffscreenCanvas/)
-    expect(text).not.toMatch(/internal\/color/)
+    expect(text).not.toMatch(/shared\/color/)
   })
 
   describe('AC 3.6 / 3.11 / pre-load guard — getNeighbors via MapEngine', () => {

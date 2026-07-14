@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
+
 import { MapEngine } from '../src/core/MapEngine'
-import { ModeNotReadyError } from '../src/shared/errors'
-import type { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
-import { makeCanvas } from './testUtils'
+import { ModeNotReadyError } from '../src/shared/errors'
+import { makeCanvas } from './test-utils'
+import type { MapRenderer } from '../src/core/MapRenderer'
 
 const BITMAP_URL = '/test/fixtures/test-4x4.png'
 const DEFINITION_URL = '/test/fixtures/test-4x4.json'

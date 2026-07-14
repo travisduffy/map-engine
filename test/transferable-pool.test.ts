@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { TransferableGroupPool } from '../src/worker/transferable-pool'
+
 import { MappingRequiredError } from '../src/shared/errors'
+import { TransferableGroupPool } from '../src/worker/transferable-pool'
 import type { WorkerMessage } from '../src/shared/types'
 
 class FakeWorker extends EventTarget {

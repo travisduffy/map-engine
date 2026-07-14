@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
+
 import { MapEngine } from '../src/core/MapEngine'
-import { makeCanvas } from './testUtils'
+import { makeCanvas } from './test-utils'
 import type { WorkerMessage } from '../src/shared/types'
 import type { TickTelemetry } from '../src/worker/SimulationClock'
 

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
+
 import { MapEngine } from '../src/core/MapEngine'
-import type { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
-import { makeCanvas } from './testUtils'
+import { makeCanvas } from './test-utils'
+import type { MapRenderer } from '../src/core/MapRenderer'
 
 const BORDERS_BITMAP = '/test/fixtures/borders/maps/two-adjacent-groups.png'
 const BORDERS_DEFINITION =
@@ -108,9 +109,9 @@ describe('F-4.10 context-loss recovery — Epic 8 Task 8.4', () => {
       renderer._pauseLoop()
       const callsBefore = renderSpy.mock.calls.length
 
-      let lost = false
+      let isLost = false
       canvas.addEventListener('webglcontextlost', () => {
-        lost = true
+        isLost = true
       })
       let restoredAt: number | null = null
       canvas.addEventListener('webglcontextrestored', () => {
@@ -118,15 +119,18 @@ describe('F-4.10 context-loss recovery — Epic 8 Task 8.4', () => {
       })
 
       loseCtx.loseContext()
-      const gotLost = await waitForCondition(() => lost, POLL_BUDGET_MS)
-      expect(gotLost).toBe(true)
+      const isLostDetected = await waitForCondition(
+        () => isLost,
+        POLL_BUDGET_MS
+      )
+      expect(isLostDetected).toBe(true)
 
       loseCtx.restoreContext()
-      const gotRestored = await waitForCondition(
+      const isRestoredDetected = await waitForCondition(
         () => restoredAt !== null,
         POLL_BUDGET_MS
       )
-      expect(gotRestored).toBe(true)
+      expect(isRestoredDetected).toBe(true)
 
       // Resume only now that restoration is confirmed, and keep polling
       // (still via real rAF) until the renderer actually draws a frame.

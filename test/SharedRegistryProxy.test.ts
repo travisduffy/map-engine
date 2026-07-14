@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { SharedRegistryProxy } from '../src/worker/SharedRegistryProxy'
+
 import { PathNotFoundError } from '../src/shared/errors'
+import { SharedRegistryProxy } from '../src/worker/SharedRegistryProxy'
 import type { WorkerMessage } from '../src/shared/types'
 
 class FakeWorker extends EventTarget {
