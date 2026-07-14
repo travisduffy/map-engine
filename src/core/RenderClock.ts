@@ -7,31 +7,38 @@ import type { FrameCallback } from '../shared/types'
  * semantics.
  */
 export class RenderClock {
+  // performance.now() of the previous tick; -1 means no baseline yet (the next tick reports dt 0).
   private _lastFrameTime = -1
-  private _inTick = false
+  private _isInTick = false
 
+  /** True while `tick()` is mid-dispatch of its frame callbacks. Frozen public name (R10). */
   get inTick(): boolean {
-    return this._inTick
+    return this._isInTick
   }
 
-  /** Resets the dt baseline — used on `MapEngine.loadMap()` reload so the
-   * first tick of the new session reports dt === 0 rather than a stale gap. */
+  /**
+   * Resets the dt baseline — used on `MapEngine.loadMap()` reload so the
+   * first tick of the new session reports dt === 0 rather than a stale gap.
+   */
   reset(): void {
     this._lastFrameTime = -1
   }
 
   /**
    * Computes dt from `performance.now()` (0 on the first call) and
-   * dispatches it to `callbacks` in order. Since Epic 4's LUT-based color
-   * pipeline writes are O(1) (no bbox/dirty-rect batching needed), there is
-   * no longer a post-dispatch flush step to couple here.
+   * dispatches it to `callbacks` in order — over a snapshot copy, so a
+   * callback that registers/unregisters mid-dispatch never perturbs this
+   * tick, and a throwing callback is logged without aborting the rest.
+   * Since Epic 4's LUT-based color pipeline writes are O(1) (no
+   * bbox/dirty-rect batching needed), there is no longer a post-dispatch
+   * flush step to couple here.
    */
   tick(callbacks: readonly FrameCallback[]): void {
     const now = performance.now()
     const dt =
       this._lastFrameTime === -1 ? 0 : (now - this._lastFrameTime) / 1000
     this._lastFrameTime = now
-    this._inTick = true
+    this._isInTick = true
     try {
       for (const cb of [...callbacks]) {
         try {
@@ -41,7 +48,7 @@ export class RenderClock {
         }
       }
     } finally {
-      this._inTick = false
+      this._isInTick = false
     }
   }
 }

@@ -1,13 +1,20 @@
 /** User-defined data for a sector (from sectors.json value). */
-export type SectorData = { name: string; [key: string]: unknown }
+export interface SectorData {
+  /** Required display name; every other key is consumer-defined. */
+  name: string
+  [key: string]: unknown
+}
 
 /** The parsed sectors.json top-level object. */
 export type SectorDefinitionFile = Record<string, SectorData>
 
 /** Config passed to MapEngine.loadMap(). */
 export interface MapConfig {
+  /** URL of the RGB sector bitmap (PNG). */
   bitmapUrl: string
+  /** URL of the sectors.json definition file. */
   definitionUrl: string
+  /** Render target — must be in the DOM with non-zero CSS dimensions. */
   canvas: HTMLCanvasElement
 }
 
@@ -35,15 +42,20 @@ export interface SectorBBox {
   maxY: number
 }
 
-// elapsed is the 1-indexed count of ticks fired since the clock consuming
-// this callback type was constructed, including the current one. The first
-// tick's callback receives elapsed === 1.
+/**
+ * Fixed-tick clock callback. `elapsed` is the 1-indexed count of ticks fired
+ * since the clock consuming this callback type was constructed, including
+ * the current one — the first tick's callback receives `elapsed === 1`.
+ */
 export type ClockTickCallback = (elapsed: number) => void
 
-// dt is elapsed wall-clock seconds since the previous frame (e.g. 0.01667 at 60fps).
-// On the very first rAF frame after loadMap() completes, dt === 0.
-// On all subsequent frames, dt is elapsed wall-clock seconds since the previous frame,
-// regardless of when a given callback was registered via onFrame.
+/**
+ * Per-frame render callback. `dt` is elapsed wall-clock seconds since the
+ * previous frame (e.g. 0.01667 at 60fps). On the very first rAF frame after
+ * `loadMap()` completes, `dt === 0`; on all subsequent frames, `dt` is the
+ * delta since the previous frame regardless of when a given callback was
+ * registered via `onFrame`.
+ */
 export type FrameCallback = (dt: number) => void
 
 /** Minimal cursor-position event shape required by the picking pipeline. */

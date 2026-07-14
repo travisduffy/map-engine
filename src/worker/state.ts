@@ -8,12 +8,15 @@ import type { BootstrapPayload } from '../shared/types'
  */
 export type WorkerState = BootstrapPayload
 
+// Populated once per Worker lifetime, by the BOOTSTRAP message.
 let state: WorkerState | null = null
 
+/** Stores the BOOTSTRAP-transferred payload as the Worker's registry state. Called from the Worker entry's BOOTSTRAP case. */
 export function setWorkerState(payload: BootstrapPayload): void {
   state = payload
 }
 
+/** The Worker-side registry state, or `null` before BOOTSTRAP. */
 export function getWorkerState(): WorkerState | null {
   return state
 }

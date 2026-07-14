@@ -1,13 +1,21 @@
+import { SectorLimitExceededError } from '../shared/errors'
+import { toHexKey, packRgb } from '../shared/utils'
 import type {
   SectorData,
   SectorDefinitionFile,
   ISpatialRegistry,
 } from '../shared/types'
-import { SectorLimitExceededError } from '../shared/errors'
-import { toHexKey, packRgb } from '../shared/utils'
 
+/** Sentinel pixel value: the pixel belongs to no defined sector (void). */
 const VOID_ID = 0xffff
 
+/**
+ * Single-scan spatial index over the sector bitmap: one O(W×H) pass over
+ * the RGBA pixel buffer + JSON definition produces every SoA spatial buffer
+ * (bboxes, centroids, CSR adjacency/contours, `pixelIndices`) plus the
+ * pre-allocated border-edge buffer. Zero Three.js imports and zero DOM
+ * access — constructible inside the Worker.
+ */
 export class SectorRegistry implements ISpatialRegistry {
   readonly width: number
   readonly height: number
@@ -44,10 +52,16 @@ export class SectorRegistry implements ISpatialRegistry {
   readonly borderEdges: Float32Array // 4 * totalGeometricPerimeterSegments
   readonly borderEdgeCount: Uint32Array // 1-element transferable counter, init 0
 
-  private readonly _hexToId: Map<string, number>
-  private readonly _sectorData: Array<SectorData | null>
+  private readonly _hexToId: Map<string, number> // hex key → dense numeric ID
+  private readonly _sectorData: Array<SectorData | null> // definition payloads, indexed by numeric ID
   private readonly _sectorPixels: Uint32Array[] // per-sector flat pixel index lists
 
+  /**
+   * Runs the single O(W×H) scan: assigns dense numeric IDs in definition
+   * order, builds every SoA buffer in one pass plus post-scan finalization,
+   * disposes `sourceBuffer` (PR-1), and warns on definition/bitmap
+   * mismatches (zero-pixel sectors, bitmap-only colors).
+   */
   constructor(
     buffer: Uint8ClampedArray,
     width: number,
@@ -372,6 +386,7 @@ export class SectorRegistry implements ISpatialRegistry {
 
   // ── ISpatialRegistry implementation ───────────────────────────────────────
 
+  /** Bounding box `[minX, minY, maxX, maxY]` (pixel space) for `id` (hex or numeric). Throws on an unknown sector. */
   getBBox(id: string): [number, number, number, number]
   getBBox(id: number): [number, number, number, number]
   getBBox(id: string | number): [number, number, number, number] {
@@ -388,6 +403,7 @@ export class SectorRegistry implements ISpatialRegistry {
     ]
   }
 
+  /** Centroid `[x, y]` (rounded, pixel space) for `id` (hex or numeric). Throws on an unknown sector. */
   getCentroid(id: string): [number, number]
   getCentroid(id: number): [number, number]
   getCentroid(id: string | number): [number, number] {
@@ -398,6 +414,7 @@ export class SectorRegistry implements ISpatialRegistry {
     return [this.centroids[numId * 2], this.centroids[numId * 2 + 1]]
   }
 
+  /** Adjacent sector ids for `id` — hex keys for a hex-string arg (empty array if unknown), numeric ids for a numeric arg. */
   getNeighbors(id: string): string[]
   getNeighbors(id: number): number[]
   getNeighbors(id: string | number): string[] | number[] {

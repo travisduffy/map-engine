@@ -31,7 +31,7 @@ Write no `#`-private fields. Tests introspect internals through `obj['_foo']`, w
 
 Prefix every cognitive boolean — field, parameter, local, accessor, or boolean-returning method — with a boolean verb (`is`, `has`, `are`, `can`, `should`): `private _isLoaded`, `_areCostsReady`, `_handlePointerEvent(event, isClick)`, `get isPanning()`, a local `isInside`, a predicate method `_isHeapLess(i, j)`. A prefixed boolean reads as a yes/no question at its use-site. A method that returns a non-boolean is named for its result instead — `_centroidDistance`, not `_getCentroidDistance`.
 
-`MapRenderer.leftHasDragged` keeps its current name as a frozen exception: it is an exported public member, and renaming the public surface is out of scope (R10). Record any such public-boolean exemption here rather than "fixing" it.
+Two public members on exported classes keep non-conforming names as frozen exceptions — they are public surface, and renaming it is out of scope (R10): `MapRenderer.leftHasDragged` and the `RenderClock.inTick` getter. A private boolean backing such an accessor still takes the prefix (`RenderClock._isInTick` backs `inTick`); only the public name is frozen. Record any further public-boolean exemption here rather than "fixing" it.
 
 ## Types vs interfaces
 

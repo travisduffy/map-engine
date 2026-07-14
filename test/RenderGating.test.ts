@@ -51,7 +51,7 @@ describe('Render Gating (A1)', () => {
     capturedLoop(performance.now())
   }
 
-  it('renders on the first tick (_dirty starts true)', () => {
+  it('renders on the first tick (_isDirty starts true)', () => {
     const spy = vi.spyOn(
       (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
       'render'
@@ -61,7 +61,7 @@ describe('Render Gating (A1)', () => {
   })
 
   it('skips render on 10 consecutive no-op ticks after first frame', () => {
-    tick() // initial frame — dirty, renders, clears _dirty
+    tick() // initial frame — dirty, renders, clears _isDirty
     const spy = vi.spyOn(
       (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
       'render'

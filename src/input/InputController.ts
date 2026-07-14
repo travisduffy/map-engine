@@ -1,6 +1,8 @@
 import * as THREE from 'three'
+
 import type { PickEvent } from '../shared/types'
 
+/** Callback contract the owning `MapRenderer` supplies: `onDirty` flags a re-render, `pan`/`zoom` apply the camera transform, and the optional `pointerMove`/`click` forward resolved pick events. */
 interface InputControllerOptions {
   onDirty: () => void
   pan: (delta: THREE.Vector2) => void
@@ -9,17 +11,25 @@ interface InputControllerOptions {
   click?: (e: PickEvent) => void
 }
 
+/**
+ * Owns every pointer/wheel listener on the canvas (main-thread, DOM consumer).
+ * Middle-button drag pans, wheel zooms about the cursor, and left-button drag
+ * is tracked through a dead-zone state machine so a small press-release still
+ * reads as a click while a real drag suppresses the synthesized click and
+ * hover. Exposes the live gesture state (`isPanning`/`isLeftDragging`/
+ * `leftHasDragged`) the renderer and pick pipeline read.
+ */
 export class InputController {
   private static readonly _DRAG_DEAD_ZONE_PX = 4
 
-  private _panPressed = false
+  private _isPanPressed = false
   private _isPanning = false
   private _panOrigin = { x: 0, y: 0 }
   private _lastPointerPos = { x: 0, y: 0 }
 
-  private _leftPressed = false
-  private _leftDragActive = false
-  private _leftHasDragged = false
+  private _isLeftPressed = false
+  private _isLeftDragActive = false
+  private _hasLeftDragged = false
   private _leftDragOrigin = { x: 0, y: 0 }
 
   private readonly _canvas: HTMLCanvasElement
@@ -27,6 +37,8 @@ export class InputController {
   private readonly _panCb: (delta: THREE.Vector2) => void
   private readonly _zoomCb: (factor: number, ndcPoint: THREE.Vector2) => void
 
+  // Retained bound listener references so `destroy()` can remove exactly what
+  // was added; each closure body holds the pan/drag/zoom gesture logic.
   private readonly _boundPointerDown: (e: PointerEvent) => void
   private readonly _boundPointerMove: (e: PointerEvent) => void
   private readonly _boundPointerUp: (e: PointerEvent) => void
@@ -34,6 +46,7 @@ export class InputController {
   private readonly _boundWheel: (e: WheelEvent) => void
   private readonly _boundClick: ((e: PickEvent) => void) | null
 
+  /** Wires all pointer/wheel listeners on `canvas` and captures the owner's `options` callbacks. The gesture state machines (pan dead-zone, left-drag detection) live in the bound-handler bodies built here. */
   constructor(canvas: HTMLCanvasElement, options: InputControllerOptions) {
     this._canvas = canvas
     this._onDirty = options.onDirty
@@ -42,7 +55,7 @@ export class InputController {
 
     this._boundPointerDown = (e: PointerEvent) => {
       if (e.button === 1) {
-        this._panPressed = true
+        this._isPanPressed = true
         this._isPanning = false
         this._panOrigin = { x: e.clientX, y: e.clientY }
         this._lastPointerPos = { x: e.clientX, y: e.clientY }
@@ -52,20 +65,20 @@ export class InputController {
           // Synthetic test events may not have a capturable pointer ID.
         }
       } else if (e.button === 0) {
-        this._leftPressed = true
-        this._leftDragActive = false
-        this._leftHasDragged = false
+        this._isLeftPressed = true
+        this._isLeftDragActive = false
+        this._hasLeftDragged = false
         this._leftDragOrigin = { x: e.clientX, y: e.clientY }
       }
     }
 
     this._boundPointerMove = (e: PointerEvent) => {
-      if (this._leftPressed && (e.buttons & 1) === 0) {
-        this._leftPressed = false
-        this._leftDragActive = false
+      if (this._isLeftPressed && (e.buttons & 1) === 0) {
+        this._isLeftPressed = false
+        this._isLeftDragActive = false
       }
 
-      if (this._panPressed) {
+      if (this._isPanPressed) {
         const dx = e.clientX - this._lastPointerPos.x
         const dy = e.clientY - this._lastPointerPos.y
         this._lastPointerPos = { x: e.clientX, y: e.clientY }
@@ -83,14 +96,14 @@ export class InputController {
         }
       }
 
-      if (this._leftPressed && !this._leftDragActive) {
+      if (this._isLeftPressed && !this._isLeftDragActive) {
         const dist = Math.hypot(
           e.clientX - this._leftDragOrigin.x,
           e.clientY - this._leftDragOrigin.y
         )
         if (dist > InputController._DRAG_DEAD_ZONE_PX) {
-          this._leftDragActive = true
-          this._leftHasDragged = true
+          this._isLeftDragActive = true
+          this._hasLeftDragged = true
         }
       }
 
@@ -99,19 +112,19 @@ export class InputController {
 
     this._boundPointerUp = (e: PointerEvent) => {
       if (e.button === 1) {
-        this._panPressed = false
+        this._isPanPressed = false
         this._isPanning = false
       } else if (e.button === 0) {
-        this._leftPressed = false
-        this._leftDragActive = false
+        this._isLeftPressed = false
+        this._isLeftDragActive = false
       }
     }
 
     this._boundPointerCancel = () => {
-      this._panPressed = false
+      this._isPanPressed = false
       this._isPanning = false
-      this._leftPressed = false
-      this._leftDragActive = false
+      this._isLeftPressed = false
+      this._isLeftDragActive = false
     }
 
     this._boundWheel = (e: WheelEvent) => {
@@ -147,18 +160,22 @@ export class InputController {
     this._onDirty()
   }
 
+  /** True while a middle-button pan press is active (used to suppress hover during a pan). */
   get isPanning(): boolean {
-    return this._panPressed
+    return this._isPanPressed
   }
 
+  /** True once a left-button press has crossed the drag dead zone (a real drag, not a click). */
   get isLeftDragging(): boolean {
-    return this._leftDragActive
+    return this._isLeftDragActive
   }
 
+  /** True if the current/last left-button gesture ever became a drag — read to suppress the synthesized click that follows a drag. */
   get leftHasDragged(): boolean {
-    return this._leftHasDragged
+    return this._hasLeftDragged
   }
 
+  /** Removes every listener this controller added (symmetric with the constructor). Call on renderer teardown. */
   destroy(): void {
     this._canvas.removeEventListener('pointerdown', this._boundPointerDown)
     this._canvas.removeEventListener('pointermove', this._boundPointerMove)

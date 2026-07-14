@@ -1,3 +1,8 @@
+/**
+ * Package entry point. Every public symbol is re-exported by name;
+ * `MapEngine as default` is the single sanctioned default-export alias —
+ * add no other default export.
+ */
 export type * from './shared/types'
 export {
   SectorLimitExceededError,

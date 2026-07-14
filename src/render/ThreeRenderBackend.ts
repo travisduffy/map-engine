@@ -1,10 +1,12 @@
 import * as THREE from 'three'
+
+import { WebGL2NotSupportedError } from '../shared/errors'
 import type {
   IThreeRenderBackend,
   ThreeRenderBackendInternalAccess,
 } from './IThreeRenderBackend'
-import { WebGL2NotSupportedError } from '../shared/errors'
 
+/** Void/unknown-pixel sentinel in the numeric sector-ID space (matches `pixelIndices`). */
 const VOID_ID = 0xffff
 
 // GLSL ES 3.00 (WebGL2) — fragment-LUT palette shader (Epic 4 B2).
@@ -51,18 +53,32 @@ void main() {
 }
 `
 
+/**
+ * Real WebGL2 `IThreeRenderBackend`: a GLSL3 `RawShaderMaterial`
+ * fragment-LUT shader samples an R32UI index texture (one sector ID per
+ * map pixel) and looks each fragment's color up in an RGBA8 palette
+ * texture, so recolors are LUT writes — never a per-pixel CPU pass. Also
+ * owns the managed border VBO (CA-6) and the context-loss recovery hooks
+ * (F-3.3/F-4.10).
+ */
 export class ThreeRenderBackend
   implements IThreeRenderBackend, ThreeRenderBackendInternalAccess
 {
+  /** The orthographic camera, framed to the constructor's frustum half-dimensions. */
   readonly camera: THREE.OrthographicCamera
+  /** The scene containing the map plane mesh. */
   readonly scene: THREE.Scene
+  /** The full-map plane mesh (`PlaneGeometry(mapWidth, mapHeight)` centered at the world origin) — the picking pipeline's raycast target. */
   readonly mesh: THREE.Mesh
+  /** The fragment-LUT `RawShaderMaterial` (exposed for shader-level tests). */
   readonly material: THREE.RawShaderMaterial
 
   private readonly _renderer: THREE.WebGLRenderer
   private readonly _indexTextureWidth: number
   private readonly _indexTextureHeight: number
+  // R32UI one-uint-per-pixel sector-ID texture sampled by the fragment shader.
   private readonly _indexTexture: THREE.DataTexture
+  // RGBA8 palette LUT texture; _paletteData is its CPU-side backing store.
   private readonly _paletteTexture: THREE.DataTexture
   private readonly _paletteData: Uint8Array
   private readonly _sectorCount: number
@@ -78,6 +94,14 @@ export class ThreeRenderBackend
    */
   private _borderVBO: WebGLBuffer | null = null
 
+  /**
+   * Acquires the WebGL2 context (throws `WebGL2NotSupportedError` if
+   * unavailable), snapshots `pixelIndices` to back the index texture and the
+   * picking readback, builds the palette texture from `initialPalette`
+   * (wrapping into a 2D layout when `sectorCount` exceeds
+   * `MAX_TEXTURE_SIZE`, F-3.4), assembles the shader/mesh/scene/camera, and
+   * wires the `webglcontextlost` VBO-drop listener.
+   */
   constructor(
     canvas: HTMLCanvasElement,
     frustumHalfW: number,
@@ -206,25 +230,12 @@ export class ThreeRenderBackend
     this._paletteTexture.needsUpdate = true
   }
 
-  /** Single write path for a full-palette replace (`registerMapMode`/`setMapMode`, Epic 4 CA-7). */
-  private _writePaletteUniform(colors: Uint32Array): void {
-    const n = Math.min(colors.length, this._sectorCount)
-    for (let id = 0; id < n; id++) {
-      const packed = colors[id]
-      const o = id * 4
-      this._paletteData[o] = (packed >>> 16) & 0xff
-      this._paletteData[o + 1] = (packed >>> 8) & 0xff
-      this._paletteData[o + 2] = packed & 0xff
-      this._paletteData[o + 3] = 255
-    }
-    this._paletteTexture.needsUpdate = true
-  }
-
   /** @internal benchmark-harness hook (F-3.4 "API Relationship"). */
   _setPaletteUniformDirect(colors: Uint32Array): void {
     this._writePaletteUniform(colors)
   }
 
+  /** Applies a `{ palette: Uint32Array }` full-palette replace via `_writePaletteUniform`; ignores everything else. */
   updateUniforms(uniforms: Record<string, unknown>): void {
     const palette = uniforms.palette
     if (palette instanceof Uint32Array) {
@@ -232,12 +243,14 @@ export class ThreeRenderBackend
     }
   }
 
+  /** Overwrites the index texture's CPU backing store from the Uint16Array mirror and flags it for re-upload (F-3.3 context-loss recovery). */
   reuploadIndexTexture(mirror: Uint16Array): void {
     const data = this._indexTexture.image.data as Uint32Array
     for (let i = 0; i < mirror.length; i++) data[i] = mirror[i]
     this._indexTexture.needsUpdate = true
   }
 
+  /** The live R32UI index `DataTexture` (Epic 4 palette shader). */
   getIndexTexture(): THREE.Texture | null {
     return this._indexTexture
   }
@@ -266,22 +279,27 @@ export class ThreeRenderBackend
     }
   }
 
+  /** The managed border `WebGLBuffer`; `null` before the first `uploadBorderEdges` call and immediately after a context loss. */
   getBorderVBO(): WebGLBuffer | null {
     return this._borderVBO
   }
 
+  /** Submits one render of `scene` through `camera` to the `WebGLRenderer`. */
   render(scene: THREE.Scene, camera: THREE.Camera): void {
     this._renderer.render(scene, camera)
   }
 
+  /** Resizes the drawing buffer to the given CSS-pixel dimensions (without touching the canvas's CSS size). */
   setSize(width: number, height: number): void {
     this._renderer.setSize(width, height, false)
   }
 
+  /** The backend's scene as a concrete `THREE.Scene`. */
   getThreeScene(): THREE.Scene {
     return this.scene
   }
 
+  /** The live `THREE.WebGLRenderer`. */
   getThreeRenderer(): THREE.WebGLRenderer {
     return this._renderer
   }
@@ -303,11 +321,26 @@ export class ThreeRenderBackend
     return this._pixelIndicesSnapshot[y * this._indexTextureWidth + x]
   }
 
+  /** Releases the renderer, plane geometry, shader material, and both textures. */
   dispose(): void {
     this._renderer.dispose()
     ;(this.mesh.geometry as THREE.BufferGeometry).dispose()
     this.material.dispose()
     this._indexTexture.dispose()
     this._paletteTexture.dispose()
+  }
+
+  /** Single write path for a full-palette replace (`registerMapMode`/`setMapMode`, Epic 4 CA-7): repacks each 24-bit RGB entry into the LUT backing store and flags the palette texture dirty. */
+  private _writePaletteUniform(colors: Uint32Array): void {
+    const n = Math.min(colors.length, this._sectorCount)
+    for (let id = 0; id < n; id++) {
+      const packed = colors[id]
+      const o = id * 4
+      this._paletteData[o] = (packed >>> 16) & 0xff
+      this._paletteData[o + 1] = (packed >>> 8) & 0xff
+      this._paletteData[o + 2] = packed & 0xff
+      this._paletteData[o + 3] = 255
+    }
+    this._paletteTexture.needsUpdate = true
   }
 }

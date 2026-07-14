@@ -1,12 +1,13 @@
-import type { WorkerMessage, BootstrapAckPayload } from '../shared/types'
-import { setWorkerState } from './state'
-import { getCallHandler, registerCallHandler } from './call-handlers'
 import { SimulationClock, type TickTelemetry } from './SimulationClock'
-import './pathfinding-handlers'
 import { handleReturnGroupBBoxes } from './aggregation-handlers'
 import { handleReturnAnchors } from './anchor-handlers'
 import { handleReturnBorderEdges } from './border-handlers'
+import { getCallHandler, registerCallHandler } from './call-handlers'
+import './pathfinding-handlers'
+import { setWorkerState } from './state'
+import type { WorkerMessage, BootstrapAckPayload } from '../shared/types'
 
+/** Reads sector `sectorId`'s `[minX, minY, maxX, maxY]` out of the flat SoA `bboxes` buffer. */
 function bboxAt(
   bboxes: Int16Array,
   sectorId: number
@@ -15,12 +16,21 @@ function bboxAt(
   return [bboxes[b], bboxes[b + 1], bboxes[b + 2], bboxes[b + 3]]
 }
 
+// Constructed and started at BOOTSTRAP; null until the first BOOTSTRAP arrives.
 let simulationClock: SimulationClock | null = null
 
+/** `getTickTelemetry` CALL handler: snapshots the clock's tick count + timestamp ring (zeros before BOOTSTRAP). */
 registerCallHandler('getTickTelemetry', (): TickTelemetry => {
   return simulationClock?.getTelemetry() ?? { tickCount: 0, timestamps: [] }
 })
 
+/**
+ * Worker entry dispatcher. `BOOTSTRAP` stores the transferred registry
+ * state, starts the SimulationClock, and replies `BOOTSTRAP_ACK`; `CALL`
+ * routes to the registered handler and replies `RESULT`/`ERROR`; the
+ * `return*` messages reclaim bounced-back ring buffers for their owning
+ * handler modules.
+ */
 self.onmessage = (e: MessageEvent<WorkerMessage>): void => {
   const msg = e.data
 

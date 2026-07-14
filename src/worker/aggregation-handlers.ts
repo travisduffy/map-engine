@@ -1,11 +1,13 @@
-import type { WorkerMessage } from '../shared/types'
+import { MappingRequiredError } from '../shared/errors'
 import { registerCallHandler } from './call-handlers'
 import { getWorkerState } from './state'
 import { yieldIfNeeded } from './yield'
-import { MappingRequiredError } from '../shared/errors'
+import type { WorkerMessage } from '../shared/types'
 
+/** Sentinel mapping entry: the sector belongs to no group (excluded from aggregation). */
 const VOID_GROUP = 0xffff
 
+// Current sector→group mapping; null until the first setParentMapping resolves.
 let mapping: Uint16Array | null = null
 /** -1 is not a valid `maxGroups` value, so the first `setParentMapping` call always (re)allocates. */
 let maxGroups = -1
@@ -27,6 +29,11 @@ let freeBuffers: Int16Array[] = []
  */
 let chain: Promise<unknown> = Promise.resolve()
 
+/**
+ * Appends `fn` to the FIFO chain. One entry's rejection never breaks the
+ * chain for later entries -- the rejection is still delivered to that
+ * entry's own caller via the returned Promise.
+ */
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   const result = chain.then(fn, fn)
   chain = result.then(
@@ -36,6 +43,7 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return result
 }
 
+/** Pops a reclaimed buffer off the free list, or allocates a fresh one sized for the current `maxGroups`. */
 function takeBuffer(): Int16Array {
   return freeBuffers.pop() ?? new Int16Array(maxGroups * 4)
 }
@@ -55,6 +63,12 @@ export function getParentMapping(): Uint16Array | null {
   return mapping
 }
 
+/**
+ * `setParentMapping` CALL handler (CA-5): validates `mapping` against
+ * `sectorCount`/`maxGroups` and stores it. A changed `maxGroups` discards
+ * the free list and notifies Main via `INIT_GROUPS` so the ring pool
+ * reallocates.
+ */
 registerCallHandler('setParentMapping', (params): Promise<void> => {
   const { mapping: newMapping, maxGroups: newMaxGroups } = params as {
     mapping: Uint16Array
@@ -90,6 +104,12 @@ registerCallHandler('setParentMapping', (params): Promise<void> => {
   })
 })
 
+/**
+ * `aggregateGroups` CALL handler (CA-5): folds every member sector's bbox
+ * into one aggregate bbox per group (yielding cooperatively) and pushes the
+ * buffer to Main as a Transferable `groupBBoxes` handoff. Rejects with
+ * `MappingRequiredError` before the first `setParentMapping` resolves.
+ */
 registerCallHandler('aggregateGroups', (): Promise<void> => {
   return enqueue(async () => {
     const state = getWorkerState()

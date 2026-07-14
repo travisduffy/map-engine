@@ -1,4 +1,3 @@
-import type { WorkerMessage } from '../shared/types'
 import {
   MapInvalidatedError,
   WebGL2NotSupportedError,
@@ -8,6 +7,7 @@ import {
   ModeNotReadyError,
   SectorLimitExceededError,
 } from '../shared/errors'
+import type { WorkerMessage } from '../shared/types'
 
 /** Canonical error constructors keyed by `.name`, for `ERROR` rehydration. */
 const ERROR_CTORS: Record<string, new (...args: never[]) => Error> = {
@@ -44,6 +44,7 @@ export interface RegistrySnapshotBuffers {
   adjacencyNeighbors: Uint16Array
 }
 
+// Resolve/reject pair for one in-flight CALL, keyed by its id in `_pending`.
 interface PendingCall {
   resolve: (value: unknown) => void
   reject: (error: Error) => void
@@ -57,35 +58,18 @@ interface PendingCall {
  */
 export class SharedRegistryProxy {
   private readonly _worker: Worker
+  // Monotonic CALL id -- correlates each RESULT/ERROR with its pending Promise.
   private _nextId = 1
+  // In-flight calls by id; entries settle (and are removed) on RESULT/ERROR or rejectAll().
   private readonly _pending = new Map<number, PendingCall>()
+  // Latest snapshot buffers serving the synchronous reads; refreshed from RESULT.snapshot.
   private _snapshot: RegistrySnapshotBuffers
 
+  /** Wires the RESULT/ERROR listener onto `worker` and seeds the snapshot caches with the pre-transfer slices. */
   constructor(worker: Worker, snapshot: RegistrySnapshotBuffers) {
     this._worker = worker
     this._snapshot = snapshot
     this._worker.addEventListener('message', this._onMessage)
-  }
-
-  private _onMessage = (e: MessageEvent<WorkerMessage>): void => {
-    const msg = e.data
-    if (msg.type === 'RESULT') {
-      const entry = this._pending.get(msg.id)
-      if (!entry) return
-      this._pending.delete(msg.id)
-      if (msg.snapshot !== undefined) {
-        this._snapshot = {
-          ...this._snapshot,
-          ...(msg.snapshot as Partial<RegistrySnapshotBuffers>),
-        }
-      }
-      entry.resolve(msg.result)
-    } else if (msg.type === 'ERROR') {
-      const entry = this._pending.get(msg.id)
-      if (!entry) return
-      this._pending.delete(msg.id)
-      entry.reject(rehydrateError(msg.errorName, msg.message))
-    }
   }
 
   /** CALL/RESULT/ERROR round-trip, keyed by a monotonic id. */
@@ -115,17 +99,20 @@ export class SharedRegistryProxy {
     this._pending.clear()
   }
 
+  /** Synchronous `[minX, minY, maxX, maxY]` read for `numId`, served from the snapshot cache. */
   getBBoxByNumericId(numId: number): [number, number, number, number] {
     const b = numId * 4
     const { bboxes } = this._snapshot
     return [bboxes[b], bboxes[b + 1], bboxes[b + 2], bboxes[b + 3]]
   }
 
+  /** Synchronous `[x, y]` centroid read for `numId`, served from the snapshot cache. */
   getCentroidByNumericId(numId: number): [number, number] {
     const { centroids } = this._snapshot
     return [centroids[numId * 2], centroids[numId * 2 + 1]]
   }
 
+  /** Synchronous CSR adjacency read: `numId`'s neighbor numeric ids, served from the snapshot cache. */
   getNeighborIdsByNumericId(numId: number): number[] {
     const { adjacencyPointers, adjacencyNeighbors } = this._snapshot
     const start = adjacencyPointers[numId]
@@ -137,8 +124,35 @@ export class SharedRegistryProxy {
     return result
   }
 
+  /** Rejects every in-flight call with `MapInvalidatedError` and detaches the Worker listener. */
   dispose(): void {
     this.rejectAll(new MapInvalidatedError())
     this._worker.removeEventListener('message', this._onMessage)
+  }
+
+  /**
+   * RESULT/ERROR correlator (an arrow field so `removeEventListener` gets
+   * the same reference): settles the matching pending call, refreshing the
+   * snapshot caches from `RESULT.snapshot` before resolving.
+   */
+  private _onMessage = (e: MessageEvent<WorkerMessage>): void => {
+    const msg = e.data
+    if (msg.type === 'RESULT') {
+      const entry = this._pending.get(msg.id)
+      if (!entry) return
+      this._pending.delete(msg.id)
+      if (msg.snapshot !== undefined) {
+        this._snapshot = {
+          ...this._snapshot,
+          ...(msg.snapshot as Partial<RegistrySnapshotBuffers>),
+        }
+      }
+      entry.resolve(msg.result)
+    } else if (msg.type === 'ERROR') {
+      const entry = this._pending.get(msg.id)
+      if (!entry) return
+      this._pending.delete(msg.id)
+      entry.reject(rehydrateError(msg.errorName, msg.message))
+    }
   }
 }

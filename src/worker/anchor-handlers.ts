@@ -1,9 +1,10 @@
-import type { WorkerMessage } from '../shared/types'
 import { registerCallHandler } from './call-handlers'
+import { polylabel } from './polylabel'
 import { getWorkerState } from './state'
 import { yieldIfNeeded } from './yield'
-import { polylabel } from './polylabel'
+import type { WorkerMessage } from '../shared/types'
 
+/** Sentinel pixel value: the pixel belongs to no defined sector (void). */
 const VOID_ID = 0xffff
 
 /**
@@ -24,6 +25,11 @@ let anchorLen = -1
  */
 let chain: Promise<unknown> = Promise.resolve()
 
+/**
+ * Appends `fn` to the FIFO chain. One entry's rejection never breaks the
+ * chain for later entries -- the rejection is still delivered to that
+ * entry's own caller via the returned Promise.
+ */
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   const result = chain.then(fn, fn)
   chain = result.then(
@@ -41,7 +47,7 @@ export function handleReturnAnchors(buffer: Int16Array): void {
 /**
  * Synthesizes the map-edge contour cracks the B1.e scan never emits (it
  * checks `x < width-1` / `y < height-1`, so the bitmap's outer edge has no
- * segments -- see `SectorRegistry.ts:149,169`). Bucketed once per sector id
+ * segments -- see `SectorRegistry.ts:163,183`). Bucketed once per sector id
  * over a single O(2*(width+height)) pass, not re-scanned per sector.
  */
 function synthesizeEdgeCracks(
@@ -50,6 +56,7 @@ function synthesizeEdgeCracks(
   height: number
 ): Map<number, number[]> {
   const buckets = new Map<number, number[]>()
+  // Appends one unit-length edge segment to `id`'s bucket; void pixels own no segments.
   const push = (
     id: number,
     x1: number,
@@ -99,6 +106,13 @@ function buildSectorSegments(
   return { segments, segCount: totalSegCount }
 }
 
+/**
+ * `computeAnchors` CALL handler (CA-8): computes a Pole-of-Inaccessibility
+ * anchor per sector (floored onto an owned pixel) from its contour slice
+ * plus synthesized map-edge cracks, then pushes the buffer to Main as a
+ * Transferable `anchors` handoff. A changed sector count discards the free
+ * list and notifies Main via `INIT_ANCHORS` so the ring pool reallocates.
+ */
 registerCallHandler('computeAnchors', (): Promise<void> => {
   return enqueue(async () => {
     const state = getWorkerState()

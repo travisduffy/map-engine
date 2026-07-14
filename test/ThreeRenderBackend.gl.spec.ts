@@ -69,11 +69,11 @@ describe('ThreeRenderBackend — Epic 1 Task 1.3 (F-3.3)', () => {
       const backend = renderer['_backend'] as ThreeRenderBackend
       const reuploadSpy = vi.spyOn(backend, 'reuploadIndexTexture')
 
-      renderer._dirty = false
+      renderer._isDirty = false
       canvas.dispatchEvent(new Event('webglcontextrestored'))
 
       expect(reuploadSpy).toHaveBeenCalledTimes(1)
-      expect(renderer._dirty).toBe(true)
+      expect(renderer._isDirty).toBe(true)
     } finally {
       engine.destroy()
       canvas.remove()
