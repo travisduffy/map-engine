@@ -2,7 +2,6 @@
 paths:
   - 'src/**/*.ts'
   - 'test/**/*.ts'
-  - 'example/**/*.ts'
 ---
 
 ## Rule ownership
@@ -11,7 +10,7 @@ In-file conventions (naming, booleans, private members, types, imports, member o
 
 ## File naming
 
-Name a file for the kind of its primary export. A file whose primary export is a class or a named interface/type shape takes PascalCase matching that export — `SectorRegistry.ts`, `SpatialGraph.ts`, `SimulationClock.ts` — whether the export is public or internal. A file that provides a collection of functions or values takes kebab-case — `aggregation-handlers.ts`, `border-handlers.ts`, `transferable-pool.ts`. A single-word leaf module stays lowercase — `types.ts`, `errors.ts`, `utils.ts`, `state.ts`, `yield.ts`, `polylabel.ts`, `index.ts`.
+Name a file for the kind of its primary export. A file built around a single class or named interface/type shape takes PascalCase matching that export — `SectorRegistry.ts`, `SpatialGraph.ts`, `SimulationClock.ts` — whether the export is public or internal. A file that provides a collection with no single primary export — a set of functions, values, or sibling classes — takes kebab-case: `aggregation-handlers.ts`, `border-handlers.ts`, and `transferable-pool.ts` (which exports three peer pool classes). A single-word leaf module stays lowercase — `types.ts`, `errors.ts`, `utils.ts`, `state.ts`, `yield.ts`, `polylabel.ts`, `index.ts`.
 
 The filename tells a reader what kind of module it is before they open it: a capital initial means "a class/type lives here."
 
@@ -51,13 +50,13 @@ import type { WorkerMessage } from '../shared/types'
 
 ## Member ordering
 
-Order class members: fields first, then the constructor, then public methods (with a getter grouped next to its backing field), then private methods last. A reader sees state and construction before behavior, and the public surface before the internal mechanics.
+Order class members: fields first, then the constructor, then public methods, then private methods last. A reader sees state and construction before behavior, and the public surface before the internal mechanics. Accessors (getters/setters) belong in the public-methods region — a backing field stays up in the fields block, never inlined beside its getter; group related accessors where it reads well.
 
 Exception: private helpers that exist only to serve one public method may immediately follow that method rather than sinking to the bottom — keep a helper next to the single caller it belongs to.
 
 ## Comments and JSDoc
 
-Give every method a JSDoc summary block — public and private alike. Co-located documentation states the method's intended behavior so a reader or agent learns it without tracing the body; a private method carries the explanation its name cannot (an algorithm's invariant, an admissibility bound, a tie-break rule).
+Give every method a JSDoc summary block — public and private, the constructor included. Co-located documentation states the method's intended behavior so a reader or agent learns it without tracing the body; a private method carries the explanation its name cannot (an algorithm's invariant, an admissibility bound, a tie-break rule). A constructor documents what it captures and initializes, even when the class-level block already states the class's purpose.
 
 Give every public or exported non-method member — an exported `const`, a public field — a JSDoc summary too. Comment a private field with a single line comment where its intent is not obvious from its name.
 

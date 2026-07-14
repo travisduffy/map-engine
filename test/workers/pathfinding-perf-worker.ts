@@ -99,7 +99,7 @@ self.onmessage = async (
   ).fill(null)
   const unreachable: UnreachableResult[] = []
 
-  async function runPass(recordUnreachable: boolean): Promise<void> {
+  async function runPass(shouldRecordUnreachable: boolean): Promise<void> {
     for (let i = 0; i < fixture.pairs.length; i++) {
       const pair = fixture.pairs[i]
       const t0 = performance.now()
@@ -120,7 +120,7 @@ self.onmessage = async (
         }
         if (ms < bestMsByPairIndex[i]) bestMsByPairIndex[i] = ms
       } catch (err) {
-        if (recordUnreachable) {
+        if (shouldRecordUnreachable) {
           unreachable.push({
             start: pair.start,
             end: pair.end,

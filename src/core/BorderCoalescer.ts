@@ -24,6 +24,7 @@ export class BorderCoalescer {
    * arrives while something is in flight shares this same Promise. */
   private _queued: Promise<void> | null = null
 
+  /** Captures the `dispatch` thunk that fires one fresh recompute CALL and the `isSessionValid` predicate the queued run consults before dispatching. */
   constructor(dispatch: () => Promise<void>, isSessionValid: () => boolean) {
     this._dispatch = dispatch
     this._isSessionValid = isSessionValid

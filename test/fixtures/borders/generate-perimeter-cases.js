@@ -6,11 +6,11 @@
 // extraction tests.
 //
 // `expectedEdges` is computed independently of engine code (no
-// SectorRegistry/borderHandlers import) via a direct per-pixel right/bottom-
+// SectorRegistry/border-handlers import) via a direct per-pixel right/bottom-
 // neighbor scan over the source grid — the same interior-only rule
 // SectorRegistry.ts's B1.e scan applies (guards `x < width-1` / `y <
 // height-1`, so bitmap-boundary-facing sides are never visited; see
-// SectorRegistry.ts:149,169). Scanning only right/bottom neighbors also means
+// SectorRegistry.ts:163,183). Scanning only right/bottom neighbors also means
 // each geometric edge is visited exactly once here, by construction — this
 // script does not need (and does not model) the contour-bucket double-
 // storage/dedup the real Worker walk must perform over per-sector CSR

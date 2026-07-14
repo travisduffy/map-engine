@@ -25,6 +25,7 @@ export class PointerPickResolver {
   /** Hex key last emitted as a hover, so `sectorHover` fires only on a change of sector. */
   private _lastHexKey: string | null = null
 
+  /** Captures the live renderer/registry/canvas the pick pipeline reads and the `emit` callback for `sectorHover`/`sectorClick`, and allocates the reusable raycaster. */
   constructor(
     renderer: MapRenderer,
     registry: SectorRegistry,
