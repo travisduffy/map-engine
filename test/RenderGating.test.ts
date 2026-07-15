@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { MapRenderer } from '../src/MapRenderer'
+
+import { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
-import { SectorRegistry } from '../src/SectorRegistry'
-import type { SectorDefinitionFile } from '../src/types'
-import { makeCanvas } from './testUtils'
+import { SectorRegistry } from '../src/sector/SectorRegistry'
+import { makeCanvas } from './test-utils'
+import type { SectorDefinitionFile } from '../src/shared/types'
 
 function make4x4Buffer(): Uint8ClampedArray {
   // prettier-ignore
@@ -51,7 +52,7 @@ describe('Render Gating (A1)', () => {
     capturedLoop(performance.now())
   }
 
-  it('renders on the first tick (_dirty starts true)', () => {
+  it('renders on the first tick (_isDirty starts true)', () => {
     const spy = vi.spyOn(
       (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
       'render'
@@ -61,7 +62,7 @@ describe('Render Gating (A1)', () => {
   })
 
   it('skips render on 10 consecutive no-op ticks after first frame', () => {
-    tick() // initial frame — dirty, renders, clears _dirty
+    tick() // initial frame — dirty, renders, clears _isDirty
     const spy = vi.spyOn(
       (renderer['_backend'] as ThreeRenderBackend).getThreeRenderer(),
       'render'

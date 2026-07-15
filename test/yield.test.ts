@@ -1,40 +1,41 @@
 import { describe, it, expect } from 'vitest'
+
 import { yieldIfNeeded } from '../src/worker/yield'
 
 describe('yieldIfNeeded — Epic 2 Task 2.2', () => {
   it('resolves without a MessageChannel round-trip when less than 8ms have elapsed', async () => {
     const state = { lastYield: performance.now() }
-    let resolved = false
+    let isResolved = false
     const p = yieldIfNeeded(state).then(() => {
-      resolved = true
+      isResolved = true
     })
     // A same-tick MessageChannel round-trip is impossible — port2.onmessage
     // is always a macrotask. Flushing microtasks only must already resolve.
     await Promise.resolve()
     await Promise.resolve()
-    expect(resolved).toBe(true)
+    expect(isResolved).toBe(true)
     await p
   })
 
   it('yields via a MessageChannel round-trip (a real macrotask) once >= 8ms have elapsed', async () => {
     const state = { lastYield: performance.now() - 10 }
-    let resolved = false
+    let isResolved = false
     const p = yieldIfNeeded(state).then(() => {
-      resolved = true
+      isResolved = true
     })
     await Promise.resolve()
     await Promise.resolve()
-    expect(resolved).toBe(false) // still pending after a microtask-only flush
+    expect(isResolved).toBe(false) // still pending after a microtask-only flush
     await p
-    expect(resolved).toBe(true)
+    expect(isResolved).toBe(true)
     expect(state.lastYield).toBeGreaterThan(performance.now() - 10)
   })
 
   it('a ~50ms busy-loop calling yieldIfNeeded lets an independently queued message interleave', async () => {
     const externalChannel = new MessageChannel()
-    let externalMessageProcessed = false
+    let isExternalMessageProcessed = false
     externalChannel.port2.onmessage = () => {
-      externalMessageProcessed = true
+      isExternalMessageProcessed = true
     }
     externalChannel.port1.postMessage(0)
 
@@ -44,6 +45,6 @@ describe('yieldIfNeeded — Epic 2 Task 2.2', () => {
       await yieldIfNeeded(state)
     }
 
-    expect(externalMessageProcessed).toBe(true)
+    expect(isExternalMessageProcessed).toBe(true)
   })
 })

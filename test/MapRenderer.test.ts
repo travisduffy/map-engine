@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as THREE from 'three'
-import { MapRenderer } from '../src/MapRenderer'
-import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+import { MapRenderer } from '../src/core/MapRenderer'
 import { NullRenderBackend } from '../src/render/NullRenderBackend'
-import { SectorRegistry } from '../src/SectorRegistry'
-import type { SectorDefinitionFile } from '../src/types'
+import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
+import { SectorRegistry } from '../src/sector/SectorRegistry'
+import type { SectorDefinitionFile } from '../src/shared/types'
 
 // 4×4 RGBA buffer — same layout as SectorRegistry tests
 function make4x4Buffer(): Uint8ClampedArray {

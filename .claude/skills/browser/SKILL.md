@@ -1,4 +1,5 @@
 ---
+name: browser
 description: Sets up and drives a real Chromium browser inside this project via a project-scoped Playwright MCP server, to verify web UIs by actually seeing and interacting with them rather than only typechecking or unit-testing. Use when visually verifying a UI change, clicking through a flow, taking a screenshot, or debugging a bug that only reproduces in a real browser — including canvas/WebGL rendering issues.
 ---
 

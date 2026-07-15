@@ -1,8 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { MapEngine } from '../../src/MapEngine'
-import { SectorBitmapParser } from '../../src/SectorBitmapParser'
-import { SectorRegistry } from '../../src/SectorRegistry'
-import { makeCanvas } from '../testUtils'
+
+import { MapEngine } from '../../src/core/MapEngine'
+import { SectorBitmapParser } from '../../src/sector/SectorBitmapParser'
+import { SectorRegistry } from '../../src/sector/SectorRegistry'
+import { makeCanvas } from '../test-utils'
 
 const BITMAP_URL = '/test/fixtures/test-4x4.png'
 const DEFINITION_URL = '/test/fixtures/test-4x4.json'
@@ -28,7 +29,7 @@ describe('MapEngine — BOOTSTRAP transfer (Epic 1 Task 1.5, F-3.1)', () => {
     // The public `registry` getter throws MapInvalidatedError by design once
     // buffers are transferred (ROADMAP §8 B3.c) — bracket access to the
     // internal field is this codebase's established pattern for reaching
-    // past that guard in tests (see test/testUtils.ts advanceFrame()).
+    // past that guard in tests (see test/test-utils.ts advanceFrame()).
     const registry = engine['_registry'] as SectorRegistry
     const transferred: ArrayBufferView[] = [
       registry.pixelIndices,

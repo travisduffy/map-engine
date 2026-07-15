@@ -1,7 +1,21 @@
-import * as THREE from 'three'
-import { SectorBitmapParser } from './SectorBitmapParser'
-import { SectorRegistry } from './SectorRegistry'
+import { SectorBitmapParser } from '../sector/SectorBitmapParser'
+import { SectorRegistry } from '../sector/SectorRegistry'
+import {
+  MapInvalidatedError,
+  ModeNotReadyError,
+  CostsRequiredError,
+} from '../shared/errors'
+import { SharedRegistryProxy } from '../worker/SharedRegistryProxy'
+import {
+  TransferableGroupPool,
+  TransferableAnchorPool,
+  TransferableBorderPool,
+} from '../worker/transferable-pool'
+import { BorderCoalescer } from './BorderCoalescer'
+import { EventEmitter } from './EventEmitter'
 import { MapRenderer } from './MapRenderer'
+import { PointerPickResolver } from './PointerPickResolver'
+import { RenderClock } from './RenderClock'
 import type {
   MapConfig,
   PickEvent,
@@ -12,172 +26,69 @@ import type {
   BootstrapAckPayload,
   WorkerMessage,
   MapModeId,
-} from './types'
-import {
-  MapInvalidatedError,
-  ModeNotReadyError,
-  CostsRequiredError,
-} from './errors'
-import { RenderClock } from './RenderClock'
-import { SharedRegistryProxy } from './worker/SharedRegistryProxy'
-import {
-  TransferableGroupPool,
-  TransferableAnchorPool,
-  TransferableBorderPool,
-} from './worker/transferablePool'
+} from '../shared/types'
 
 export class MapEngine {
-  private _loaded: boolean = false
-  private _destroyed: boolean = false
-  private _loading: boolean = false
-  private _lastHexKey: string | null = null
+  private _isLoaded: boolean = false
+  private _isDestroyed: boolean = false
+  private _isLoading: boolean = false
   private _parser: SectorBitmapParser
-  private _handlers: Map<string, Set<Function>>
-  private _canvas: HTMLCanvasElement | null = null
+  private readonly _events: EventEmitter
   private _registry: SectorRegistry | null = null
   private _renderer: MapRenderer | null = null
-  private readonly _raycaster: THREE.Raycaster
+  private _picker: PointerPickResolver | null = null
   private _frameCallbacks: FrameCallback[] = []
   private readonly _renderClock: RenderClock
   private _tickRate: number = 60
   private _worker: Worker
   private _proxy: SharedRegistryProxy | null = null
-  private _registryInvalidated: boolean = false
+  private _isRegistryInvalidated: boolean = false
   private _lastBootstrapAck: BootstrapAckPayload | null = null
   private _mapModes: Map<MapModeId, Uint32Array> = new Map()
   private _currentMapMode: MapModeId | null = null
-  private _costsReady: boolean = false
+  private _areCostsReady: boolean = false
   private _pool: TransferableGroupPool | null = null
   private _anchorPool: TransferableAnchorPool | null = null
   private _borderPool: TransferableBorderPool | null = null
-  /** In-flight `recomputeBorders()` Worker CALL (CA-6 coalescing). */
-  private _borderInFlight: Promise<void> | null = null
-  /** At most one coalesced call queued behind `_borderInFlight` — every
-   * caller that arrives while something is in flight shares this same
-   * Promise (≤ 2 Worker computations total, regardless of caller count). */
-  private _borderQueued: Promise<void> | null = null
+  private readonly _borderCoalescer: BorderCoalescer
 
+  /** Constructs the facade and spins up the Worker eagerly (before any `loadMap()`), so the bootstrap round-trip can begin the moment a map is loaded. */
   constructor() {
     this._parser = new SectorBitmapParser()
-    this._handlers = new Map<string, Set<Function>>()
-    this._raycaster = new THREE.Raycaster()
+    this._events = new EventEmitter()
     this._renderClock = new RenderClock()
     this._worker = this._createWorker()
+    this._borderCoalescer = new BorderCoalescer(
+      () => this._proxy!.call<void>('recomputeBorders'),
+      () => !this._isDestroyed && this._isLoaded && !!this._proxy
+    )
   }
 
-  private _createWorker(): Worker {
-    return new Worker(new URL('./worker/index.ts', import.meta.url), {
-      type: 'module',
-    })
-  }
-
+  /** Registers `handler` for a pick event (`sectorClick`/`sectorHover`). Throws once destroyed. */
   on(event: 'sectorClick', handler: (result: PickResult) => void): void
   on(event: 'sectorHover', handler: (result: PickResult | null) => void): void
-  on(_event: string, _handler: Function): void {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    const event = _event
-    const handler = _handler
-    if (!this._handlers.has(event)) {
-      this._handlers.set(event, new Set())
-    }
-    this._handlers.get(event)!.add(handler)
+  on(event: string, handler: Function): void {
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    this._events.on(event, handler)
   }
 
-  off(_event: 'sectorClick' | 'sectorHover', _handler: Function): void {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    const set = this._handlers.get(_event)
-    if (set) set.delete(_handler)
+  /** Removes a previously registered pick-event handler; a no-op if it was never registered. Throws once destroyed. */
+  off(event: 'sectorClick' | 'sectorHover', handler: Function): void {
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    this._events.off(event, handler)
   }
 
+  /** Registers a per-frame callback invoked with the frame delta on every render tick; a no-op once destroyed. */
   onFrame(callback: FrameCallback): void {
-    if (this._destroyed) return
+    if (this._isDestroyed) return
     this._frameCallbacks.push(callback)
   }
 
+  /** Unregisters a frame callback; a no-op once destroyed or if it was never registered. */
   offFrame(callback: FrameCallback): void {
-    if (this._destroyed) return
+    if (this._isDestroyed) return
     const idx = this._frameCallbacks.indexOf(callback)
     if (idx !== -1) this._frameCallbacks.splice(idx, 1)
-  }
-
-  private _emit(event: string, payload: unknown): void {
-    const set = this._handlers.get(event)
-    if (set) {
-      for (const handler of set) {
-        handler(payload)
-      }
-    }
-  }
-
-  /**
-   * NDC conversion → raycast → UV → clamped, Y-inverted bitmap pixel coords.
-   * Shared by the hover/click pipeline and `pick()` (Epic 3 Task 3.4).
-   * Returns null on a mesh-miss (ray did not hit the map plane).
-   */
-  private _resolvePixelCoords(
-    event: PickEvent
-  ): { pixelX: number; pixelY: number } | null {
-    if (!this._renderer || !this._registry || !this._canvas) return null
-
-    const rect = this._canvas.getBoundingClientRect()
-    const ndc = new THREE.Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1
-    )
-
-    this._raycaster.setFromCamera(ndc, this._renderer.camera)
-    const intersections = this._raycaster.intersectObject(this._renderer.mesh)
-    if (intersections.length === 0) return null
-
-    const uv = intersections[0].uv!
-    const width = this._registry.width
-    const height = this._registry.height
-    const pixelX = Math.max(0, Math.min(width - 1, Math.floor(uv.x * width)))
-    const pixelY = Math.max(
-      0,
-      Math.min(height - 1, Math.floor((1 - uv.y) * height))
-    )
-    return { pixelX, pixelY }
-  }
-
-  /** Resolves a bitmap pixel + numeric ID into a `PickResult`, or null on a void/unknown sector. */
-  private _resolveHexPick(pixelX: number, pixelY: number): PickResult | null {
-    const numId = this._renderer!.readSectorIdAt(pixelX, pixelY)
-    if (numId >= this._registry!.idToHex.length) return null
-    const hexKey = this._registry!.idToHex[numId]
-    const sectorData = this._registry!.getSector(hexKey)
-    if (sectorData === undefined) return null
-    return { hexKey, sectorData, pixelX, pixelY }
-  }
-
-  private _handlePointerEvent(event: PickEvent, isClick: boolean): void {
-    if (!this._renderer || !this._registry || !this._canvas) return
-
-    const coords = this._resolvePixelCoords(event)
-    const result = coords
-      ? this._resolveHexPick(coords.pixelX, coords.pixelY)
-      : null
-
-    if (result === null) {
-      if (!isClick && this._lastHexKey !== null) {
-        this._lastHexKey = null
-        this._emit('sectorHover', null)
-      }
-      return
-    }
-
-    if (!isClick) {
-      // Suppress hover during middle-button pan OR left-button drag.
-      if (this._renderer.isPanning || this._renderer.isLeftDragging) return
-      if (result.hexKey !== this._lastHexKey) {
-        this._lastHexKey = result.hexKey
-        this._emit('sectorHover', result)
-      }
-    } else {
-      // Suppress synthesized click that follows a left-button drag.
-      if (this._renderer.leftHasDragged) return
-      this._emit('sectorClick', result)
-    }
   }
 
   /**
@@ -186,11 +97,9 @@ export class MapEngine {
    * `loadMap()`/`BOOTSTRAP_ACK`, on a mesh-miss, or on a void/unknown pixel.
    */
   async pick(point: PickEvent): Promise<PickResult | null> {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded) return null
-    const coords = this._resolvePixelCoords(point)
-    if (!coords) return null
-    return this._resolveHexPick(coords.pixelX, coords.pixelY)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded) return null
+    return this._picker!.pick(point)
   }
 
   /**
@@ -198,8 +107,8 @@ export class MapEngine {
    * Worker at bootstrap. Must be called before `loadMap()` resolves.
    */
   setTickRate(hz: number): void {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (this._isLoaded)
       throw new Error(
         'MapEngine: setTickRate() cannot be called after loadMap() has resolved'
       )
@@ -216,12 +125,20 @@ export class MapEngine {
     return this._tickRate
   }
 
+  /**
+   * Loads a map: parses the bitmap + definition, builds the `SectorRegistry`,
+   * uploads the index texture, and bootstraps the Worker (transferring every
+   * spatial buffer). Resolves once the Worker acknowledges the bootstrap.
+   * Calling it again after a successful load reloads — the previous session
+   * (Worker, renderer, proxy, pools, palette, costs) is torn down and rebuilt.
+   * Throws if destroyed or if a load is already in progress.
+   */
   async loadMap(config: MapConfig): Promise<void> {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (this._loading)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (this._isLoading)
       throw new Error('MapEngine: loadMap() is already in progress')
 
-    if (this._loaded) {
+    if (this._isLoaded) {
       // Reload lifecycle (Epic 3 Task 3.3): invalidate the previous
       // session's in-flight proxy calls before re-bootstrapping.
       this._proxy?.rejectAll(new MapInvalidatedError())
@@ -232,27 +149,25 @@ export class MapEngine {
       this._anchorPool = null
       this._borderPool?.dispose()
       this._borderPool = null
-      this._borderInFlight = null
-      this._borderQueued = null
+      this._borderCoalescer.reset()
       this._renderer?.destroy()
       this._worker.terminate()
       this._worker = this._createWorker()
       this._renderClock.reset()
       this._registry = null
       this._renderer = null
-      this._canvas = null
-      this._registryInvalidated = false
-      this._lastHexKey = null
-      this._loaded = false
+      this._picker = null
+      this._isRegistryInvalidated = false
+      this._isLoaded = false
       // CA-7: discard the registered palette data (Epic 4 Task 4.3).
       this._mapModes.clear()
       this._currentMapMode = null
       // CA-4: a fresh Worker means a fresh (empty) SpatialGraph -- costs
       // must be re-supplied before findPath() is usable again.
-      this._costsReady = false
+      this._areCostsReady = false
     }
 
-    this._loading = true
+    this._isLoading = true
 
     try {
       const [{ buffer, width, height }, definition] = await Promise.all([
@@ -275,8 +190,8 @@ export class MapEngine {
         config.canvas,
         registry,
         hook,
-        e => this._handlePointerEvent(e, false),
-        e => this._handlePointerEvent(e, true)
+        e => this._picker?.handlePointer(e, false),
+        e => this._picker?.handlePointer(e, true)
       )
       // Suspend rendering across the Worker bootstrap round-trip — a real
       // rAF tick here would consume the render loop's "priming" frame before
@@ -336,15 +251,15 @@ export class MapEngine {
           bootstrapPayload.borderEdgeCount.buffer,
         ]
       )
-      this._registryInvalidated = true
+      this._isRegistryInvalidated = true
 
       this._lastBootstrapAck = await ackPromise
       this._proxy = new SharedRegistryProxy(this._worker, registrySnapshot)
       this._pool = new TransferableGroupPool(this._worker, () => {
-        renderer._dirty = true
+        renderer._isDirty = true
       })
       this._anchorPool = new TransferableAnchorPool(this._worker, () => {
-        renderer._dirty = true
+        renderer._isDirty = true
       })
       this._borderPool = new TransferableBorderPool(
         this._worker,
@@ -362,14 +277,19 @@ export class MapEngine {
       }
       renderer._resumeLoop()
 
-      this._canvas = config.canvas
       this._registry = registry
       this._renderer = renderer
+      this._picker = new PointerPickResolver(
+        renderer,
+        registry,
+        config.canvas,
+        (event, payload) => this._events.emit(event, payload)
+      )
 
-      this._loaded = true
-      this._loading = false
+      this._isLoaded = true
+      this._isLoading = false
     } catch (err) {
-      this._loading = false
+      this._isLoading = false
       throw err
     }
   }
@@ -381,7 +301,7 @@ export class MapEngine {
    */
   async dispose(): Promise<void> {
     // Step 1: idempotent — never throws
-    if (this._destroyed) return
+    if (this._isDestroyed) return
 
     // Step 0 (new): reject in-flight proxy calls before tearing anything down
     this._proxy?.rejectAll(new MapInvalidatedError())
@@ -392,8 +312,7 @@ export class MapEngine {
     this._anchorPool = null
     this._borderPool?.dispose()
     this._borderPool = null
-    this._borderInFlight = null
-    this._borderQueued = null
+    this._borderCoalescer.reset()
     // CA-7: discard the registered palette data (Epic 4 Task 4.3).
     this._mapModes.clear()
     this._currentMapMode = null
@@ -406,23 +325,24 @@ export class MapEngine {
     }
 
     // Step 3: clear event handler map
-    this._handlers.clear()
+    this._events.clear()
 
     // Step 5: null out refs
     this._registry = null
     this._renderer = null
-    this._canvas = null
-    this._loading = false
+    this._picker = null
+    this._isLoading = false
 
     // Steps 6–7: conditionally mark destroyed
-    if (this._loaded) {
+    if (this._isLoaded) {
       this._worker.terminate()
-      this._destroyed = true
+      this._isDestroyed = true
     }
-    // If _loaded === false (partial failure), do NOT set _destroyed or terminate
+    // If _isLoaded === false (partial failure), do NOT set _isDestroyed or terminate
     // the Worker (never bootstrapped yet) — allow retry via loadMap()
   }
 
+  /** Synchronous teardown entry point; delegates to `dispose()` fire-and-forget (ROADMAP §8 B3.c). */
   destroy(): void {
     void this.dispose()
   }
@@ -432,9 +352,10 @@ export class MapEngine {
     return this._lastBootstrapAck
   }
 
+  /** The live `MapRenderer` for the loaded map. Throws if destroyed or before `loadMap()` resolves. */
   get renderer(): MapRenderer {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     return this._renderer!
   }
@@ -445,37 +366,41 @@ export class MapEngine {
    * `getBBox`/`getCentroid`/`getNeighbors` instead.
    */
   get registry(): SectorRegistry {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
-    if (this._registryInvalidated) throw new MapInvalidatedError()
+    if (this._isRegistryInvalidated) throw new MapInvalidatedError()
     return this._registry!
   }
 
+  /** Returns the `SectorData` for `hexKey`, or `undefined` if unknown. Throws if destroyed or not loaded. */
   getSector(hexKey: string): SectorData | undefined {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     return this._registry!.getSector(hexKey)
   }
 
+  /** Returns every known sector hex key. Throws if destroyed or not loaded. */
   getSectorKeys(): string[] {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     return this._registry!.getSectorKeys()
   }
 
+  /** Overrides a sector's fill color via the GPU palette LUT (O(1) write, no pixel iteration). Throws if destroyed or not loaded. */
   setSectorColor(hexKey: string, color: string): void {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     this._renderer!.setSectorColor(hexKey, color)
   }
 
+  /** Restores a sector's fill color to its source-bitmap value. Throws if destroyed or not loaded. */
   resetSectorColor(hexKey: string): void {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     this._renderer!.resetSectorColor(hexKey)
   }
@@ -487,8 +412,8 @@ export class MapEngine {
    * `loadMap()` has resolved.
    */
   registerMapMode(id: MapModeId, colors: Uint32Array): void {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded) throw new ModeNotReadyError('registerMapMode')
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded) throw new ModeNotReadyError('registerMapMode')
     if (this._mapModes.has(id)) {
       throw new Error(`MapEngine: map mode '${id}' is already registered`)
     }
@@ -507,8 +432,8 @@ export class MapEngine {
    * already-current mode is a no-op (zero uniform writes, zero submits).
    */
   setMapMode(id: MapModeId): void {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded) throw new ModeNotReadyError('setMapMode')
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded) throw new ModeNotReadyError('setMapMode')
     const colors = this._mapModes.get(id)
     if (!colors) throw new Error(`Unknown map mode: ${id}`)
     if (this._currentMapMode === id) return
@@ -516,11 +441,12 @@ export class MapEngine {
     this._renderer!.setPalette(colors)
   }
 
+  /** Adjacent sector ids for `id` — hex keys for a hex-string arg (`undefined` if the key is unknown), numeric ids for a numeric arg. Served from the Worker proxy snapshot. Throws if destroyed or not loaded. */
   getNeighbors(id: string): string[] | undefined
   getNeighbors(id: number): number[]
   getNeighbors(id: string | number): string[] | number[] | undefined {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     if (typeof id === 'number') {
       return this._proxy!.getNeighborIdsByNumericId(id)
@@ -534,11 +460,12 @@ export class MapEngine {
     )
   }
 
+  /** Bounding box `[minX, minY, maxX, maxY]` (pixel space) for `id` (hex or numeric). Throws on an unknown sector, or if destroyed/not loaded. */
   getBBox(id: string): [number, number, number, number]
   getBBox(id: number): [number, number, number, number]
   getBBox(id: string | number): [number, number, number, number] {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     const numId = typeof id === 'number' ? id : this._registry!.getNumericId(id)
     if (numId === undefined)
@@ -546,11 +473,12 @@ export class MapEngine {
     return this._proxy!.getBBoxByNumericId(numId)
   }
 
+  /** Centroid `[x, y]` in bitmap pixel space for `id` (hex or numeric). Throws on an unknown sector, or if destroyed/not loaded. */
   getCentroid(id: string): [number, number]
   getCentroid(id: number): [number, number]
   getCentroid(id: string | number): [number, number] {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     const numId = typeof id === 'number' ? id : this._registry!.getNumericId(id)
     if (numId === undefined)
@@ -568,8 +496,8 @@ export class MapEngine {
    * slice of the consumer's memory is never detached.
    */
   async setTraversalCosts(costs: Uint8Array): Promise<void> {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     if (
       costs.byteOffset !== 0 ||
@@ -580,7 +508,7 @@ export class MapEngine {
       )
     }
     await this._proxy!.call<void>('setTraversalCosts', costs, [costs.buffer])
-    this._costsReady = true
+    this._areCostsReady = true
   }
 
   /**
@@ -591,10 +519,10 @@ export class MapEngine {
    * traversable edges.
    */
   async findPath(startId: number, endId: number): Promise<Uint16Array> {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
-    if (!this._costsReady) throw new CostsRequiredError()
+    if (!this._areCostsReady) throw new CostsRequiredError()
     return this._proxy!.call<Uint16Array>('findPath', { startId, endId })
   }
 
@@ -610,8 +538,8 @@ export class MapEngine {
     mapping: Uint16Array,
     maxGroups: number
   ): Promise<void> {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     if (
       mapping.byteOffset !== 0 ||
@@ -633,8 +561,8 @@ export class MapEngine {
    * `setParentMapping` has never resolved.
    */
   async aggregateGroups(): Promise<void> {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     await this._proxy!.call<void>('aggregateGroups')
   }
@@ -646,8 +574,8 @@ export class MapEngine {
    * out of range.
    */
   getGroupBBox(groupId: number): [number, number, number, number] {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     return this._pool!.getGroupBBox(groupId)
   }
@@ -658,8 +586,8 @@ export class MapEngine {
    * segments and delivered to Main via the Transferable ring pool.
    */
   async computeAnchors(): Promise<void> {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     await this._proxy!.call<void>('computeAnchors')
   }
@@ -671,8 +599,8 @@ export class MapEngine {
    * `RangeError` if `sectorId` is out of range.
    */
   getAnchor(sectorId: number): [number, number] {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     return this._anchorPool!.getAnchor(sectorId)
   }
@@ -699,51 +627,14 @@ export class MapEngine {
    * Deliberately NOT declared `async`: an `async` method always wraps its
    * return value in a *new* Promise per call, even when returning an
    * already-existing Promise — which would defeat the "coalesced callers
-   * share the exact same Promise" property this method relies on. Returning
-   * `this._borderQueued`/the proxy call directly, from a plain method,
-   * preserves that identity.
+   * share the exact same Promise" property this method relies on. Delegating
+   * to `BorderCoalescer.request()` from a plain method preserves that identity.
    */
   recomputeBorders(): Promise<void> {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
-
-    if (this._borderInFlight) {
-      if (!this._borderQueued) {
-        this._borderQueued = this._borderInFlight
-          .catch(() => {
-            // The queued run's own outcome (below) is what callers sharing
-            // this slot observe — the in-flight run's rejection, if any, is
-            // deliberately swallowed here so the queued run still attempts.
-          })
-          .then(() => {
-            this._borderQueued = null
-            // loadMap()/dispose() may have invalidated this session while
-            // we were waiting — don't dereference a torn-down proxy.
-            if (this._destroyed || !this._loaded || !this._proxy) {
-              throw new MapInvalidatedError()
-            }
-            return this._startBorderComputation()
-          })
-      }
-      return this._borderQueued
-    }
-
-    return this._startBorderComputation()
-  }
-
-  private _startBorderComputation(): Promise<void> {
-    const run = this._proxy!.call<void>('recomputeBorders')
-    this._borderInFlight = run
-    // `run` itself (returned below) is what callers actually observe/handle;
-    // this cleanup-only chain needs its own no-op `.catch` so a rejecting
-    // `run` doesn't surface as a separate *unhandled* rejection here.
-    run
-      .finally(() => {
-        if (this._borderInFlight === run) this._borderInFlight = null
-      })
-      .catch(() => {})
-    return run
+    return this._borderCoalescer.request()
   }
 
   /**
@@ -754,8 +645,8 @@ export class MapEngine {
    * zero-edge (sentinel) resolution returns `Float32Array(0)`, not `null`.
    */
   getBorderSegments(): Float32Array | null {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     return this._renderer!.getBorderSegments()
   }
@@ -766,11 +657,11 @@ export class MapEngine {
    * ever resolved -- the choice is remembered and applied once borders
    * exist.
    */
-  setBordersVisible(visible: boolean): void {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+  setBordersVisible(isVisible: boolean): void {
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
-    this._renderer!.setBordersVisible(visible)
+    this._renderer!.setBordersVisible(isVisible)
   }
 
   /**
@@ -779,9 +670,16 @@ export class MapEngine {
    * A pure-number transform -- no Three.js type crosses this boundary (PR-4).
    */
   project(x: number, y: number): [number, number] {
-    if (this._destroyed) throw new Error('MapEngine: destroyed')
-    if (!this._loaded)
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     return this._renderer!.project(x, y)
+  }
+
+  /** Spins up the module Worker from the bundled worker entry. Called at construction and again on every `loadMap()` reload — a fresh Worker means a fresh, empty registry/graph. */
+  private _createWorker(): Worker {
+    return new Worker(new URL('../worker/index.ts', import.meta.url), {
+      type: 'module',
+    })
   }
 }

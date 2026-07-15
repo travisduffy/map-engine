@@ -6,12 +6,12 @@
 // bypassing bitmap parsing and registry construction entirely. It also
 // hosts a real SimulationClock on this same thread so the F-4.7 drift
 // assertion observes genuine cross-tick cadence during a findPath burst.
-import { SpatialGraph } from '../../src/worker/SpatialGraph'
+import { PathNotFoundError } from '../../src/shared/errors'
 import {
   SimulationClock,
   type TickTelemetry,
 } from '../../src/worker/SimulationClock'
-import { PathNotFoundError } from '../../src/errors'
+import { SpatialGraph } from '../../src/worker/SpatialGraph'
 
 interface FixturePair {
   start: number
@@ -28,6 +28,7 @@ interface Fixture {
   pairs: FixturePair[]
 }
 
+/** Best-of-N timing and cost outcome for one reachable fixture pair. */
 export interface PairResult {
   start: number
   end: number
@@ -37,6 +38,7 @@ export interface PairResult {
   nodeCount: number
 }
 
+/** Error outcome for a fixture pair whose findPath call rejected. */
 export interface UnreachableResult {
   start: number
   end: number
@@ -45,6 +47,7 @@ export interface UnreachableResult {
   errorMessage: string
 }
 
+/** The worker's single RESULT payload: per-pair timings, rejections, and clock telemetry. */
 export interface PerfWorkerResult {
   type: 'RESULT'
   results: PairResult[]
@@ -96,7 +99,7 @@ self.onmessage = async (
   ).fill(null)
   const unreachable: UnreachableResult[] = []
 
-  async function runPass(recordUnreachable: boolean): Promise<void> {
+  async function runPass(shouldRecordUnreachable: boolean): Promise<void> {
     for (let i = 0; i < fixture.pairs.length; i++) {
       const pair = fixture.pairs[i]
       const t0 = performance.now()
@@ -117,7 +120,7 @@ self.onmessage = async (
         }
         if (ms < bestMsByPairIndex[i]) bestMsByPairIndex[i] = ms
       } catch (err) {
-        if (recordUnreachable) {
+        if (shouldRecordUnreachable) {
           unreachable.push({
             start: pair.start,
             end: pair.end,

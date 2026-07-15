@@ -1,10 +1,12 @@
 import { vi } from 'vitest'
-import type { MapRenderer } from '../src/MapRenderer'
+
+import type { MapRenderer } from '../src/core/MapRenderer'
 
 // Import-isolation verification commands (AC 1.10):
 //   grep -rn 'internal/color' src/SectorRegistry.ts src/SectorBitmapParser.ts   # must return empty
 //   grep -rn 'SectorRegistry\|SectorBitmapParser' src/internal/color.ts          # must return empty
 
+/** Creates a canvas with stubbed clientWidth/clientHeight, appended to document.body. */
 export function makeCanvas(width = 800, height = 600): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
   canvas.style.width = `${width}px`
@@ -23,11 +25,13 @@ export function makeCanvas(width = 800, height = 600): HTMLCanvasElement {
   return canvas
 }
 
+/** Advances fake timers by dtMillis and invokes the renderer's pre-render hook directly, bypassing the rAF loop. */
 export function advanceFrame(renderer: MapRenderer, dtMillis: number): void {
   vi.advanceTimersByTime(dtMillis)
   renderer['_preRenderHook']?.()
 }
 
+/** Builds a fully opaque RGBA pixel buffer from a row-major list of [r, g, b] triples. */
 export function buildTestBuffer(
   width: number,
   height: number,

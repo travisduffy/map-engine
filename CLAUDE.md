@@ -51,7 +51,7 @@ The example is a **permanent fixture** of the repo, not a throwaway demo. It ser
 
 This is a **TypeScript ESM library** (not an app) that renders Paradox-style grand strategy maps in the browser using Three.js. The entry point is `src/index.ts`; `src/main.ts` is Vite boilerplate only — the real development surface is `example/`.
 
-See `.claude/rules/architecture.md` for the module breakdown, data flow, sector identity system, color overlay strategy, picking pipeline, resize strategy, build configuration, and test fixtures.
+See `.claude/rules/structure.md` for the module breakdown, data flow, folder placement, and build configuration. Area-specific internals live in the domain rules — `rendering.md` (GPU palette, resize, projection), `worker.md` (worker boundary), `sectors.md` (sector identity), `picking.md` (picking and input), and `testing.md` (fixtures, perf gates) — each loading automatically when you touch its part of the tree.
 
 ### Post-task checklist
 
@@ -70,7 +70,7 @@ Before concluding any task, run in two parallel batches then update state:
 
 **When modifying the public API:** also update `example/src/main.ts` to reflect the change — the example must always demonstrate the current, accurate API surface.
 
-**When adding a new module file under `src/worker/` or `src/render/`:** also add its row to `.claude/rules/architecture.md`'s Module layout table in the same session. A vaguer version of this rule ("update relevant `.claude/rules/*.md` files if domain patterns changed") is not concrete enough to fire reliably — several `src/render/` modules once went undocumented in that table for a long stretch before a later pass caught the gap, so treat the concrete rule as the operative one.
+**When adding a new module file under `src/worker/` or `src/render/`:** also add its row to `.claude/rules/structure.md`'s Module layout table in the same session. A vaguer version of this rule ("update relevant `.claude/rules/*.md` files if domain patterns changed") is not concrete enough to fire reliably — several `src/render/` modules once went undocumented in that table for a long stretch before a later pass caught the gap, so treat the concrete rule as the operative one.
 
 ## Dev dependencies (when installing)
 
@@ -95,7 +95,7 @@ sharp@^0.33.0           # fixture generation only
 ## Documentation
 
 - `docs/vision.md` — the project's design charter: North Star, the veto-bearing First-Class Principles, architectural invariants, current capability surface, settled non-goals, and uncommitted future directions. Read this to keep new work on-track; a change that conflicts with a First-Class Principle is wrong by default.
-- `.claude/rules/architecture.md` — module breakdown, data flow, sector identity, rendering, and resize implementation details. Loads automatically when touching `src/`, `example/`, or `test/` TypeScript files.
+- `.claude/rules/*.md` — domain-scoped rules loaded automatically by path: `structure.md` (module layout, data flow, folder placement, build config), plus `rendering.md`, `worker.md`, `sectors.md`, `picking.md`, and `testing.md` for area-specific internals.
 - `docs/research/` — architecture/engineering reference PDFs (RGB index-map rendering, GSG engine architecture, WASM/UI binding, etc.), indexed by `docs/research/README.md`.
 - `docs/archive/` — **frozen, read-only** historical record of the retired sprint/phase project-management system (per-version snapshots, the former roadmap, traceability matrix, and phase audits). Not governed or updated; kept for provenance. See `docs/archive/README.md`.
 
@@ -119,7 +119,7 @@ A specific signal: if a `beforeEach` in an existing test does `cancelAnimationFr
 
 The post-task checklist requires two parallel batches. `npm run test` runs against source (no build dependency) and `npm run build` is independent of tests, so typecheck, test, and build never need to run sequentially — batch them per the checklist above.
 
-When a verification step filters `grep -r` output by path (e.g. reference sweeps that exclude `docs/archive/`), anchor the exclusion on `(^|/)`, not `\./` — recursive grep emits paths with no leading `./`, so a `\./`-anchored `grep -v` matches nothing and silently leaks the entire result instead of narrowing it.
+Anchor every `grep` exclusion pattern to a real boundary, or it silently under- or over-matches. Path filters anchor on `(^|/)`, not `\./` — recursive grep emits paths with no leading `./`, so a `\./`-anchored `grep -v` matches nothing and leaks the whole result. Verb/prefix filters (e.g. excluding already-conforming booleans) anchor on the identifier start — `_?(is|has|are|can|should)[A-Z_]`, not a bare `is`, which also matches the substring inside `visible` and silently drops real violations.
 
 ### 3. Trust CLAUDE.md; do not verify via config reads
 
@@ -138,3 +138,11 @@ When editing a single row of a prettier-formatted markdown table, anchor the `Ed
 ### 6. Plan Mode: verify before exiting
 
 Before calling `ExitPlanMode` on a non-trivial plan, re-read the exact source lines the plan depends on (method signatures, field names, call sites) instead of trusting Explore/Plan subagent summaries at face value — a first draft should be treated as needing a dedicated verification pass without being asked. Make the pass produce a visible artifact instead of a private mental step: before the first `ExitPlanMode` call, add a short "Verified against source" note to the plan file itself, listing the specific file:line locations re-read and confirming each still matches the plan's key assumptions. A plan file with no such note is a visible signal — to you and to the user — that the pass was skipped.
+
+### 7. Plan Mode: specify for a weaker executor
+
+When a plan will be carried out by a weaker model — a subagent handoff, or the implementation pass after `ExitPlanMode` — write it as exact operations from the first draft, not a description to be re-derived. Give exact `old_string`→`new_string` pairs for edits, full file contents or frontmatter for new files, and an explicit source→destination checklist for any content move. Prose like "repoint the references" or "move the section" forces the executor to reconstruct specifics it can get wrong; reserve prose for rationale.
+
+### 8. Infra-outage backoff: canary before re-batching
+
+A tool result of "temporarily unavailable, so auto mode cannot determine the safety" is a transient classifier outage, not a content rejection — the identical call may succeed seconds later. Do not re-issue a multi-call batch or a large-payload `Write` against it repeatedly; each failure re-sends the whole payload for zero progress. Probe with one minimal call first, and resume the full batch only after that canary succeeds. Read-only tools stay live during the outage — use them to stage and verify meanwhile.

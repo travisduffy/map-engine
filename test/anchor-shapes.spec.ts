@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+
 import { polylabel, signedDistanceToSegments } from '../src/worker/polylabel'
 
 interface AnchorFixture {

@@ -1,8 +1,9 @@
-import { registerCallHandler } from './callHandlers'
-import { getWorkerState } from './state'
+import { CostsRequiredError } from '../shared/errors'
 import { SpatialGraph } from './SpatialGraph'
-import { CostsRequiredError } from '../errors'
+import { registerCallHandler } from './call-handlers'
+import { getWorkerState } from './state'
 
+// Rebuilt from scratch on every setTraversalCosts; null until costs are first supplied.
 let graph: SpatialGraph | null = null
 
 /**
@@ -16,11 +17,13 @@ let graph: SpatialGraph | null = null
  */
 let chain: Promise<unknown> = Promise.resolve()
 
+/**
+ * Appends `fn` to the FIFO chain. One entry's rejection never breaks the
+ * chain for later entries -- the rejection is still delivered to that
+ * entry's own caller via the returned Promise.
+ */
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   const result = chain.then(fn, fn)
-  // Never let one entry's rejection break the chain for later entries --
-  // the rejection itself is still delivered to this entry's own caller via
-  // the returned `result`.
   chain = result.then(
     () => undefined,
     () => undefined
@@ -28,6 +31,11 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return result
 }
 
+/**
+ * `setTraversalCosts` CALL handler (CA-4): validates `costs` against
+ * `sectorCount` and rebuilds the `SpatialGraph` around the transferred
+ * buffer, FIFO-serialized behind any in-flight search.
+ */
 registerCallHandler('setTraversalCosts', (params): Promise<void> => {
   const costs = params as Uint8Array
   return enqueue(async () => {
@@ -47,6 +55,11 @@ registerCallHandler('setTraversalCosts', (params): Promise<void> => {
   })
 })
 
+/**
+ * `findPath` CALL handler (CA-4): validates the endpoint ids and runs A*
+ * over the current `SpatialGraph`, FIFO-serialized behind any in-flight
+ * rebuild or search.
+ */
 registerCallHandler('findPath', (params): Promise<Uint16Array> => {
   const { startId, endId } = params as { startId: number; endId: number }
   return enqueue(async () => {

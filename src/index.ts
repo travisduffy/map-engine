@@ -1,4 +1,9 @@
-export type * from './types'
+/**
+ * Package entry point. Every public symbol is re-exported by name;
+ * `MapEngine as default` is the single sanctioned default-export alias —
+ * add no other default export.
+ */
+export type * from './shared/types'
 export {
   SectorLimitExceededError,
   WebGL2NotSupportedError,
@@ -7,11 +12,11 @@ export {
   CostsRequiredError,
   ModeNotReadyError,
   MapInvalidatedError,
-} from './errors'
-export { toHexKey } from './utils'
-export { SectorBitmapParser } from './SectorBitmapParser'
-export { SectorRegistry } from './SectorRegistry'
-export { MapRenderer } from './MapRenderer'
-export { MapEngine } from './MapEngine'
-export { MapEngine as default } from './MapEngine'
-export { RenderClock } from './RenderClock'
+} from './shared/errors'
+export { toHexKey } from './shared/utils'
+export { SectorBitmapParser } from './sector/SectorBitmapParser'
+export { SectorRegistry } from './sector/SectorRegistry'
+export { MapRenderer } from './core/MapRenderer'
+export { MapEngine } from './core/MapEngine'
+export { MapEngine as default } from './core/MapEngine'
+export { RenderClock } from './core/RenderClock'

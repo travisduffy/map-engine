@@ -1,3 +1,4 @@
+// Minimum elapsed time between real macrotask yields.
 const YIELD_INTERVAL_MS = 8
 
 /**

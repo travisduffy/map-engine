@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { MapEngine } from '../src/MapEngine'
-import { makeCanvas } from './testUtils'
-import type { WorkerMessage } from '../src/types'
+
+import { MapEngine } from '../src/core/MapEngine'
+import { makeCanvas } from './test-utils'
+import type { WorkerMessage } from '../src/shared/types'
 import type { TickTelemetry } from '../src/worker/SimulationClock'
 
 const REFERENCE_TOLERANCE_MS = 2.0
@@ -76,7 +77,7 @@ describe('Anchors drift gate — Epic 7 Task 7.3 (CA-8)', () => {
         canvas,
       })
 
-      // Burst across a real >=1.1s wall-clock window (architecture.md: sample
+      // Burst across a real >=1.1s wall-clock window (testing.md: sample
       // a real window rather than pad with setTimeout(0), which browsers
       // clamp to ~4ms and would alias against the 60Hz tick period).
       const burstStart = performance.now()

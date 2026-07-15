@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
+
+import { MapEngine } from '../src/core/MapEngine'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
-import { WebGL2NotSupportedError } from '../src/errors'
-import { MapEngine } from '../src/MapEngine'
-import type { MapRenderer } from '../src/MapRenderer'
-import { makeCanvas } from './testUtils'
+import { WebGL2NotSupportedError } from '../src/shared/errors'
+import { makeCanvas } from './test-utils'
+import type { MapRenderer } from '../src/core/MapRenderer'
 
 function makeIndices(width: number, height: number): Uint32Array {
   return new Uint32Array(width * height).fill(0xffff)
@@ -69,11 +70,11 @@ describe('ThreeRenderBackend — Epic 1 Task 1.3 (F-3.3)', () => {
       const backend = renderer['_backend'] as ThreeRenderBackend
       const reuploadSpy = vi.spyOn(backend, 'reuploadIndexTexture')
 
-      renderer._dirty = false
+      renderer._isDirty = false
       canvas.dispatchEvent(new Event('webglcontextrestored'))
 
       expect(reuploadSpy).toHaveBeenCalledTimes(1)
-      expect(renderer._dirty).toBe(true)
+      expect(renderer._isDirty).toBe(true)
     } finally {
       engine.destroy()
       canvas.remove()

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { MapEngine } from '../src/MapEngine'
-import type { MapRenderer } from '../src/MapRenderer'
+
+import { MapEngine } from '../src/core/MapEngine'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
-import { makeCanvas } from './testUtils'
+import { makeCanvas } from './test-utils'
+import type { MapRenderer } from '../src/core/MapRenderer'
 
 const BORDERS_BITMAP = '/test/fixtures/borders/maps/two-adjacent-groups.png'
 const BORDERS_DEFINITION =
@@ -70,7 +71,7 @@ describe('BorderRenderer + GPU VBO — Epic 8 Task 8.3 (CA-6, F-C.9)', () => {
     expect(countDiffPixels(before, after)).toBeGreaterThan(0)
   })
 
-  it('sets renderer._dirty and renders exactly once on the next rAF after resolution', async () => {
+  it('sets renderer._isDirty and renders exactly once on the next rAF after resolution', async () => {
     // Mocked rAF (test/RenderGating.test.ts pattern) -- installed BEFORE
     // loadMap() constructs the real MapRenderer, since its constructor calls
     // requestAnimationFrame(this._loop) directly. advanceFrame-style direct
@@ -100,12 +101,12 @@ describe('BorderRenderer + GPU VBO — Epic 8 Task 8.3 (CA-6, F-C.9)', () => {
     // isolation.
     capturedLoop!(performance.now())
     renderSpy.mockClear()
-    renderer._dirty = false
+    renderer._isDirty = false
 
     await engine.setParentMapping(new Uint16Array([0, 1]), 2)
     await engine.recomputeBorders()
 
-    expect(renderer._dirty).toBe(true)
+    expect(renderer._isDirty).toBe(true)
     capturedLoop!(performance.now())
     expect(renderSpy).toHaveBeenCalledTimes(1)
   })

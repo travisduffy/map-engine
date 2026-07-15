@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+
 import { polylabel } from '../src/worker/polylabel'
 
 /** Converts an open ring (last vertex != first) into a flat [x1,y1,x2,y2,...] segment array, closing it implicitly. */

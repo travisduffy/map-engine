@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { RenderClock } from '../src/RenderClock'
+
+import { RenderClock } from '../src/core/RenderClock'
 
 describe('RenderClock — Epic 2 Task 2.1', () => {
   beforeEach(() => {
@@ -40,15 +41,15 @@ describe('RenderClock — Epic 2 Task 2.1', () => {
 
   it('inTick is true only for the duration of the callback dispatch', () => {
     const clock = new RenderClock()
-    let sawInTick = false
+    let hasSeenInTick = false
 
     clock.tick([
       () => {
-        sawInTick = clock.inTick
+        hasSeenInTick = clock.inTick
       },
     ])
 
-    expect(sawInTick).toBe(true)
+    expect(hasSeenInTick).toBe(true)
     expect(clock.inTick).toBe(false)
   })
 

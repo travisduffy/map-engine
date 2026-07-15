@@ -1,8 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { MapEngine } from '../../src/MapEngine'
-import { MapInvalidatedError } from '../../src/errors'
+
+import { MapEngine } from '../../src/core/MapEngine'
+import { MapInvalidatedError } from '../../src/shared/errors'
+import { makeCanvas } from '../test-utils'
 import type { SharedRegistryProxy } from '../../src/worker/SharedRegistryProxy'
-import { makeCanvas } from '../testUtils'
 
 const BITMAP_URL = '/test/fixtures/test-4x4.png'
 const DEFINITION_URL = '/test/fixtures/test-4x4.json'

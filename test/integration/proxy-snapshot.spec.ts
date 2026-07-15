@@ -1,8 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { MapEngine } from '../../src/MapEngine'
-import { SectorBitmapParser } from '../../src/SectorBitmapParser'
-import { SectorRegistry } from '../../src/SectorRegistry'
-import { makeCanvas } from '../testUtils'
+
+import { MapEngine } from '../../src/core/MapEngine'
+import { SectorBitmapParser } from '../../src/sector/SectorBitmapParser'
+import { SectorRegistry } from '../../src/sector/SectorRegistry'
+import { makeCanvas } from '../test-utils'
 
 const BITMAP_URL = '/test/fixtures/test-4x4.png'
 const DEFINITION_URL = '/test/fixtures/test-4x4.json'

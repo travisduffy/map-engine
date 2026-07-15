@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
+import { describe, it, expect } from 'vitest'
+
 import { NullRenderBackend } from '../src/render/NullRenderBackend'
 
 describe('NullRenderBackend', () => {

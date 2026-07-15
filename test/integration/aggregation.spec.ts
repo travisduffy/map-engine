@@ -1,7 +1,11 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { MapEngine } from '../../src/MapEngine'
-import { MappingRequiredError, MapInvalidatedError } from '../../src/errors'
-import { makeCanvas } from '../testUtils'
+
+import { MapEngine } from '../../src/core/MapEngine'
+import {
+  MappingRequiredError,
+  MapInvalidatedError,
+} from '../../src/shared/errors'
+import { makeCanvas } from '../test-utils'
 
 interface RegionFixture {
   mapImage: string

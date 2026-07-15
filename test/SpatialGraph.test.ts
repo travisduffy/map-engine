@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
+
+import { PathNotFoundError } from '../src/shared/errors'
 import { SpatialGraph } from '../src/worker/SpatialGraph'
-import { PathNotFoundError } from '../src/errors'
 
 /** Builds CSR adjacencyPointers/adjacencyNeighbors from a plain adjacency list. */
 function buildCSR(adjList: number[][]): {

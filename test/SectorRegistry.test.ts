@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { SectorRegistry } from '../src/SectorRegistry'
-import { SectorLimitExceededError } from '../src/errors'
-import type { SectorDefinitionFile } from '../src/types'
+
+import { SectorRegistry } from '../src/sector/SectorRegistry'
+import { SectorLimitExceededError } from '../src/shared/errors'
+import type { SectorDefinitionFile } from '../src/shared/types'
 
 // 4×4 RGBA buffer matching the test fixture layout:
 // top-left 2×2: #ff0000 (red), top-right 2×2: #00ff00 (green)
@@ -415,7 +416,7 @@ describe('SectorRegistry', () => {
       // Verify statically — the import itself succeeds and the module
       // exposes only the expected class. Three.js absence is enforced
       // at build time via grep; this test documents the contract.
-      const mod = await import('../src/SectorRegistry')
+      const mod = await import('../src/sector/SectorRegistry')
       expect(typeof mod.SectorRegistry).toBe('function')
     })
   })

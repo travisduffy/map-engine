@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+
 import type { ThreeRenderBackendInternalAccess } from './IThreeRenderBackend'
 
 /**
@@ -19,11 +20,17 @@ import type { ThreeRenderBackendInternalAccess } from './IThreeRenderBackend'
  * z-fighting against the sector-color plane mesh, which sits at z=0.
  */
 export class BorderRenderer {
+  /** Renderable border geometry: a single `LineSegments` bound to the backend's managed GPU VBO. Add to a `THREE.Scene` to display group perimeters. */
   readonly lineSegments: THREE.LineSegments
   private readonly _geometry: THREE.BufferGeometry
   private readonly _material: THREE.LineBasicMaterial
   private readonly _positionAttribute: THREE.GLBufferAttribute
 
+  /**
+   * Builds the `LineSegments` over the backend's border VBO and positions it
+   * in world space. Throws if the backend has no border VBO — call
+   * `uploadBorderEdges()` before constructing.
+   */
   constructor(
     backend: ThreeRenderBackendInternalAccess,
     mapWidth: number,
@@ -97,6 +104,7 @@ export class BorderRenderer {
     this._positionAttribute.count = count * 2
   }
 
+  /** Releases the geometry and material. Call when the owning renderer tears down (`loadMap()` / `dispose()`). */
   dispose(): void {
     this._geometry.dispose()
     this._material.dispose()

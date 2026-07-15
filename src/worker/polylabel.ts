@@ -12,12 +12,14 @@ import { yieldIfNeeded } from './yield'
  * ring-separation logic — every segment is treated uniformly.
  */
 
+/** A Pole-of-Inaccessibility result: the point plus its clearance (`distance`) to the nearest boundary. */
 export interface Pole {
   x: number
   y: number
   distance: number
 }
 
+// A quadtree search cell centered at (x, y).
 interface Cell {
   x: number
   y: number
@@ -26,6 +28,7 @@ interface Cell {
   max: number // upper bound on distance achievable anywhere in this cell: d + h*sqrt(2)
 }
 
+// Hoisted for the cell upper-bound formula `d + h*sqrt(2)`.
 const SQRT2 = Math.sqrt(2)
 
 /**
@@ -42,7 +45,7 @@ export function signedDistanceToSegments(
   px: number,
   py: number
 ): number {
-  let inside = false
+  let isInside = false
   let minDistSq = Infinity
 
   for (let i = 0; i < segCount; i++) {
@@ -55,7 +58,7 @@ export function signedDistanceToSegments(
     // Crossing-number ray-cast (ray in +x direction from (px,py)).
     if (ay > py !== by > py) {
       const xIntersect = ax + ((py - ay) / (by - ay)) * (bx - ax)
-      if (px < xIntersect) inside = !inside
+      if (px < xIntersect) isInside = !isInside
     }
 
     // Point-to-segment squared distance.
@@ -74,9 +77,10 @@ export function signedDistanceToSegments(
   }
 
   const dist = Math.sqrt(minDistSq)
-  return inside ? dist : -dist
+  return isInside ? dist : -dist
 }
 
+/** Builds a cell centered at (x, y) with half-size `h`, evaluating its signed distance `d` and upper bound `max`. */
 function makeCell(
   x: number,
   y: number,

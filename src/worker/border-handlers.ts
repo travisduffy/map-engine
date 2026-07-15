@@ -1,11 +1,13 @@
-import type { WorkerMessage } from '../types'
-import { registerCallHandler } from './callHandlers'
+import { MappingRequiredError } from '../shared/errors'
+import { getParentMapping } from './aggregation-handlers'
+import { registerCallHandler } from './call-handlers'
 import { getWorkerState } from './state'
 import { yieldIfNeeded } from './yield'
-import { getParentMapping } from './aggregationHandlers'
-import { MappingRequiredError } from '../errors'
+import type { WorkerMessage } from '../shared/types'
 
+/** Sentinel pixel value: the pixel belongs to no defined sector (void). */
 const VOID_ID = 0xffff
+/** Sentinel mapping entry: the sector belongs to no group. */
 const VOID_GROUP = 0xffff
 
 /** A reclaimed (edges, count) pair -- the border ring cycles this pair as a unit (unlike the single-buffer anchor/group pools). */
@@ -24,16 +26,24 @@ interface BorderBufferPair {
  * bootstrap allocation.
  */
 let freeBuffers: BorderBufferPair[] = []
-let seeded = false
+// Set once the bootstrap-transferred (edges, count) pair has seeded the free list.
+let isSeeded = false
 
-/** FIFO serialization, deliberately separate from `aggregationHandlers`'s
+/**
+ * FIFO serialization, deliberately separate from `aggregationHandlers`'s
  * chain: `recomputeBorders` shares no mutable module state with
  * `setParentMapping`/`aggregateGroups`, and the Worker-side handler captures
  * `getParentMapping()`'s return by reference at the top of each run (see
  * below), so an overlapping `setParentMapping` call may freely proceed on
- * its own chain without blocking or corrupting an in-flight extraction. */
+ * its own chain without blocking or corrupting an in-flight extraction.
+ */
 let chain: Promise<unknown> = Promise.resolve()
 
+/**
+ * Appends `fn` to the FIFO chain. One entry's rejection never breaks the
+ * chain for later entries -- the rejection is still delivered to that
+ * entry's own caller via the returned Promise.
+ */
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   const result = chain.then(fn, fn)
   chain = result.then(
@@ -51,6 +61,7 @@ export function handleReturnBorderEdges(
   freeBuffers.push({ edges, count })
 }
 
+/** Pops a reclaimed (edges, count) pair off the free list, or allocates a fresh pair with `edgesLength` capacity. */
 function takeBuffers(edgesLength: number): BorderBufferPair {
   return (
     freeBuffers.pop() ?? {
@@ -65,7 +76,7 @@ function takeBuffers(edgesLength: number): BorderBufferPair {
  * stores only `[x1,y1,x2,y2]` per segment -- unlike the transient `idA`/`idB`
  * pairing used internally while `SectorRegistry` builds the CSR structure,
  * that identity is discarded before construction finishes (see
- * SectorRegistry.ts:268-289) -- so the far side must be re-derived by
+ * SectorRegistry.ts:282-303) -- so the far side must be re-derived by
  * resampling `pixelIndices` at the pixel pair adjacent to the segment. A
  * vertical segment (`x1 === x2`) sits between columns `x1-1` and `x1` at row
  * `y1`; a horizontal segment sits between rows `y1-1` and `y1` at column
@@ -91,6 +102,15 @@ function resolveFarSide(
   return idA === ownId ? idB : idA
 }
 
+/**
+ * `recomputeBorders` CALL handler (CA-6): walks every sector's contour
+ * bucket, resolves each segment's far-side sector by resampling
+ * `pixelIndices`, dedups shared edges by lower-sector-id, emits an edge iff
+ * the two sides' groups differ (sentinel-as-void rule), and pushes the
+ * (edges, count) pair to Main as a Transferable `borderEdges` handoff.
+ * Rejects with `MappingRequiredError` before the first `setParentMapping`
+ * resolves.
+ */
 registerCallHandler('recomputeBorders', (): Promise<void> => {
   return enqueue(async () => {
     const state = getWorkerState()
@@ -111,12 +131,12 @@ registerCallHandler('recomputeBorders', (): Promise<void> => {
       )
     }
 
-    if (!seeded) {
+    if (!isSeeded) {
       freeBuffers.push({
         edges: state.borderEdges,
         count: state.borderEdgeCount,
       })
-      seeded = true
+      isSeeded = true
     }
 
     const { edges, count } = takeBuffers(state.borderEdges.length)
@@ -139,7 +159,7 @@ registerCallHandler('recomputeBorders', (): Promise<void> => {
         const farId = resolveFarSide(x1, y1, x2, id, width, pixelIndices)
 
         // Dedup: a shared edge between two real sectors is stored in BOTH
-        // sides' contour buckets (see SectorRegistry.ts:275-288) -- emit it
+        // sides' contour buckets (see SectorRegistry.ts:289-302) -- emit it
         // only from the lower-id side. A void far side is never doubled (a
         // void pixel has no contour bucket of its own), so it's always an
         // emit-candidate from this single bucket.

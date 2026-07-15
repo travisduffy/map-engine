@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { SectorBitmapParser } from '../src/SectorBitmapParser'
-import { SectorRegistry } from '../src/SectorRegistry'
-import { MapRenderer } from '../src/MapRenderer'
+
+import { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
-import { makeCanvas } from './testUtils'
+import { SectorBitmapParser } from '../src/sector/SectorBitmapParser'
+import { SectorRegistry } from '../src/sector/SectorRegistry'
+import { makeCanvas } from './test-utils'
 
 /**
  * B2 performance gate (Epic 4 Task 4.2): median full-map palette swap on

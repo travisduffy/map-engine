@@ -1,5 +1,5 @@
-import type { WorkerMessage } from '../types'
-import { MappingRequiredError } from '../errors'
+import { MappingRequiredError } from '../shared/errors'
+import type { WorkerMessage } from '../shared/types'
 
 /**
  * @internal Main-thread side of the Transferable ring-pool handoff
@@ -20,30 +20,20 @@ import { MappingRequiredError } from '../errors'
  */
 export class TransferableGroupPool {
   private readonly _worker: Worker
+  // Schedules a render (and therefore a _postRenderHook flush) after every handoff.
   private readonly _markDirty: () => void
+  // Group capacity from the latest INIT_GROUPS; null until the first one arrives.
   private _maxGroups: number | null = null
+  // Main-current buffer serving getGroupBBox reads.
   private _current: Int16Array | null = null
+  // Superseded buffer awaiting bounce-back to the Worker.
   private _pending: Int16Array | null = null
 
+  /** Wires the handoff listener onto `worker`; `markDirty` is invoked on every received handoff. */
   constructor(worker: Worker, markDirty: () => void) {
     this._worker = worker
     this._markDirty = markDirty
     this._worker.addEventListener('message', this._onMessage)
-  }
-
-  private _onMessage = (e: MessageEvent<WorkerMessage>): void => {
-    const msg = e.data
-    if (msg.type === 'INIT_GROUPS') {
-      // A (re)allocation on the Worker side invalidates any buffers this
-      // pool already holds -- they belong to the old-sized pool.
-      this._maxGroups = msg.maxGroups
-      this._current = null
-      this._pending = null
-    } else if (msg.type === 'groupBBoxes') {
-      this._pending = this._current
-      this._current = msg.buffer
-      this._markDirty()
-    }
   }
 
   /** Wired as `MapRenderer._postRenderHook`. Safe to call every frame. */
@@ -57,6 +47,11 @@ export class TransferableGroupPool {
     )
   }
 
+  /**
+   * Synchronous `[minX, minY, maxX, maxY]` read for `groupId` from the
+   * Main-current buffer. Throws `MappingRequiredError` before the first
+   * `aggregateGroups` handoff, or `RangeError` on an out-of-range `groupId`.
+   */
   getGroupBBox(groupId: number): [number, number, number, number] {
     if (!this._current) {
       throw new MappingRequiredError(
@@ -83,6 +78,26 @@ export class TransferableGroupPool {
     this._current = null
     this._pending = null
   }
+
+  /**
+   * Handoff listener (an arrow field so `removeEventListener` gets the same
+   * reference). `INIT_GROUPS` drops both slots -- a (re)allocation on the
+   * Worker side invalidates any buffers this pool already holds, since they
+   * belong to the old-sized pool. `groupBBoxes` swaps the incoming buffer
+   * into `_current` and queues the superseded one for bounce-back.
+   */
+  private _onMessage = (e: MessageEvent<WorkerMessage>): void => {
+    const msg = e.data
+    if (msg.type === 'INIT_GROUPS') {
+      this._maxGroups = msg.maxGroups
+      this._current = null
+      this._pending = null
+    } else if (msg.type === 'groupBBoxes') {
+      this._pending = this._current
+      this._current = msg.buffer
+      this._markDirty()
+    }
+  }
 }
 
 /**
@@ -99,30 +114,20 @@ export class TransferableGroupPool {
  */
 export class TransferableAnchorPool {
   private readonly _worker: Worker
+  // Schedules a render (and therefore a _postRenderHook flush) after every handoff.
   private readonly _markDirty: () => void
+  // Sector capacity from the latest INIT_ANCHORS; null until the first one arrives.
   private _sectorCount: number | null = null
+  // Main-current buffer serving getAnchor reads.
   private _current: Int16Array | null = null
+  // Superseded buffer awaiting bounce-back to the Worker.
   private _pending: Int16Array | null = null
 
+  /** Wires the handoff listener onto `worker`; `markDirty` is invoked on every received handoff. */
   constructor(worker: Worker, markDirty: () => void) {
     this._worker = worker
     this._markDirty = markDirty
     this._worker.addEventListener('message', this._onMessage)
-  }
-
-  private _onMessage = (e: MessageEvent<WorkerMessage>): void => {
-    const msg = e.data
-    if (msg.type === 'INIT_ANCHORS') {
-      // A (re)allocation on the Worker side invalidates any buffers this
-      // pool already holds -- they belong to the old-sized pool.
-      this._sectorCount = msg.sectorCount
-      this._current = null
-      this._pending = null
-    } else if (msg.type === 'anchors') {
-      this._pending = this._current
-      this._current = msg.buffer
-      this._markDirty()
-    }
   }
 
   /** Wired as part of the composite `MapRenderer._postRenderHook`. Safe to call every frame. */
@@ -136,6 +141,12 @@ export class TransferableAnchorPool {
     )
   }
 
+  /**
+   * Synchronous `[x, y]` anchor read for `sectorId` from the Main-current
+   * buffer. Throws a plain `Error` before the first `computeAnchors`
+   * handoff (Epic 7 Task 7.2 ruling -- no canonical error class), or
+   * `RangeError` on an out-of-range `sectorId`.
+   */
   getAnchor(sectorId: number): [number, number] {
     if (!this._current) {
       throw new Error(
@@ -162,6 +173,26 @@ export class TransferableAnchorPool {
     this._current = null
     this._pending = null
   }
+
+  /**
+   * Handoff listener (an arrow field so `removeEventListener` gets the same
+   * reference). `INIT_ANCHORS` drops both slots -- a (re)allocation on the
+   * Worker side invalidates any buffers this pool already holds, since they
+   * belong to the old-sized pool. `anchors` swaps the incoming buffer into
+   * `_current` and queues the superseded one for bounce-back.
+   */
+  private _onMessage = (e: MessageEvent<WorkerMessage>): void => {
+    const msg = e.data
+    if (msg.type === 'INIT_ANCHORS') {
+      this._sectorCount = msg.sectorCount
+      this._current = null
+      this._pending = null
+    } else if (msg.type === 'anchors') {
+      this._pending = this._current
+      this._current = msg.buffer
+      this._markDirty()
+    }
+  }
 }
 
 /**
@@ -178,10 +209,13 @@ export class TransferableAnchorPool {
  */
 export class TransferableBorderPool {
   private readonly _worker: Worker
+  // Injected receiver (MapRenderer._receiveBorderEdges): GPU upload + private copy + dirty flag.
   private readonly _onEdges: (edges: Float32Array, count: number) => void
+  // The received (edges, count) pair awaiting bounce-back to the Worker.
   private _pendingEdges: Float32Array | null = null
   private _pendingCount: Uint32Array | null = null
 
+  /** Wires the handoff listener onto `worker`; `onEdges` is invoked synchronously on every received handoff. */
   constructor(
     worker: Worker,
     onEdges: (edges: Float32Array, count: number) => void
@@ -189,18 +223,6 @@ export class TransferableBorderPool {
     this._worker = worker
     this._onEdges = onEdges
     this._worker.addEventListener('message', this._onMessage)
-  }
-
-  private _onMessage = (e: MessageEvent<WorkerMessage>): void => {
-    const msg = e.data
-    if (msg.type === 'borderEdges') {
-      // Runs on every resolution, including the zero-edge sentinel -- GPU
-      // upload, private-copy retention, and the dirty flag do not depend on
-      // `BorderRenderer`'s (lazy, non-empty-only) scene construction.
-      this._onEdges(msg.edges, msg.count[0])
-      this._pendingEdges = msg.edges
-      this._pendingCount = msg.count
-    }
   }
 
   /** Wired as part of the composite `MapRenderer._postRenderHook`. Safe to call every frame. */
@@ -221,5 +243,21 @@ export class TransferableBorderPool {
     this._worker.removeEventListener('message', this._onMessage)
     this._pendingEdges = null
     this._pendingCount = null
+  }
+
+  /**
+   * Handoff listener (an arrow field so `removeEventListener` gets the same
+   * reference). Invokes `_onEdges` on every resolution, including the
+   * zero-edge sentinel -- GPU upload, private-copy retention, and the dirty
+   * flag do not depend on `BorderRenderer`'s (lazy, non-empty-only) scene
+   * construction -- then holds the pair for the next bounce-back flush.
+   */
+  private _onMessage = (e: MessageEvent<WorkerMessage>): void => {
+    const msg = e.data
+    if (msg.type === 'borderEdges') {
+      this._onEdges(msg.edges, msg.count[0])
+      this._pendingEdges = msg.edges
+      this._pendingCount = msg.count
+    }
   }
 }

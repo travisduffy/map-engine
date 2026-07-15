@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
-import { SectorBitmapParser } from '../src/SectorBitmapParser'
-import { SectorRegistry } from '../src/SectorRegistry'
-import { MapRenderer } from '../src/MapRenderer'
+
+import { MapRenderer } from '../src/core/MapRenderer'
 import { ThreeRenderBackend } from '../src/render/ThreeRenderBackend'
-import { makeCanvas } from './testUtils'
+import { SectorBitmapParser } from '../src/sector/SectorBitmapParser'
+import { SectorRegistry } from '../src/sector/SectorRegistry'
+import { makeCanvas } from './test-utils'
 
 async function buildRegistry(): Promise<SectorRegistry> {
   const parser = new SectorBitmapParser()
