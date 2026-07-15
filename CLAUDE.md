@@ -138,3 +138,11 @@ When editing a single row of a prettier-formatted markdown table, anchor the `Ed
 ### 6. Plan Mode: verify before exiting
 
 Before calling `ExitPlanMode` on a non-trivial plan, re-read the exact source lines the plan depends on (method signatures, field names, call sites) instead of trusting Explore/Plan subagent summaries at face value — a first draft should be treated as needing a dedicated verification pass without being asked. Make the pass produce a visible artifact instead of a private mental step: before the first `ExitPlanMode` call, add a short "Verified against source" note to the plan file itself, listing the specific file:line locations re-read and confirming each still matches the plan's key assumptions. A plan file with no such note is a visible signal — to you and to the user — that the pass was skipped.
+
+### 7. Plan Mode: specify for a weaker executor
+
+When a plan will be carried out by a weaker model — a subagent handoff, or the implementation pass after `ExitPlanMode` — write it as exact operations from the first draft, not a description to be re-derived. Give exact `old_string`→`new_string` pairs for edits, full file contents or frontmatter for new files, and an explicit source→destination checklist for any content move. Prose like "repoint the references" or "move the section" forces the executor to reconstruct specifics it can get wrong; reserve prose for rationale.
+
+### 8. Infra-outage backoff: canary before re-batching
+
+A tool result of "temporarily unavailable, so auto mode cannot determine the safety" is a transient classifier outage, not a content rejection — the identical call may succeed seconds later. Do not re-issue a multi-call batch or a large-payload `Write` against it repeatedly; each failure re-sends the whole payload for zero progress. Probe with one minimal call first, and resume the full batch only after that canary succeeds. Read-only tools stay live during the outage — use them to stage and verify meanwhile.
