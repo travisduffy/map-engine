@@ -6,7 +6,7 @@ paths:
 
 ## Rule ownership
 
-In-file conventions (naming, booleans, private members, types, imports, member order, comments) live in this file. Folder/module-layout and placement conventions live in `architecture.md`. When adding a rule, pick its home by this split: if the rule is decidable while looking at one file, it belongs here; if it is decidable only by looking at the tree, it belongs in `architecture.md`. See .claude/rules/architecture.md for layout.
+In-file conventions (naming, booleans, private members, types, imports, member order, comments) live in this file. Folder/module-layout and placement conventions live in `structure.md`. When adding a rule, pick its home by this split: if the rule is decidable while looking at one file, it belongs here; if it is decidable only by looking at the tree, it belongs in `structure.md`. See .claude/rules/structure.md for layout.
 
 ## File naming
 

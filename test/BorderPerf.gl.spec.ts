@@ -81,7 +81,7 @@ describe('Borders drift gate — Epic 8 Task 8.4 (CA-6)', () => {
       const sectorCount = engine.getSectorKeys().length
       await engine.setParentMapping(new Uint16Array(sectorCount).fill(0), 1)
 
-      // Burst across a real >=1.1s wall-clock window (architecture.md: sample
+      // Burst across a real >=1.1s wall-clock window (testing.md: sample
       // a real window rather than pad with setTimeout(0), which browsers
       // clamp to ~4ms and would alias against the 60Hz tick period).
       const burstStart = performance.now()

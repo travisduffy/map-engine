@@ -95,7 +95,7 @@ describe('Aggregation drift gate — Epic 6 Task 6.4 (CA-5)', () => {
         fixture.maxGroups
       )
 
-      // Burst across a real >=1.1s wall-clock window (architecture.md: sample
+      // Burst across a real >=1.1s wall-clock window (testing.md: sample
       // a real window rather than pad with setTimeout(0), which browsers
       // clamp to ~4ms and would alias against the 60Hz tick period).
       const burstStart = performance.now()

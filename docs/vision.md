@@ -122,7 +122,7 @@ each must still satisfy the First-Class Principles above:
 ## References
 
 - `README.md` — public API, requirements, current-release scope.
-- `.claude/rules/architecture.md` — module layout, data flow, rendering/resize internals.
+- `.claude/rules/structure.md` — module layout, data flow, folder placement; plus `rendering.md`, `worker.md`, `sectors.md`, `picking.md`, `testing.md` for area internals.
 - `docs/archive/ROADMAP.md` — full historical roadmap, memory contract, and per-milestone
   detail (frozen; read-only).
 - `docs/research/` — supporting architecture/engineering research.

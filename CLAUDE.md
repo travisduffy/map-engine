@@ -51,7 +51,7 @@ The example is a **permanent fixture** of the repo, not a throwaway demo. It ser
 
 This is a **TypeScript ESM library** (not an app) that renders Paradox-style grand strategy maps in the browser using Three.js. The entry point is `src/index.ts`; `src/main.ts` is Vite boilerplate only — the real development surface is `example/`.
 
-See `.claude/rules/architecture.md` for the module breakdown, data flow, sector identity system, color overlay strategy, picking pipeline, resize strategy, build configuration, and test fixtures.
+See `.claude/rules/structure.md` for the module breakdown, data flow, folder placement, and build configuration. Area-specific internals live in the domain rules — `rendering.md` (GPU palette, resize, projection), `worker.md` (worker boundary), `sectors.md` (sector identity), `picking.md` (picking and input), and `testing.md` (fixtures, perf gates) — each loading automatically when you touch its part of the tree.
 
 ### Post-task checklist
 
@@ -70,7 +70,7 @@ Before concluding any task, run in two parallel batches then update state:
 
 **When modifying the public API:** also update `example/src/main.ts` to reflect the change — the example must always demonstrate the current, accurate API surface.
 
-**When adding a new module file under `src/worker/` or `src/render/`:** also add its row to `.claude/rules/architecture.md`'s Module layout table in the same session. A vaguer version of this rule ("update relevant `.claude/rules/*.md` files if domain patterns changed") is not concrete enough to fire reliably — several `src/render/` modules once went undocumented in that table for a long stretch before a later pass caught the gap, so treat the concrete rule as the operative one.
+**When adding a new module file under `src/worker/` or `src/render/`:** also add its row to `.claude/rules/structure.md`'s Module layout table in the same session. A vaguer version of this rule ("update relevant `.claude/rules/*.md` files if domain patterns changed") is not concrete enough to fire reliably — several `src/render/` modules once went undocumented in that table for a long stretch before a later pass caught the gap, so treat the concrete rule as the operative one.
 
 ## Dev dependencies (when installing)
 
@@ -95,7 +95,7 @@ sharp@^0.33.0           # fixture generation only
 ## Documentation
 
 - `docs/vision.md` — the project's design charter: North Star, the veto-bearing First-Class Principles, architectural invariants, current capability surface, settled non-goals, and uncommitted future directions. Read this to keep new work on-track; a change that conflicts with a First-Class Principle is wrong by default.
-- `.claude/rules/architecture.md` — module breakdown, data flow, sector identity, rendering, and resize implementation details. Loads automatically when touching `src/`, `example/`, or `test/` TypeScript files.
+- `.claude/rules/*.md` — domain-scoped rules loaded automatically by path: `structure.md` (module layout, data flow, folder placement, build config), plus `rendering.md`, `worker.md`, `sectors.md`, `picking.md`, and `testing.md` for area-specific internals.
 - `docs/research/` — architecture/engineering reference PDFs (RGB index-map rendering, GSG engine architecture, WASM/UI binding, etc.), indexed by `docs/research/README.md`.
 - `docs/archive/` — **frozen, read-only** historical record of the retired sprint/phase project-management system (per-version snapshots, the former roadmap, traceability matrix, and phase audits). Not governed or updated; kept for provenance. See `docs/archive/README.md`.
 
