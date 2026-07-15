@@ -119,7 +119,7 @@ A specific signal: if a `beforeEach` in an existing test does `cancelAnimationFr
 
 The post-task checklist requires two parallel batches. `npm run test` runs against source (no build dependency) and `npm run build` is independent of tests, so typecheck, test, and build never need to run sequentially — batch them per the checklist above.
 
-When a verification step filters `grep -r` output by path (e.g. reference sweeps that exclude `docs/archive/`), anchor the exclusion on `(^|/)`, not `\./` — recursive grep emits paths with no leading `./`, so a `\./`-anchored `grep -v` matches nothing and silently leaks the entire result instead of narrowing it.
+Anchor every `grep` exclusion pattern to a real boundary, or it silently under- or over-matches. Path filters anchor on `(^|/)`, not `\./` — recursive grep emits paths with no leading `./`, so a `\./`-anchored `grep -v` matches nothing and leaks the whole result. Verb/prefix filters (e.g. excluding already-conforming booleans) anchor on the identifier start — `_?(is|has|are|can|should)[A-Z_]`, not a bare `is`, which also matches the substring inside `visible` and silently drops real violations.
 
 ### 3. Trust CLAUDE.md; do not verify via config reads
 

@@ -105,7 +105,11 @@ A same-thread sequence of many fast calls chained via `await` can starve a co-re
 
 Compare a computed tolerance with `toBeLessThanOrEqual`, not `toBeLessThan` — an exact tie at the boundary is a reachable value, not an edge case to ignore.
 
-Stop once best-of-N sampling and environment-aware tolerance are in place and a few stress-test runs — including one concurrent with `npm run build` — look reasonable. A slow or contended box is non-authoritative for a perf gate; chasing zero residual flakiness past that point costs far more than it is worth.
+Stop once best-of-N sampling and environment-aware tolerance are in place and a few stress-test runs — including one concurrent with `npm run build` — look reasonable. A slow or contended box is non-authoritative for a perf gate; chasing zero residual flakiness past that point costs far more than it is worth. When you need one clean full-suite pass despite that contention, run `npx vitest run --no-file-parallelism` — the `*.gl.spec.ts` gates false-fail when several run in parallel on this box but pass serialized, so serialize before reading a failure as a real regression.
+
+## Source-fetching isolation tests
+
+A few tests assert import-isolation by `fetch()`-ing library source over HTTP and regex-matching the text (`AdjacencyGraph`'s "no forbidden imports", `FrameHook`'s "color utility isolation"). This fails silently two ways: a stale served path 404s and the negative assertion passes vacuously against the 404 page, and a bare-identifier match false-positives on a comment that merely names the module. On any file move, grep every `fetch('/src/` and `new URL(` string path — tsc cannot see them — and write these assertions import-scoped (`/import[^\n]*Name/`), never bare identifiers.
 
 ## Example app assets
 

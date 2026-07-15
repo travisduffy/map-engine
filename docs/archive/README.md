@@ -8,12 +8,13 @@ for provenance.
 
 ## Contents
 
-| Path                             | What it is                                                                                                                                            |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `v0.0.1/` … `v0.0.6/`            | Per-version snapshots of each shipped sprint's PRD, PROGRESS, and epic work specs.                                                                    |
-| `ROADMAP.md`                     | The former canonical technical & product roadmap (vision, Pillars, Principles, Capability Areas, phase plan). Historical reference for design intent. |
-| `ROADMAP_TRACEABILITY_MATRIX.md` | Mapping of past audit findings to the roadmap sections that resolved them.                                                                            |
-| `audits/`                        | The five phase exit-audit reports (`phase-0` … `phase-4`).                                                                                            |
+| Path                             | What it is                                                                                                                                                                       |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v0.0.1/` … `v0.0.6/`            | Per-version snapshots of each shipped sprint's PRD, PROGRESS, and epic work specs.                                                                                               |
+| `v0.0.6/POST-AI-CLEANUP-PLAN.md` | The post-AI-development taste-cleanup plan (units U1–U11: audit → codex → pilot → propagate). A standalone effort archived on completion, not part of the retired sprint system. |
+| `ROADMAP.md`                     | The former canonical technical & product roadmap (vision, Pillars, Principles, Capability Areas, phase plan). Historical reference for design intent.                            |
+| `ROADMAP_TRACEABILITY_MATRIX.md` | Mapping of past audit findings to the roadmap sections that resolved them.                                                                                                       |
+| `audits/`                        | The five phase exit-audit reports (`phase-0` … `phase-4`).                                                                                                                       |
 
 Treat everything here as immutable. Do not edit these files or their internal
 cross-references, and do not add new sprint/PRD/audit artifacts — the process that
