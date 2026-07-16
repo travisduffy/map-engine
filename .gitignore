@@ -22,5 +22,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# Playwright test-runner output (browser-mode tests)
+test-results/
+playwright-report/
+
 # Playwright MCP browser skill
 .playwright-mcp/
