@@ -1,36 +1,29 @@
 /**
- * map-engine canonical example
+ * map-engine canonical example — entry point (App in app.ts is the composition root).
  *
- * Demonstrates every public API surface:
- *   MapEngine, MapRenderer, SectorRegistry, SectorBitmapParser, toHexKey
+ * Demonstrates every public API surface across example/src/features/*:
+ *   MapEngine (default), toHexKey, PathNotFoundError, types PickResult/SectorData
  *   Events: sectorHover, sectorClick
- *   Methods: loadMap, setTickRate, setSectorColor, resetSectorColor, getSector, getSectorKeys,
- *            getBBox, getCentroid, getNeighbors, registerMapMode, setMapMode, on, off, destroy,
- *            setTraversalCosts, findPath, setParentMapping, aggregateGroups, getGroupBBox,
- *            computeAnchors, getAnchor, project, recomputeBorders, getBorderSegments,
- *            setBordersVisible
- */
-
-import { AppController } from './controller'
-
-/*
- * Direct SectorBitmapParser + SectorRegistry usage (advanced / Worker pattern):
+ *   Lifecycle: loadMap, setTickRate, onFrame/offFrame, destroy
+ *   Data: getSector, getSectorKeys, getBBox, getCentroid, getNeighbors
+ *   Color: setSectorColor, resetSectorColor
+ *   Modes: registerMapMode, setMapMode
+ *   Async: pick, setTraversalCosts, findPath, setParentMapping, aggregateGroups,
+ *          computeAnchors, recomputeBorders
+ *   Reads: getGroupBBox, getAnchor, getBorderSegments, project
+ *   Borders: setBordersVisible
  *
+ * Advanced / Worker pattern (SectorBitmapParser + SectorRegistry direct usage):
  *   import { SectorBitmapParser, SectorRegistry } from 'map-engine'
- *
  *   const parser = new SectorBitmapParser()
  *   const { buffer, width, height } = await parser.parse('/map.png')
- *
- *   const response = await fetch('/sectors.json')
- *   const definition = await response.json()
- *
+ *   const definition = await (await fetch('/sectors.json')).json()
  *   const registry = new SectorRegistry(buffer, width, height, definition)
- *   // registry.getBBox(), registry.getCentroid(), registry.getSectorPixels() are now available
- *   // Both SectorBitmapParser and SectorRegistry are DOM-free and Worker-safe.
+ *   // Both are DOM-free and Worker-safe.
  */
 
-const canvas = document.getElementById('map') as HTMLCanvasElement
-const chkHover = document.getElementById('chk-hover') as HTMLInputElement
+import { App } from './app'
 
-const app = new AppController(canvas, chkHover)
+const canvas = document.getElementById('map') as HTMLCanvasElement
+const app = new App(canvas)
 await app.start()

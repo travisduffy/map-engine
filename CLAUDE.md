@@ -68,7 +68,7 @@ Before concluding any task, run in two parallel batches then update state:
 - Update relevant `.claude/rules/*.md` files if domain patterns changed.
 - `npm run format`
 
-**When modifying the public API:** also update `example/src/main.ts` to reflect the change — the example must always demonstrate the current, accurate API surface.
+**When modifying the public API:** also update the owning module(s) under `example/src/features/*` to reflect the change, and update `main.ts`'s header comment index of demonstrated symbols — the example must always demonstrate the current, accurate API surface.
 
 **When adding a new module file under `src/worker/` or `src/render/`:** also add its row to `.claude/rules/structure.md`'s Module layout table in the same session. A vaguer version of this rule ("update relevant `.claude/rules/*.md` files if domain patterns changed") is not concrete enough to fire reliably — several `src/render/` modules once went undocumented in that table for a long stretch before a later pass caught the gap, so treat the concrete rule as the operative one.
 
@@ -90,6 +90,7 @@ sharp@^0.33.0           # fixture generation only
 - `MapRenderer` and `MapEngine` are **main-thread only**
 - JSON hex keys are **not** normalized — `"FF0000"` ≠ `"ff0000"`; consumer's responsibility
 - `createImageBitmap` called without options (safe because bitmap guarantees alpha=255)
+- Root `tsconfig.json` (inherited by `example/`) enforces `erasableSyntaxOnly` (no constructor parameter properties, no enums — declare the field and assign in the constructor body), `verbatimModuleSyntax` (type-only imports require `import type`), and `noUnusedLocals`/`noUnusedParameters` — new code, including code embedded in plans, complies or `tsc` fails
 - Do not implement anything in the current release's out-of-scope list (see README.md §"What this version does not include")
 
 ## Documentation
@@ -135,9 +136,11 @@ When only a named section of a large file is needed, use `offset` + `limit` para
 
 When editing a single row of a prettier-formatted markdown table, anchor the `Edit` on a short unique fragment rather than the full copied line — column-alignment padding often doesn't match what gets typed manually, and a full-line `old_string` fails on that whitespace mismatch. When that same edit expands one row into several (or merges several into one), emit every resulting row in `new_string` — the short anchor shrinks only what you match, not what you must output, so a replacement that names one row while the source covered three silently drops the other two and costs a follow-up edit to restore them.
 
-### 6. Plan Mode: verify before exiting
+### 6. Plans: verify against source before handoff
 
-Before calling `ExitPlanMode` on a non-trivial plan, re-read the exact source lines the plan depends on (method signatures, field names, call sites) instead of trusting Explore/Plan subagent summaries at face value — a first draft should be treated as needing a dedicated verification pass without being asked. Make the pass produce a visible artifact instead of a private mental step: before the first `ExitPlanMode` call, add a short "Verified against source" note to the plan file itself, listing the specific file:line locations re-read and confirming each still matches the plan's key assumptions. A plan file with no such note is a visible signal — to you and to the user — that the pass was skipped.
+Before finalizing any non-trivial plan an executor will implement — an `ExitPlanMode` plan or a written plan/spec file — re-read the exact source lines the plan depends on (method signatures, field names, call sites, and the tsconfig/build flags any embedded code must compile under) instead of trusting Explore/Plan subagent summaries at face value — a first draft should be treated as needing a dedicated verification pass without being asked. Make the pass produce a visible artifact instead of a private mental step: before the first `ExitPlanMode` call or before declaring a plan file done, add a short "Verified against source" note to the plan itself, listing the specific file:line locations re-read and confirming each still matches the plan's key assumptions. A plan with no such note is a visible signal — to you and to the user — that the pass was skipped. (Signal: a plan file shipped constructor-parameter-property code that `erasableSyntaxOnly` rejects; the pass that caught it took two tool calls.)
+
+This verification covers runtime data shape, not only source code shape. Any hardcoded UI content that assumes a data shape — a skeleton/placeholder field list, a mocked API response, a demo default — needs its own check against the actual fixture or live response, because type checks and tests validate that such content compiles, never that its field names still exist in the real data. Compiling and passing tests is not evidence the content is accurate. (Signal: an example app's hover/selected-panel skeleton rows listed `population`/`capital`/`climate` — legacy fields copied verbatim from an existing implementation into a refactor plan, then from the plan into the new code — while the actual fixture had only a `name` field; typecheck, the full test suite, the production build, and a manual browser smoke test all passed with the mismatch still in place, because none of them diff hardcoded display content against the fixture it renders.)
 
 ### 7. Plan Mode: specify for a weaker executor
 

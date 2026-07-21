@@ -1,7 +1,6 @@
 ---
 paths:
   - 'src/**/*.ts'
-  - 'example/**/*.ts'
   - 'test/**/*.ts'
 ---
 
@@ -52,7 +51,3 @@ Place every module in a subsystem directory; keep `src/` root for `index.ts` onl
 ## Build configuration
 
 `vite.config.ts` serves dual purpose: library build (`rollupOptions.external: ['three']` is mandatory — omitting it bundles Three.js and silently blows the 15 KB gzipped size budget) and Vitest browser-mode testing. See CLAUDE.md "Dev dependencies" for the pinned versions.
-
-## Example app assets
-
-The example app's map bitmap and sector definition are committed static assets. Do not generate or replace them programmatically.
