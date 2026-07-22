@@ -65,7 +65,18 @@ interface Measurement {
   retainedArrayBufferDeltaBytes: number
   samplerIntervalMs: number
   samplerSamples: number
+  /** Sampled window / scan duration. Below 1.0 means the sampler lost the CPU. */
+  samplerCoverage: number
 }
+
+/**
+ * RSS is a process-wide high-water mark, so a second measurement in this
+ * process would inherit the first one's peak as its baseline and report a
+ * peak-over-retained gap of roughly zero. `package.json` runs each fixture size
+ * through its own `bench:registry-alloc:*` script; this guard makes that a
+ * checked invariant rather than a convention a future edit can quietly break.
+ */
+let hasMeasuredInThisProcess = false
 
 /**
  * Fails loudly rather than skipping. The previous revision of this benchmark
@@ -113,6 +124,16 @@ async function startSampler(): Promise<{ stop: () => Promise<SamplerResult> }> {
 }
 
 async function measure(sectorCount: number): Promise<Measurement> {
+  if (hasMeasuredInThisProcess) {
+    throw new Error(
+      'bench:registry-alloc measured twice in one process. RSS is a high-water ' +
+        'mark, so the second measurement would inherit the first peak as its ' +
+        'baseline and report a near-zero peak-over-retained gap. Run each ' +
+        'fixture size through its own script (npm run bench:registry-alloc).'
+    )
+  }
+  hasMeasuredInThisProcess = true
+
   const fixture = generateRegistryFixture({
     seed: SEED,
     width: WIDTH,
@@ -172,6 +193,7 @@ async function measure(sectorCount: number): Promise<Measurement> {
       retained.arrayBuffers - baseline.arrayBuffers,
     samplerIntervalMs: peak.intervalMs,
     samplerSamples: peak.samples,
+    samplerCoverage: (peak.samples * peak.intervalMs) / scanMs,
   }
 }
 
@@ -184,7 +206,7 @@ function signedMib(bytes: number): string {
   return `${bytes < 0 ? '-' : '+'}${mib(Math.abs(bytes))}`
 }
 
-function report(m: Measurement): void {
+function writeResult(m: Measurement): void {
   fs.mkdirSync(path.dirname(RESULT_FILE), { recursive: true })
   // Each fixture size runs in its own process, so the file is merged rather
   // than overwritten — but only across `sectors_*` keys, so output from an
@@ -200,13 +222,15 @@ function report(m: Measurement): void {
     capturedAt: new Date().toISOString(),
   }
   fs.writeFileSync(RESULT_FILE, `${JSON.stringify(existing, null, 2)}\n`)
+}
 
+function logMeasurement(m: Measurement): void {
   console.log(
     [
       ``,
       `bench:registry-alloc — ${m.width}x${m.height}, ${m.sectorCount} sectors, coverage ${m.coverage * 100}%`,
       `  scan wall-clock   ${m.scanMsMin.toFixed(0)} ms (best of ${m.scanMsSamples.length}: ${m.scanMsSamples.map(s => s.toFixed(0)).join(', ')})`,
-      `  peak RSS          ${mib(m.peakRssBytes)} (${signedMib(m.peakRssDeltaBytes)} over baseline ${mib(m.baselineRssBytes)}, ${m.samplerSamples} samples @ ${m.samplerIntervalMs} ms)`,
+      `  peak RSS          ${mib(m.peakRssBytes)} (${signedMib(m.peakRssDeltaBytes)} over baseline ${mib(m.baselineRssBytes)}, ${m.samplerSamples} samples @ ${m.samplerIntervalMs} ms, ${(m.samplerCoverage * 100).toFixed(0)}% coverage)`,
       `  retained RSS      ${signedMib(m.retainedRssDeltaBytes)}`,
       `  retained V8 heap  ${signedMib(m.retainedHeapDeltaBytes)}`,
       `  retained ArrayBuf ${signedMib(m.retainedArrayBufferDeltaBytes)}`,
@@ -223,20 +247,30 @@ function report(m: Measurement): void {
 function assertInstrumentIsLive(m: Measurement): void {
   expect(m.samplerSamples).toBeGreaterThan(0)
   expect(m.scanMsMin).toBeGreaterThan(0)
+  // A sampler starved of CPU while the main thread spins can still take a few
+  // samples and still clear the peak-over-retained check below, reporting a
+  // plausible-looking peak it never actually observed. Recorded runs sit at
+  // ~96%; 0.5 leaves generous headroom for a contended box.
+  expect(m.samplerCoverage).toBeGreaterThan(0.5)
   // The transient pixel lists and their typed-array conversions are alive
   // together only inside the constructor. If peak does not clear retained, the
   // sampler missed the window and the run says nothing about the removal.
   expect(m.peakRssDeltaBytes).toBeGreaterThan(m.retainedRssDeltaBytes)
 }
 
+// Assert before writing: baselines.json is transcribed by hand from
+// .last-result.json, so a run that failed its sanity checks must not leave a
+// fully-formed result file behind to be promoted into a baseline by mistake.
 test('registry-alloc @1k', async () => {
   const m = await measure(1_000)
-  report(m)
+  logMeasurement(m)
   assertInstrumentIsLive(m)
+  writeResult(m)
 })
 
 test('registry-alloc @10k', async () => {
   const m = await measure(10_000)
-  report(m)
+  logMeasurement(m)
   assertInstrumentIsLive(m)
+  writeResult(m)
 })

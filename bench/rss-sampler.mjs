@@ -19,6 +19,13 @@
  */
 import { parentPort, workerData } from 'node:worker_threads'
 
+if (parentPort === null) {
+  throw new Error(
+    'rss-sampler.mjs must be loaded as a worker thread, not as a main module.'
+  )
+}
+const port = parentPort
+
 const intervalMs = Number(workerData?.intervalMs ?? 5)
 
 let peakRss = 0
@@ -30,10 +37,10 @@ const timer = setInterval(() => {
   samples++
 }, intervalMs)
 
-parentPort.on('message', message => {
+port.on('message', message => {
   if (message !== 'stop') return
   clearInterval(timer)
-  parentPort.postMessage({ peakRss, samples, intervalMs })
+  port.postMessage({ peakRss, samples, intervalMs })
 })
 
-parentPort.postMessage({ ready: true })
+port.postMessage({ ready: true })

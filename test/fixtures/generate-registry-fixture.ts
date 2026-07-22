@@ -18,9 +18,10 @@
  * Every pixel is assigned to a sector. Coverage is total by construction, so
  * figures measured against this fixture are an explicit upper bound.
  */
-import type { SectorDefinitionFile } from '../../src/shared/types'
 import { toHexKey } from '../../src/shared/utils'
+import type { SectorDefinitionFile } from '../../src/shared/types'
 
+/** Inputs to `generateRegistryFixture`. */
 export interface RegistryFixtureOptions {
   /** Any integer; the same seed yields a byte-identical buffer. */
   seed: number
@@ -30,6 +31,7 @@ export interface RegistryFixtureOptions {
   sectorCount: number
 }
 
+/** A generated bitmap plus the definition that describes it. */
 export interface RegistryFixture {
   buffer: Uint8ClampedArray
   width: number
@@ -68,6 +70,11 @@ function sectorColor(id: number, multiplier: number): number {
   return (Math.imul(id + 1, multiplier) >>> 0) & 0xffffff
 }
 
+/**
+ * Builds a deterministic RGBA buffer and matching definition at the requested
+ * sector count. Throws rather than silently degrading when the request cannot
+ * satisfy the one-pixel-per-sector guarantee.
+ */
 export function generateRegistryFixture(
   options: RegistryFixtureOptions
 ): RegistryFixture {

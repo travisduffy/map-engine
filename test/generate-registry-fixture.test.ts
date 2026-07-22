@@ -91,6 +91,31 @@ describe('generateRegistryFixture', () => {
     }
   })
 
+  it('keeps every sector populated at a non-square, tile-folding config', () => {
+    // The 64x64/16 case above has square tiles and an exact tile-to-sector fit.
+    // This one has neither: 512x128 at 337 sectors gives non-square tiles, a
+    // non-zero jitter amplitude derived from both axes, and a tile count that
+    // exceeds the sector count so the remainder folds into the last sector.
+    // That combination is what the benchmark's 4096x4096 configs actually hit.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { buffer, width, height, definition } = generateRegistryFixture({
+        seed: 5,
+        width: 512,
+        height: 128,
+        sectorCount: 337,
+      })
+
+      const registry = new SectorRegistry(buffer, width, height, definition)
+
+      expect(registry.idToHex).toHaveLength(337)
+      expect(hexKeysIn(buffer).size).toBe(337)
+      expect(warnSpy).not.toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
   it('rejects a sector count the pixel budget cannot cover', () => {
     expect(() =>
       generateRegistryFixture({

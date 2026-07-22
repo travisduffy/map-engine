@@ -2,6 +2,7 @@
 paths:
   - 'src/**/*.ts'
   - 'test/**/*.ts'
+  - 'bench/**'
 ---
 
 ## Rule ownership
@@ -52,4 +53,15 @@ Place every module in a subsystem directory; keep `src/` root for `index.ts` onl
 
 `vite.config.ts` serves dual purpose: library build (`rollupOptions.external: ['three']` is mandatory — omitting it bundles Three.js and silently blows the 15 KB gzipped size budget) and Vitest browser-mode testing. See CLAUDE.md "Dev dependencies" for the pinned versions.
 
-Three tsconfigs, three typecheck surfaces, and every one of them has to be in Batch 1 of the post-task checklist. The root `tsconfig.json` pins `include: ["src"]`; `example/` has its own; `tsconfig.bench.json` covers `bench/` (root config plus Node types, DOM lib retained because bench specs import from `src/shared/types.ts`). A directory left out of all three is a directory where a module move deadens code silently — `bench/registry-alloc.spec.ts` sat uncompilable across a release for exactly that reason.
+Three tsconfigs, three typecheck surfaces, and every one of them has to be in Batch 1 of the post-task checklist. The root `tsconfig.json` pins `include: ["src"]`; `example/` has its own; `tsconfig.bench.json` covers `bench/` (root config plus Node types, DOM lib retained because bench specs import from `src/shared/types.ts`, and `allowJs`/`checkJs` so the plain-JS worker module `bench/rss-sampler.mjs` is checked from its JSDoc rather than escaping every gate). A directory left out of all three is a directory where a module move deadens code silently — `bench/registry-alloc.spec.ts` sat uncompilable across a release for exactly that reason.
+
+**`test/**`is still outside all three.** Only files reachable by import from`src/`or`bench/`get checked, which today means`test/fixtures/generate-registry-fixture.ts`(because the benchmark imports it) and nothing else —`\*.test.ts`files are import leaves, so a type error in one passes every Batch 1 gate and Vitest's esbuild transform strips types without checking them. Closing this needs a fourth surface or a widened`include`; until then, do not assume a green Batch 1 says anything about `test/\*\*`.
+
+### Benchmark measurement invariants
+
+Two facts about `bench/` cost real effort to discover and are not recoverable by reading the code:
+
+- **`process.memoryUsage()` is per-isolate except for `rss`.** `heapUsed`, `heapTotal`, `external`, and `arrayBuffers` are read from the calling thread's own V8 isolate, so an out-of-band sampler thread polling them reports its own idle heap — measured on Node v26.5.0, a sampler saw 7.8 MB while the main thread held 270 MB. Only `rss` is process-wide. This is why peak allocation is sampled as RSS and the heap/ArrayBuffer split belongs to the retained main-thread sample.
+- **RSS is a high-water mark, so one measurement per process.** A second measurement in the same process inherits the first one's peak as its baseline and reports a near-zero peak-over-retained gap. `bench:registry-alloc` chains one script per fixture size for this reason, and `measure()` throws if called twice.
+
+Allocated ArrayBuffer bytes can also exceed resident bytes: `borderEdges` is allocated zero-filled and never written until borders are recomputed, so its pages are not faulted in. Quote the RSS figure, not the ArrayBuffer figure, when reporting real memory pressure.

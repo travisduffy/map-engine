@@ -94,6 +94,20 @@ describe('SectorRegistry', () => {
       expect(registry.pixelIndices[3]).toBe(1) // (3,0)
     })
 
+    it('pixelIndices maps blue sector pixels to id 2', () => {
+      expect(registry.pixelIndices[8]).toBe(2) // (0,2)
+      expect(registry.pixelIndices[9]).toBe(2) // (1,2)
+      expect(registry.pixelIndices[12]).toBe(2) // (0,3)
+      expect(registry.pixelIndices[13]).toBe(2) // (1,3)
+    })
+
+    it('pixelIndices maps yellow sector pixels to id 3', () => {
+      expect(registry.pixelIndices[10]).toBe(3) // (2,2)
+      expect(registry.pixelIndices[11]).toBe(3) // (3,2)
+      expect(registry.pixelIndices[14]).toBe(3) // (2,3)
+      expect(registry.pixelIndices[15]).toBe(3) // (3,3)
+    })
+
     it('pixelIndicesMirror matches pixelIndices values', () => {
       for (let i = 0; i < 16; i++) {
         expect(registry.pixelIndicesMirror[i]).toBe(
