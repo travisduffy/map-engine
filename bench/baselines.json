@@ -1,10 +1,42 @@
 {
-  "b1.constructor_alloc_bytes": {
-    "value": 16327600,
-    "unit": "bytes",
-    "capturedAt": "2026-05-14T15:29:24Z",
-    "hardware": "Linux x86_64",
-    "measurementMethod": "process.memoryUsage().heapUsed (Node.js v8 heap, --expose-gc)"
+  "b1.registry_scan": {
+    "note": "Supersedes b1.constructor_alloc_bytes (16327600 bytes, captured 2026-05-14). That figure was measured with an empty sector definition — which zeroes every sector-proportional structure in the scan — and sampled process.memoryUsage().heapUsed alone, which excludes ArrayBuffer backing stores. It corresponded to no structure the scan builds and has been removed rather than carried forward. The spec producing it had also stopped compiling during a module reorg; see bench/SPEC.md.",
+    "hardware": "Intel Core i5-2520M @ 2.50GHz (4 threads), 7 GiB RAM, Linux x86_64, Node v26.5.0 — containerized dev session, not reference hardware",
+    "measurementMethod": "bench/registry-alloc.spec.ts. Fixture generated in-process by test/fixtures/generate-registry-fixture.ts as a raw RGBA buffer (no PNG encode/decode in the sampled process). Scan wall-clock is performance.now() bracketing the SectorRegistry constructor, best of 3. Peak is process-wide RSS sampled every 5 ms from a node:worker_threads sampler (bench/rss-sampler.mjs) while the constructor's single synchronous block runs. Retained is the main thread's own post-forced-GC delta, split into V8 heap and ArrayBuffer components. Each fixture size runs in its own process.",
+    "caveats": [
+      "Peak is an RSS upper bound, not an allocation total: RSS includes pages the allocator has not returned to the OS. Only rss is process-wide in Node — heapUsed, heapTotal, external, and arrayBuffers are read from the calling thread's own V8 isolate, so an out-of-band sampler cannot read them. The heap/ArrayBuffer split is therefore available only for the retained sample.",
+      "Coverage is 1.0 — every pixel is assigned to a sector, zero void. Real maps carry void pixels, so these are an upper bound for maps of these dimensions.",
+      "Retained V8 heap deltas land near zero because the scan's retained structures are all typed arrays (ArrayBuffer-backed); the transient per-sector pixel lists are the heap-resident part and are gone by the time the retained sample is taken. The peak-over-retained gap is where they show up.",
+      "Wall-clock was measured on a 2011-era mobile CPU under container contention. Treat the ratio between pre- and post-removal figures as the signal, not the absolute milliseconds."
+    ],
+    "pre_removal": {
+      "capturedAt": "2026-07-22T13:36:16Z",
+      "gitRef": "0c4dd28",
+      "4096x4096_1k_sectors": {
+        "scan_ms_best_of_3": 9242.6,
+        "peak_rss_delta_bytes": 633712640,
+        "retained_rss_delta_bytes": 247808000,
+        "retained_heap_delta_bytes": -3196624,
+        "retained_arraybuffer_delta_bytes": 221672700,
+        "baseline_rss_bytes": 214638592,
+        "peak_rss_bytes": 848351232,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 1921,
+        "coverage": 1
+      },
+      "4096x4096_10k_sectors": {
+        "scan_ms_best_of_3": 10334.9,
+        "peak_rss_delta_bytes": 961765376,
+        "retained_rss_delta_bytes": 463314944,
+        "retained_heap_delta_bytes": -766608,
+        "retained_arraybuffer_delta_bytes": 339757600,
+        "baseline_rss_bytes": 217501696,
+        "peak_rss_bytes": 1179267072,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 2012,
+        "coverage": 1
+      }
+    }
   },
   "b2.palette_swap_median_ms": {
     "value": 0.4,
