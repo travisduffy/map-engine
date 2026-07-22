@@ -272,8 +272,7 @@ export class MapRenderer {
    * no-ops if the sector has no pixel data.
    */
   setSectorColor(hexKey: string, color: string): void {
-    const pixels = this._registry.getSectorPixels(hexKey)
-    if (!pixels) {
+    if (!this._registry.hasSectorPixels(hexKey)) {
       console.warn('[MapEngine] setSectorColor: sector has no pixel data')
       return
     }
@@ -285,8 +284,7 @@ export class MapRenderer {
 
   /** Restores a sector's palette LUT entry to its source-bitmap packed RGB. Warns and no-ops if the sector has no pixel data. */
   resetSectorColor(hexKey: string): void {
-    const pixels = this._registry.getSectorPixels(hexKey)
-    if (!pixels) {
+    if (!this._registry.hasSectorPixels(hexKey)) {
       console.warn('[MapEngine] resetSectorColor: sector has no pixel data')
       return
     }

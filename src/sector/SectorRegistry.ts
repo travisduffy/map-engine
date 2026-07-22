@@ -54,7 +54,7 @@ export class SectorRegistry implements ISpatialRegistry {
 
   private readonly _hexToId: Map<string, number> // hex key → dense numeric ID
   private readonly _sectorData: Array<SectorData | null> // definition payloads, indexed by numeric ID
-  private readonly _sectorPixels: Uint32Array[] // per-sector flat pixel index lists
+  private readonly _pixelCounts: Uint32Array // per-sector non-void pixel tally
 
   /**
    * Runs the single O(W×H) scan: assigns dense numeric IDs in definition
@@ -114,10 +114,6 @@ export class SectorRegistry implements ISpatialRegistry {
     const centSumY = new Float64Array(sectorCount)
     const centCount = new Uint32Array(sectorCount)
 
-    const sectorPixelLists: number[][] = Array.from(
-      { length: sectorCount },
-      () => []
-    )
     const edgePairs = new Set<number>()
     // tempBorderEdges: [x1, y1, x2, y2, idA, idB, ...] per border segment
     const tempBorderEdges: number[] = []
@@ -151,9 +147,6 @@ export class SectorRegistry implements ISpatialRegistry {
           centSumX[id] += x
           centSumY[id] += y
           centCount[id]++
-
-          // Accumulate per-sector pixel index
-          sectorPixelLists[id].push(flat)
         } else {
           bitmapOnlyKeys.add(hex)
         }
@@ -240,10 +233,7 @@ export class SectorRegistry implements ISpatialRegistry {
       idToPackedRgb[rawPairs[i][1]] = rawPairs[i][0]
     }
 
-    // 4d. Per-sector pixel arrays (for MapRenderer recoloring)
-    const sectorPixels = sectorPixelLists.map(list => new Uint32Array(list))
-
-    // 4e. CSR adjacency — Pass 2: flatten, sort, populate.
+    // 4d. CSR adjacency — Pass 2: flatten, sort, populate.
     const edgePairsArr = new Uint32Array(edgePairs.size)
     let ei = 0
     for (const pair of edgePairs) edgePairsArr[ei++] = pair
@@ -270,7 +260,7 @@ export class SectorRegistry implements ISpatialRegistry {
       adjacencyNeighbors[adjacencyPointers[hi] + adjCursor[hi]++] = lo
     }
 
-    // 4f. CSR contour — build pointers then fill from tempBorderEdges.
+    // 4e. CSR contour — build pointers then fill from tempBorderEdges.
     const contourPointers = new Uint32Array(sectorCount + 1)
     for (let i = 0; i < sectorCount; i++) {
       contourPointers[i + 1] = contourPointers[i] + contourSegCount[i]
@@ -302,7 +292,7 @@ export class SectorRegistry implements ISpatialRegistry {
       }
     }
 
-    // 4g. Border edge allocator (Phase 4 placeholder, zero-initialized).
+    // 4f. Border edge allocator (Phase 4 placeholder, zero-initialized).
     const borderEdges = new Float32Array(4 * totalGeoPerimeterSegs)
     const borderEdgeCount = new Uint32Array(1)
 
@@ -324,7 +314,11 @@ export class SectorRegistry implements ISpatialRegistry {
     this.borderEdgeCount = borderEdgeCount
     this._hexToId = hexToId
     this._sectorData = sectorData
-    this._sectorPixels = sectorPixels
+    // Retained as-is: it is already the per-sector non-void pixel tally the
+    // scan maintains for centroid finalization, so keeping it costs no extra
+    // scan work and serves the recolor precondition without the per-sector
+    // pixel index lists this class used to build and hold.
+    this._pixelCounts = centCount
 
     // ── Load-time validation ───────────────────────────────────────────────
 
@@ -371,12 +365,10 @@ export class SectorRegistry implements ISpatialRegistry {
     return this.idToHex.slice()
   }
 
-  /** Returns the flat pixel-index array for the given sector, or undefined if unknown/zero-pixel. */
-  getSectorPixels(hexKey: string): Uint32Array | undefined {
+  /** Whether the given sector is in the definition and occupies at least one bitmap pixel. */
+  hasSectorPixels(hexKey: string): boolean {
     const id = this._hexToId.get(hexKey)
-    if (id === undefined) return undefined
-    const pixels = this._sectorPixels[id]
-    return pixels.length > 0 ? pixels : undefined
+    return id !== undefined && this._pixelCounts[id] > 0
   }
 
   /** Returns the dense numeric ID for a hex key, or undefined if not in the definition. */

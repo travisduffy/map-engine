@@ -103,39 +103,46 @@ describe('SectorRegistry', () => {
     })
   })
 
-  describe('getSectorPixels', () => {
+  describe('hasSectorPixels', () => {
     let registry: SectorRegistry
 
     beforeEach(() => {
       registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
     })
 
-    it('getSectorPixels("ff0000") returns Uint32Array [0,1,4,5]', () => {
-      expect(registry.getSectorPixels('ff0000')).toEqual(
-        new Uint32Array([0, 1, 4, 5])
-      )
+    it('returns true for every sector present in the bitmap', () => {
+      for (const hexKey of ['ff0000', '00ff00', '0000ff', 'ffff00']) {
+        expect(registry.hasSectorPixels(hexKey)).toBe(true)
+      }
     })
 
-    it('getSectorPixels("00ff00") returns Uint32Array [2,3,6,7]', () => {
-      expect(registry.getSectorPixels('00ff00')).toEqual(
-        new Uint32Array([2, 3, 6, 7])
-      )
+    it('returns false for a key absent from the definition', () => {
+      expect(registry.hasSectorPixels('aabbcc')).toBe(false)
     })
 
-    it('getSectorPixels("0000ff") returns Uint32Array [8,9,12,13]', () => {
-      expect(registry.getSectorPixels('0000ff')).toEqual(
-        new Uint32Array([8, 9, 12, 13])
-      )
+    it('returns false for a defined sector with no bitmap pixels', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const ghosted = new SectorRegistry(
+          make4x4Buffer(),
+          4,
+          4,
+          mismatchDefinition
+        )
+        expect(ghosted.hasSectorPixels('ffffff')).toBe(false)
+        expect(ghosted.hasSectorPixels('ff0000')).toBe(true)
+      } finally {
+        warnSpy.mockRestore()
+      }
     })
 
-    it('getSectorPixels("ffff00") returns Uint32Array [10,11,14,15]', () => {
-      expect(registry.getSectorPixels('ffff00')).toEqual(
-        new Uint32Array([10, 11, 14, 15])
-      )
-    })
-
-    it('getSectorPixels for unknown key returns undefined', () => {
-      expect(registry.getSectorPixels('aabbcc')).toBeUndefined()
+    it('retains one pixel tally per sector, in definition order', () => {
+      // Replaces the per-sector pixel-index assertions this block used to
+      // carry: those arrays are no longer built, and the tally backing the
+      // predicate is the counter the scan already keeps for centroids.
+      const counts = registry['_pixelCounts']
+      expect(counts).toHaveLength(4)
+      expect(Array.from(counts)).toEqual([4, 4, 4, 4])
     })
   })
 
