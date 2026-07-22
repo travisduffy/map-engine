@@ -10,7 +10,7 @@ import type {
 const VOID_ID = 0xffff
 
 /**
- * Single-scan spatial index over the sector bitmap: one O(W×H) pass over
+ * Two-pass spatial index over the sector bitmap: two O(W×H) passes over
  * the RGBA pixel buffer + JSON definition produces every SoA spatial buffer
  * (bboxes, centroids, CSR adjacency/contours, `pixelIndices`) plus the
  * pre-allocated border-edge buffer. Zero Three.js imports and zero DOM
@@ -57,7 +57,7 @@ export class SectorRegistry implements ISpatialRegistry {
   private readonly _pixelCounts: Uint32Array // per-sector non-void pixel tally
 
   /**
-   * Runs the single O(W×H) scan: assigns dense numeric IDs in definition
+   * Runs the two O(W×H) passes: assigns dense numeric IDs in definition
    * order, builds every SoA buffer in one pass plus post-scan finalization,
    * disposes `sourceBuffer` (PR-1), and warns on definition/bitmap
    * mismatches (zero-pixel sectors, bitmap-only colors).
@@ -118,21 +118,45 @@ export class SectorRegistry implements ISpatialRegistry {
     // tempBorderEdges: [x1, y1, x2, y2, idA, idB, ...] per border segment
     const tempBorderEdges: number[] = []
     const contourSegCount = new Uint32Array(sectorCount)
-    const bitmapOnlyKeys = new Set<string>()
+    const bitmapOnlyPacked = new Set<number>()
     let totalGeoPerimeterSegs = 0
 
-    // ── Phase 3: Single O(W×H) scan ────────────────────────────────────────
+    // Packed-RGB → id, built for the scan alone; `hexToId` stays as the
+    // public-facing lookup. Keying the hot loop on an integer avoids building
+    // one string per pixel purely to hash it.
+    //
+    // `toHexKey` only ever emits lowercase six-character hex, so a definition
+    // key in any other form can never match a bitmap pixel. Skipping those
+    // here preserves the documented `"FF0000" !== "ff0000"` invariant instead
+    // of silently canonicalizing them into matches.
+    const packedToId = new Map<number, number>()
+    for (const [hexKey, id] of hexToId) {
+      if (/^[0-9a-f]{6}$/.test(hexKey)) {
+        packedToId.set(parseInt(hexKey, 16), id)
+      }
+    }
+
+    // ── Phase 3a: O(W×H) identity pass ─────────────────────────────────────
+    //
+    // Resolves each pixel's sector exactly once. Border detection used to run
+    // in this same loop, which meant every pixel's colour was hashed three
+    // times over the scan — once as itself, once as its left neighbour's
+    // right-lookup, once as its top neighbour's bottom-lookup — at three
+    // string allocations and three Map lookups apiece. Phase 3b reads the
+    // `pixelIndices` this pass already writes instead, so the hashing work is
+    // done once per pixel rather than three times. The second pass is pure
+    // typed-array reads.
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const flat = y * width + x
         const offset = flat * 4
-        const hex = toHexKey(
+        const packed = packRgb(
           buffer[offset],
           buffer[offset + 1],
           buffer[offset + 2]
         )
-        const id = hexToId.get(hex) ?? VOID_ID
+        const id = packedToId.get(packed) ?? VOID_ID
         pixelIndices[flat] = id
 
         if (id !== VOID_ID) {
@@ -148,17 +172,27 @@ export class SectorRegistry implements ISpatialRegistry {
           centSumY[id] += y
           centCount[id]++
         } else {
-          bitmapOnlyKeys.add(hex)
+          bitmapOnlyPacked.add(packed)
         }
+      }
+    }
+
+    // ── Phase 3b: O(W×H) border pass ───────────────────────────────────────
+    //
+    // Same iteration order as 3a, and the right check still precedes the
+    // bottom check, so `tempBorderEdges` is emitted in the identical order —
+    // which is what keeps the CSR contour buckets byte-identical to the
+    // single-pass version.
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const flat = y * width + x
+        const id = pixelIndices[flat]
 
         // Border detection for ALL pixels (right and bottom neighbors only,
         // so each edge is emitted once from the left/top pixel's perspective).
         if (x < width - 1) {
-          const rOff = (y * width + x + 1) * 4
-          const rId =
-            hexToId.get(
-              toHexKey(buffer[rOff], buffer[rOff + 1], buffer[rOff + 2])
-            ) ?? VOID_ID
+          const rId = pixelIndices[flat + 1]
           if (rId !== id) {
             // Geometric segment: vertical line at x+1, spanning y to y+1
             tempBorderEdges.push(x + 1, y, x + 1, y + 1, id, rId)
@@ -174,11 +208,7 @@ export class SectorRegistry implements ISpatialRegistry {
         }
 
         if (y < height - 1) {
-          const bOff = ((y + 1) * width + x) * 4
-          const bId =
-            hexToId.get(
-              toHexKey(buffer[bOff], buffer[bOff + 1], buffer[bOff + 2])
-            ) ?? VOID_ID
+          const bId = pixelIndices[flat + width]
           if (bId !== id) {
             // Geometric segment: horizontal line at y+1, spanning x to x+1
             tempBorderEdges.push(x, y + 1, x + 1, y + 1, id, bId)
@@ -329,7 +359,15 @@ export class SectorRegistry implements ISpatialRegistry {
         )
       }
     }
-    for (const hexKey of bitmapOnlyKeys) {
+    // Set iteration is first-encounter order, and `toHexKey` reproduces the
+    // exact string the scan used to build per pixel — so both the content and
+    // the order of these warnings are unchanged.
+    for (const packed of bitmapOnlyPacked) {
+      const hexKey = toHexKey(
+        (packed >>> 16) & 0xff,
+        (packed >>> 8) & 0xff,
+        packed & 0xff
+      )
       console.warn(
         `[MapEngine] Color '${hexKey}' found in the bitmap has no corresponding entry in sectors.json.`
       )

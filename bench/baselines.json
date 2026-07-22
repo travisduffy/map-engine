@@ -66,6 +66,47 @@
         "coverage": 1
       }
     },
+    "post_scan_split": {
+      "capturedAt": "2026-07-22T16:55:57Z",
+      "change": "Scan split into two O(WxH) passes (identity, then border detection reading pixelIndices) and the hot loop rekeyed from hex strings onto packed RGB integers. Border detection previously resolved each pixel's colour three times — once as itself, twice as a neighbour — at one string allocation and one string-keyed Map lookup each.",
+      "equivalence": "All eleven output buffers digest-identical to the pre-split implementation at 7, 331, and 1,000 sectors on a 512x384 fixture.",
+      "4096x4096_1k_sectors": {
+        "scan_ms_best_of_3": 1857.2,
+        "peak_rss_delta_bytes": 426487808,
+        "retained_rss_delta_bytes": 125329408,
+        "retained_heap_delta_bytes": 38536,
+        "retained_arraybuffer_delta_bytes": 154567836,
+        "baseline_rss_bytes": 215322624,
+        "peak_rss_bytes": 641810432,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 397,
+        "sampler_coverage": 0.962,
+        "coverage": 1
+      },
+      "4096x4096_10k_sectors": {
+        "scan_ms_best_of_3": 3164.7,
+        "peak_rss_delta_bytes": 816369664,
+        "retained_rss_delta_bytes": 187633664,
+        "retained_heap_delta_bytes": -2391672,
+        "retained_arraybuffer_delta_bytes": 272608736,
+        "baseline_rss_bytes": 216645632,
+        "peak_rss_bytes": 1033015296,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 748,
+        "sampler_coverage": 0.958,
+        "coverage": 1
+      },
+      "ab_control": {
+        "note": "The pre_removal and post_removal entries above were captured on a quieter box and are not directly comparable to these. This pair was measured back to back against the immediately preceding implementation under identical load, by stashing only src/sector/SectorRegistry.ts.",
+        "single_pass_1k_scan_ms": 11585,
+        "single_pass_10k_scan_ms": 13309,
+        "two_pass_string_keys_1k_scan_ms": 5406,
+        "two_pass_string_keys_10k_scan_ms": 6569,
+        "two_pass_packed_keys_1k_scan_ms": 1857,
+        "two_pass_packed_keys_10k_scan_ms": 3165,
+        "speedup": "6.2x at 1,000 sectors, 4.2x at 10,000. The pass split alone accounted for ~2x; rekeying onto packed integers delivered the rest."
+      }
+    },
     "delta": {
       "retained_arraybuffer": "-64.0 MiB at both sector counts — 4096*4096 pixels * 4 bytes, i.e. exactly the removed Uint32Array[] whose entries totalled one per non-void pixel. Independent of sector count, as expected: the arrays were pixel-proportional, not sector-proportional.",
       "retained_rss": "-28% at 1k sectors, -49% at 10k.",
