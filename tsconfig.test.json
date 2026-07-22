@@ -1,0 +1,21 @@
+{
+  /*
+   * The test suite runs under Vitest browser mode, whose esbuild transform
+   * strips types without checking them — so nothing type-checked `test/**`
+   * before this config existed. The root pins `include: ["src"]`, and
+   * `*.test.ts` files are import leaves nothing pulls in transitively, which
+   * meant a type error in one passed every gate silently.
+   *
+   * Overrides on the root config:
+   *   - `types`: adds Vitest globals and Node types (a few specs reach for
+   *     `Buffer` and `node:` builtins through Playwright's browser provider).
+   *   - `include`: `test/` rather than `src/`.
+   *
+   * `lib` is inherited unchanged — these are DOM tests.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node", "vitest/globals"]
+  },
+  "include": ["test"]
+}

@@ -26,6 +26,7 @@ npm run build         # tsc + vite build (library mode, outputs dist/index.js)
 npm run build:example     # vite build for the example app (example/ workspace)
 npm run typecheck:example # tsc --noEmit for the example workspace
 npm run typecheck:bench   # tsc --noEmit for bench/ (Node under Playwright)
+npm run typecheck:test    # tsc --noEmit for test/ (Vitest strips types, never checks them)
 npm run format            # prettier --write .
 npm run test              # run full test suite (vitest run — all test files, single pass)
 npm run size              # gzip -c dist/index.js | wc -c  (verify <15 KB gzipped)
@@ -58,7 +59,7 @@ See `.claude/rules/structure.md` for the module breakdown, data flow, folder pla
 
 Before concluding any task, run in two parallel batches then update state:
 
-**Batch 1 (parallel):** `npm run typecheck` + `npm run typecheck:example` + `npm run typecheck:bench`
+**Batch 1 (parallel):** `npm run typecheck` + `npm run typecheck:example` + `npm run typecheck:bench` + `npm run typecheck:test`
 
 **Batch 2 (parallel, after Batch 1 passes):** `npm run test` + `npm run build`
 
