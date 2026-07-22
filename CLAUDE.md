@@ -99,6 +99,7 @@ sharp@^0.33.0           # fixture generation only
 
 - `docs/vision.md` — the project's design charter: North Star, the veto-bearing First-Class Principles, architectural invariants, current capability surface, settled non-goals, and uncommitted future directions. Read this to keep new work on-track; a change that conflicts with a First-Class Principle is wrong by default.
 - `.claude/rules/*.md` — domain-scoped rules loaded automatically by path: `structure.md` (module layout, data flow, folder placement, build config), plus `rendering.md`, `worker.md`, `sectors.md`, `picking.md`, and `testing.md` for area-specific internals.
+- `docs/plans/` — live implementation plans. Move a plan to `docs/plans/shipped/` once its work has landed; tooling selects "the newest implementation-ready plan" by globbing `docs/plans/*.md`, so a completed plan left there reads as pending work. Leave the plan body verbatim — it records what was decided, and git records what shipped.
 - `docs/research/` — architecture/engineering reference PDFs (RGB index-map rendering, GSG engine architecture, WASM/UI binding, etc.), indexed by `docs/research/README.md`.
 - `docs/archive/` — **frozen, read-only** historical record of the retired sprint/phase project-management system (per-version snapshots, the former roadmap, traceability matrix, and phase audits). Not governed or updated; kept for provenance. See `docs/archive/README.md`.
 

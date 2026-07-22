@@ -564,7 +564,9 @@ The following are explicitly out of scope for the current release:
 
 ## Future work
 
-This release (`v0.0.6`) shipped the Worker-side grand-strategy primitives — pathfinding, hierarchical (group-level) aggregation, dynamic border rendering, and spatial anchoring — on top of the earlier Off-Main-Thread kernel. The now-frozen historical roadmap (`docs/archive/ROADMAP.md`) sketched framework bindings, a modding script boundary, and group-scope palettes as possible future directions; none are committed.
+This release (`v0.0.7`) made map-load cost measurable and then reduced it: the registry scan is 4–6× faster, the per-sector pixel arrays it used to retain are gone, and both halves of load — decode and scan — now have recorded figures in `bench/baselines.json` rather than estimates.
+
+Uncommitted directions live in `docs/vision.md` §"Open directions" — framework bindings, a modding script boundary, group-scope palettes, and moving map load into the Worker. That last one was the presumed next step before this release; the measurements weakened its case, and the reasoning is recorded there. The now-frozen historical roadmap (`docs/archive/ROADMAP.md`) sketched some of these originally and is kept only for provenance.
 
 ## Bundle size
 

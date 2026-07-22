@@ -93,6 +93,10 @@ Shipped capability surface (see `README.md` for the full public API):
   hierarchical aggregation (`setParentMapping` / `aggregateGroups` / `getGroupBBox`),
   dynamic perimeter borders (`recomputeBorders`), and spatial anchoring via pole-of-
   inaccessibility (`computeAnchors` / `getAnchor`).
+- **Measured load path** — parse and scan cost are benchmarked rather than estimated
+  (`npm run bench:registry-alloc`, `test/DecodePerf.gl.spec.ts`, recorded in
+  `bench/baselines.json`). PR-3 decisions about the load path now have a number to
+  argue against.
 
 ## Non-goals (settled exclusions)
 
@@ -118,6 +122,31 @@ each must still satisfy the First-Class Principles above:
 - **QuickJS modding engine** (Pillar VII) — a sandboxed scripting boundary for game logic.
 - **Group-scope palettes** (Pillar IV) — extend `registerMapMode` with
   `{scope: 'sector' | 'group'}`, resolving sector→group via `parentMapping` in the shader.
+
+- **Relocating map load (parse + scan) into the Worker** — the "Worker-safe core"
+  invariant exists to keep this open, and it was the presumed next step before v0.0.7.
+  **The measurements weakened the case, and it should not be picked up without re-deciding.**
+  Load cost is now measured rather than assumed (`bench/baselines.json`: `b1.registry_scan`,
+  `b4.decode`), and optimizing the scan in place took it from ~11.6 s to ~1.8 s at 1,000
+  sectors and ~13.3 s to ~3.0 s at 10,000 — leaving total main-thread load at roughly
+  2.1 s / 3.3 s worst case on a 2011-era laptop CPU under container contention, on a
+  fixture with zero void pixels. Real maps carry void, and ordinary hardware is far
+  quicker, so the blocking window on a plausible target machine is likely a few hundred
+  milliseconds.
+
+  Two consequences. First, PR-3 now bites: the Worker relocation is a
+  `BOOTSTRAP`-protocol change and a second `SectorRegistry` construction path, and that
+  complexity has to earn itself against a much smaller remaining win than the one that
+  originally motivated it. Second, the cheaper alternative deserves to be tried first —
+  chunking the scan with the existing `yieldIfNeeded` helper (`src/worker/yield.ts`,
+  which depends only on `MessageChannel` and `performance.now` and so runs on either
+  thread) keeps the work on Main but stops it blocking.
+
+  Re-measure on idle, non-contended hardware before either. If the number lands where the
+  1,000-sector figure suggests, the honest answer may be that neither is needed.
+  Where the remaining cost actually sits, if it is pursued: `OffscreenCanvas` pixel
+  readback (~225 ms) rather than PNG decode (~79 ms) on the parse side, and the per-pixel
+  `Map` lookup on the scan side now that string keys are gone.
 
 ## References
 
