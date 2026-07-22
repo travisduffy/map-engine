@@ -114,6 +114,17 @@
       "scan_ms": "-6.4% at 1k sectors, -3.9% at 10k. The per-pixel array push was never the dominant cost; the scan is dominated by the per-pixel hex-key construction and neighbour lookups."
     }
   },
+  "b4.decode": {
+    "capturedAt": "2026-07-22T17:35:00Z",
+    "hardware": "Intel Core i5-2520M @ 2.50GHz (4 threads), 7 GiB RAM, Linux x86_64 — containerized dev session, not reference hardware",
+    "measurementMethod": "test/DecodePerf.gl.spec.ts. Vitest browser mode (Playwright/Chromium) — createImageBitmap and OffscreenCanvas do not exist in the Node harness bench/ uses, which is why this is the one b-series entry produced from test/ rather than bench/. performance.now() bracketing, best of 5, warmed once first so the HTTP cache is primed and codec lazy-init has settled. The sub-step figures fetch the blob outside the timed region, so neither includes I/O.",
+    "fixture": "test/fixtures/maps/large.png (4096x4096)",
+    "parse_end_to_end_ms": 323,
+    "create_image_bitmap_ms": 79,
+    "offscreen_canvas_readback_ms": 225,
+    "note": "Readback costs roughly 3x the decode itself. The PNG decode is cheap; extracting the pixels back through a 2D context is what dominates. Combined with b1.registry_scan, total main-thread map load at 4096x4096 on this hardware is roughly 2.1 s at 1,000 sectors and 3.3 s at 10,000.",
+    "notThreshold": "Emits figures; no gate is asserted. There is no reference-hardware number to compare against, and a threshold set on a contended box would be flaky rather than informative."
+  },
   "b2.palette_swap_median_ms": {
     "value": 0.4,
     "unit": "ms",

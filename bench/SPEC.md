@@ -108,7 +108,9 @@ nothing about transient allocation.
   do not exist, so `SectorBitmapParser`'s decode path cannot be exercised here
   at all — these figures cover the scan only, never decode. The scan itself is
   pure JS over typed arrays with no DOM dependency and both hosts run V8, but
-  this is assumed, not measured.
+  this is assumed, not measured. Decode is measured separately by
+  `test/DecodePerf.gl.spec.ts` under Vitest browser mode and recorded as
+  `b4.decode`; add the two for total main-thread load cost.
 - **Recorded hardware is not reference hardware.** See the `hardware` field in
   `bench/baselines.json`. Treat the ratio between pre- and post-removal figures
   as the signal rather than the absolute milliseconds.

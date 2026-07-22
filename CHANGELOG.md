@@ -12,6 +12,28 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.0.7] — 2026-07-22
+
+Map-load cost made measurable, then reduced. The load path had never been benchmarked — the figure the README quoted was prose, and the one benchmark that could have grounded it had not compiled since a module reorganization. Measuring it first showed the suspected cost was not the real one.
+
+### Changed
+
+- `SectorRegistry`'s scan is **4–6× faster**. It now runs as two O(W×H) passes instead of one: pass 1 resolves each pixel's sector identity, pass 2 detects borders by reading the `pixelIndices` pass 1 already wrote. Border detection needs each pixel's right and bottom neighbour, so the single-pass form resolved every pixel's colour three times — once as itself, twice as a neighbour. The hot loop also keys on packed RGB integers rather than hex strings, removing roughly 50M string allocations per 4096×4096 load. Measured back to back at 4096×4096 with total sector coverage: 11,585 ms → 1,857 ms at 1,000 sectors, 13,309 ms → 3,165 ms at 10,000. All scan output buffers are byte-identical to the previous implementation
+- `SectorRegistry.getSectorPixels(hexKey)` is replaced by `hasSectorPixels(hexKey): boolean`. The per-sector pixel index arrays it returned were built as JS arrays, converted to `Uint32Array`s with both representations simultaneously live, and retained for the lifetime of the registry — roughly 64 MiB at 4096×4096 — while the only consumer inside the engine was a null check. The recolor precondition is now served by the per-sector pixel tally the scan already maintains for centroids
+- `README.md`'s main-thread cost and mobile heap figures are replaced with measured ones. The previous "200–500 ms on an 8192×4096 bitmap" and "~192 MB" figures had no measurement behind them, and the heap figure omitted the per-sector pixel arrays entirely
+
+### Added
+
+- `npm run bench:registry-alloc` measures scan wall-clock, peak allocation during the scan, and allocation retained after it. Peak is sampled as process-wide RSS from a worker thread, since `process.memoryUsage()`'s heap fields are per-V8-isolate and unreadable from another thread; the heap-vs-ArrayBuffer split applies to the retained main-thread sample. Each fixture size runs in its own process because RSS is a high-water mark
+- `test/fixtures/generate-registry-fixture.ts` — seeded in-process fixture generator producing a raw RGBA buffer and matching definition at a configurable sector count, with total coverage and a guaranteed minimum of one pixel per declared sector
+- `npm run typecheck:bench` and `npm run typecheck:test` — `bench/` and `test/` were outside every typecheck surface. The first `typecheck:test` run found a test helper reconstructing Worker errors from a field absent from the message type, which had been rejecting with `Error: undefined`
+
+### Fixed
+
+- `bench/registry-alloc.spec.ts` imported `../src/SectorRegistry` and `../src/types`; both paths moved during a module reorganization and the spec had not compiled since
+
+---
+
 ## [0.0.6] — 2026-07-09
 
 Phase 4 (GSG Logic) — Worker-side grand-strategy spatial primitives built on the v0.0.5 Off-Main-Thread kernel. All computation runs in the Web Worker and returns to Main via the zero-GC Transferable ring-pool handoff.

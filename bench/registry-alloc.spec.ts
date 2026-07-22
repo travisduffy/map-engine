@@ -97,29 +97,77 @@ function forceGc(): void {
   gc()
 }
 
+/** Upper bound on either sampler handshake; both are a single message round trip. */
+const SAMPLER_HANDSHAKE_TIMEOUT_MS = 10_000
+
 async function startSampler(): Promise<{ stop: () => Promise<SamplerResult> }> {
   const worker = new Worker(SAMPLER, {
     workerData: { intervalMs: SAMPLE_INTERVAL_MS },
   })
 
-  await new Promise<void>((resolve, reject) => {
-    worker.once('error', reject)
-    worker.once('message', message => {
-      if ((message as { ready?: boolean }).ready) resolve()
-      else reject(new Error(`sampler sent an unexpected first message`))
-    })
+  // A sampler that dies between the ready handshake and the stop handshake
+  // would otherwise leave the run hanging until Playwright's timeout with no
+  // diagnostic: an `error` handler attached inside stop() is registered after
+  // the failure has already fired, and worker exit was not watched at all.
+  // Latch any failure at construction so a later wait can settle from it, and
+  // bound every wait so a silently wedged worker still reports something.
+  let failure: Error | null = null
+  const waiters = new Set<(err: Error) => void>()
+  const fail = (err: Error): void => {
+    failure ??= err
+    for (const reject of waiters) reject(err)
+    waiters.clear()
+  }
+  worker.on('error', fail)
+  worker.on('exit', code => {
+    if (code !== 0) fail(new Error(`sampler worker exited with code ${code}`))
   })
 
+  function nextMessage(label: string): Promise<unknown> {
+    if (failure !== null) return Promise.reject(failure)
+    return new Promise<unknown>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        worker.off('message', onMessage)
+        waiters.delete(onFail)
+      }
+      function onMessage(message: unknown): void {
+        cleanup()
+        resolve(message)
+      }
+      function onFail(err: Error): void {
+        cleanup()
+        reject(err)
+      }
+      timer = setTimeout(() => {
+        cleanup()
+        reject(
+          new Error(
+            `sampler ${label} timed out after ${SAMPLER_HANDSHAKE_TIMEOUT_MS} ms`
+          )
+        )
+      }, SAMPLER_HANDSHAKE_TIMEOUT_MS)
+      waiters.add(onFail)
+      worker.on('message', onMessage)
+    })
+  }
+
+  const ready = await nextMessage('ready handshake')
+  if (!(ready as { ready?: boolean }).ready) {
+    void worker.terminate()
+    throw new Error('sampler sent an unexpected first message')
+  }
+
   return {
-    stop: () =>
-      new Promise<SamplerResult>((resolve, reject) => {
-        worker.once('error', reject)
-        worker.once('message', message => {
-          void worker.terminate()
-          resolve(message as SamplerResult)
-        })
+    stop: async () => {
+      try {
         worker.postMessage('stop')
-      }),
+        return (await nextMessage('stop handshake')) as SamplerResult
+      } finally {
+        void worker.terminate()
+      }
+    },
   }
 }
 
