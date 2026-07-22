@@ -67,9 +67,10 @@ Together these took the scan from ~11.6 s to ~1.9 s at 1,000 sectors and ~13.3 s
 
 ### Benchmark measurement invariants
 
-Two facts about `bench/` cost real effort to discover and are not recoverable by reading the code:
+Three facts about `bench/` cost real effort to discover and are not recoverable by reading the code:
 
 - **`process.memoryUsage()` is per-isolate except for `rss`.** `heapUsed`, `heapTotal`, `external`, and `arrayBuffers` are read from the calling thread's own V8 isolate, so an out-of-band sampler thread polling them reports its own idle heap — measured on Node v26.5.0, a sampler saw 7.8 MB while the main thread held 270 MB. Only `rss` is process-wide. This is why peak allocation is sampled as RSS and the heap/ArrayBuffer split belongs to the retained main-thread sample.
 - **RSS is a high-water mark, so one measurement per process.** A second measurement in the same process inherits the first one's peak as its baseline and reports a near-zero peak-over-retained gap. `bench:registry-alloc` chains one script per fixture size for this reason, and `measure()` throws if called twice.
+- **Compare A/B back to back, never across sessions.** This box is contended enough that one build measured an hour apart varied 33% (8.7 s vs 11.6 s for identical code). A perf delta is only trustworthy when both sides run in one sitting under the same load — `git stash push -- <the one file>`, measure, `git stash pop`, measure. Record cross-time figures as separate baseline entries; never subtract one from another and call it a result.
 
 Allocated ArrayBuffer bytes can also exceed resident bytes: `borderEdges` is allocated zero-filled and never written until borders are recomputed, so its pages are not faulted in. Quote the RSS figure, not the ArrayBuffer figure, when reporting real memory pressure.

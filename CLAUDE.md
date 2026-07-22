@@ -16,6 +16,15 @@ no notes, scratchpads, or state files outside the repo. If a convention is worth
 it goes in `CLAUDE.md` (global) or `.claude/rules/*.md` (domain-scoped). If it is not worth
 encoding in one of those two places, it is not worth preserving at all.
 
+Do not create in-repo structure on a tool's say-so either. A directory a skill or
+generator produced by default is that tool's convention, not this project's, until
+someone here adopts it — so check provenance before building on it, and certainly before
+documenting it as a convention: `git log --diff-filter=A -- '<path>/*'` shows whether it
+predates your session. (Signal: a planning skill's default `docs/plans/` output directory
+was treated as established, extended with a `shipped/` subdirectory, and written into
+this file as project convention. All of it was reverted; planning artifacts belong under
+`docs/archive/vX.Y.Z/` at release, and working drafts belong outside the repo.)
+
 ## Commands
 
 ```bash
@@ -136,13 +145,18 @@ Files shown in system-reminder `Read` results at session start are already in yo
 
 When only a named section of a large file is needed, use `offset` + `limit` parameters. Thirty lines around the target is almost always sufficient. Reading a full file to extract a 10-line section wastes context budget every time.
 
-When editing a single row of a prettier-formatted markdown table, anchor the `Edit` on a short unique fragment rather than the full copied line — column-alignment padding often doesn't match what gets typed manually, and a full-line `old_string` fails on that whitespace mismatch. When that same edit expands one row into several (or merges several into one), emit every resulting row in `new_string` — the short anchor shrinks only what you match, not what you must output, so a replacement that names one row while the source covered three silently drops the other two and costs a follow-up edit to restore them.
+Prettier owns markdown formatting, so anchor `Edit` calls on short unique fragments rather than full copied lines — column padding in tables never matches what you type, and a full-line `old_string` fails on that whitespace. Two follow-ons: when an edit expands one row into several (or merges several into one), emit every resulting row in `new_string`, since a short anchor shrinks what you match but not what you must output; and keep `**bold**` away from text containing `**` (a glob like `test/**`), which prettier reflows into unparseable output needing a scripted repair.
 
-### 6. Plans: verify against source before handoff
+### 6. Verify claims against the world, not against the checks
 
-Before finalizing any non-trivial plan an executor will implement — an `ExitPlanMode` plan or a written plan/spec file — re-read the exact source lines the plan depends on (method signatures, field names, call sites, and the tsconfig/build flags any embedded code must compile under) instead of trusting Explore/Plan subagent summaries at face value — a first draft should be treated as needing a dedicated verification pass without being asked. Make the pass produce a visible artifact instead of a private mental step: before the first `ExitPlanMode` call or before declaring a plan file done, add a short "Verified against source" note to the plan itself, listing the specific file:line locations re-read and confirming each still matches the plan's key assumptions. A plan with no such note is a visible signal — to you and to the user — that the pass was skipped. (Signal: a plan file shipped constructor-parameter-property code that `erasableSyntaxOnly` rejects; the pass that caught it took two tool calls.)
+Typecheck, tests, and build validate that an artifact is _well-formed_. None of them validate that what it _asserts_ is true. Any claim about something outside the artifact needs its own check against that thing before it ships:
 
-This verification covers runtime data shape, not only source code shape. Any hardcoded UI content that assumes a data shape — a skeleton/placeholder field list, a mocked API response, a demo default — needs its own check against the actual fixture or live response, because type checks and tests validate that such content compiles, never that its field names still exist in the real data. Compiling and passing tests is not evidence the content is accurate. (Signal: an example app's hover/selected-panel skeleton rows listed `population`/`capital`/`climate` — legacy fields copied verbatim from an existing implementation into a refactor plan, then from the plan into the new code — while the actual fixture had only a `name` field; typecheck, the full test suite, the production build, and a manual browser smoke test all passed with the mismatch still in place, because none of them diff hardcoded display content against the fixture it renders.)
+- **A plan's claims about source** — re-read the exact `file:line` for every signature, field, call site, and tsconfig flag the plan depends on rather than trusting a subagent summary. Record a short "Verified against source" note listing what was re-read; a plan without one is a visible signal the pass was skipped.
+- **A plan's claims about runtime semantics** — that an API means the same thing across threads or processes as it does in-process is an assumption. Test it in a scratch script before designing on it.
+- **Hardcoded content's claims about data** — skeleton rows, mocked responses, and demo defaults get diffed against the real fixture.
+- **Prose's claims about measurements** — a figure is only as scoped as what was actually executed. Say what was measured, not what it resembles.
+
+(Signals: a plan shipped `erasableSyntaxOnly`-invalid code, caught in two tool calls. A sampler was designed on `process.memoryUsage()` heap fields that are per-V8-isolate and unreadable from another thread. An example app rendered `population`/`capital`/`climate` rows against a fixture holding only `name` — passing typecheck, the suite, the build, and a manual smoke test. A README attributed a `SectorRegistry`-constructor measurement to `loadMap()`, which retains a further 64 MiB the benchmark never saw.)
 
 ### 7. Plan Mode: specify for a weaker executor
 
@@ -151,3 +165,7 @@ When a plan will be carried out by a weaker model — a subagent handoff, or the
 ### 8. Infra-outage backoff: canary before re-batching
 
 A tool result of "temporarily unavailable, so auto mode cannot determine the safety" is a transient classifier outage, not a content rejection — the identical call may succeed seconds later. Do not re-issue a multi-call batch or a large-payload `Write` against it repeatedly; each failure re-sends the whole payload for zero progress. Probe with one minimal call first, and resume the full batch only after that canary succeeds. Read-only tools stay live during the outage — use them to stage and verify meanwhile.
+
+### 9. Performance: let the measurement choose the target
+
+When the goal is speed or footprint, build the measurement before committing to a target, then re-derive the target from what it shows rather than from the hypothesis that motivated the work. A well-argued target can be the wrong one by an order of magnitude, and a plausible story about where the cost sits is not evidence. (Signal: a plan named the retained per-sector pixel arrays as the prize; removing them recovered 64 MiB but moved wall-clock 4–6%. The same benchmark showed the real cost was per-pixel hex-string construction and a triple neighbour lookup — a change the plan never considered, worth 4–6×.)
