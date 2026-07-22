@@ -1,6 +1,6 @@
 import { test } from 'playwright/test'
-import { SectorRegistry } from '../src/SectorRegistry'
-import type { SectorDefinitionFile } from '../src/types'
+import { SectorRegistry } from '../src/sector/SectorRegistry'
+import type { SectorDefinitionFile } from '../src/shared/types'
 import sharp from 'sharp'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -29,8 +29,7 @@ test('registry-alloc', async () => {
   if (typeof global.gc === 'function') global.gc()
 
   const before = process.memoryUsage().heapUsed
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _registry = new SectorRegistry(buffer, width, height, definition)
+  const registry = new SectorRegistry(buffer, width, height, definition)
   const after = process.memoryUsage().heapUsed
 
   const delta = Math.max(0, after - before)
@@ -40,5 +39,7 @@ test('registry-alloc', async () => {
     JSON.stringify({ delta, timestamp: new Date().toISOString() }, null, 2)
   )
 
-  console.log(`bench:registry-alloc delta=${delta} bytes`)
+  console.log(
+    `bench:registry-alloc delta=${delta} bytes sectors=${registry.idToHex.length}`
+  )
 })
