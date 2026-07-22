@@ -4,41 +4,33 @@
     "width": 4096,
     "height": 4096,
     "coverage": 1,
-    "scanMsMin": 9242.638056,
-    "scanMsSamples": [
-      10052.051574000001,
-      10175.026887,
-      9242.638056
-    ],
-    "baselineRssBytes": 214638592,
-    "peakRssBytes": 848351232,
-    "peakRssDeltaBytes": 633712640,
-    "retainedRssDeltaBytes": 247808000,
-    "retainedHeapDeltaBytes": -3196624,
-    "retainedArrayBufferDeltaBytes": 221672700,
+    "scanMsMin": 8653.335858000002,
+    "scanMsSamples": [8725.383168, 8653.335858000002, 8793.992516000002],
+    "baselineRssBytes": 215805952,
+    "peakRssBytes": 581132288,
+    "peakRssDeltaBytes": 365326336,
+    "retainedRssDeltaBytes": 178843648,
+    "retainedHeapDeltaBytes": -2975696,
+    "retainedArrayBufferDeltaBytes": 154567836,
     "samplerIntervalMs": 5,
-    "samplerSamples": 1921,
-    "capturedAt": "2026-07-22T13:35:40.249Z"
+    "samplerSamples": 1680,
+    "capturedAt": "2026-07-22T13:43:04.879Z"
   },
   "sectors_10000": {
     "sectorCount": 10000,
     "width": 4096,
     "height": 4096,
     "coverage": 1,
-    "scanMsMin": 10334.855488,
-    "scanMsSamples": [
-      10334.855488,
-      10851.831874,
-      10549.298199
-    ],
-    "baselineRssBytes": 217501696,
-    "peakRssBytes": 1179267072,
-    "peakRssDeltaBytes": 961765376,
-    "retainedRssDeltaBytes": 463314944,
-    "retainedHeapDeltaBytes": -766608,
-    "retainedArrayBufferDeltaBytes": 339757600,
+    "scanMsMin": 9933.855049000002,
+    "scanMsSamples": [10602.363046, 10427.595087000002, 9933.855049000002],
+    "baselineRssBytes": 216289280,
+    "peakRssBytes": 1070923776,
+    "peakRssDeltaBytes": 854634496,
+    "retainedRssDeltaBytes": 237277184,
+    "retainedHeapDeltaBytes": -2824136,
+    "retainedArrayBufferDeltaBytes": 272608736,
     "samplerIntervalMs": 5,
-    "samplerSamples": 2012,
-    "capturedAt": "2026-07-22T13:36:16.240Z"
+    "samplerSamples": 2043,
+    "capturedAt": "2026-07-22T13:43:40.993Z"
   }
 }

@@ -36,6 +36,41 @@
         "sampler_samples": 2012,
         "coverage": 1
       }
+    },
+    "post_removal": {
+      "capturedAt": "2026-07-22T13:43:40Z",
+      "gitRef": "6a7968e",
+      "change": "SectorRegistry no longer builds or retains the per-sector pixel index arrays; the recolor precondition is served by the pixel tally the scan already keeps.",
+      "4096x4096_1k_sectors": {
+        "scan_ms_best_of_3": 8653.3,
+        "peak_rss_delta_bytes": 365326336,
+        "retained_rss_delta_bytes": 178843648,
+        "retained_heap_delta_bytes": -2975696,
+        "retained_arraybuffer_delta_bytes": 154567836,
+        "baseline_rss_bytes": 215805952,
+        "peak_rss_bytes": 581132288,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 1680,
+        "coverage": 1
+      },
+      "4096x4096_10k_sectors": {
+        "scan_ms_best_of_3": 9933.9,
+        "peak_rss_delta_bytes": 854634496,
+        "retained_rss_delta_bytes": 237277184,
+        "retained_heap_delta_bytes": -2824136,
+        "retained_arraybuffer_delta_bytes": 272608736,
+        "baseline_rss_bytes": 216289280,
+        "peak_rss_bytes": 1070923776,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 2043,
+        "coverage": 1
+      }
+    },
+    "delta": {
+      "retained_arraybuffer": "-64.0 MiB at both sector counts — 4096*4096 pixels * 4 bytes, i.e. exactly the removed Uint32Array[] whose entries totalled one per non-void pixel. Independent of sector count, as expected: the arrays were pixel-proportional, not sector-proportional.",
+      "retained_rss": "-28% at 1k sectors, -49% at 10k.",
+      "peak_rss": "-42% at 1k sectors, -11% at 10k. The two do not agree, and the transient allocation removed is identical at both sizes, so treat the peak figures as the noisier of the two: RSS is a high-water mark over pages the allocator chose to hold, not an allocation total.",
+      "scan_ms": "-6.4% at 1k sectors, -3.9% at 10k. The per-pixel array push was never the dominant cost; the scan is dominated by the per-pixel hex-key construction and neighbour lookups."
     }
   },
   "b2.palette_swap_median_ms": {

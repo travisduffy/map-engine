@@ -517,10 +517,18 @@ Omitting the `(1 - uv.y)` inversion causes the top and bottom halves of the map 
 These are documented constraints in the current version. See the Future work section below for planned mitigations.
 
 **Main-thread bitmap parse + registry construction:**
-`SectorBitmapParser.parse()` and the `SectorRegistry` O(W×H) scan both still run on the Main thread inside `loadMap()`, before the registry is transferred to the Worker. For an 8192×4096 bitmap, this can block the main thread for 200–500 ms. There is no built-in mitigation yet — the Worker relocation shipped in this release only covers post-construction state and computation, not the initial parse/scan.
+`SectorBitmapParser.parse()` and the `SectorRegistry` O(W×H) scan both still run on the Main thread inside `loadMap()`, before the registry is transferred to the Worker. There is no built-in mitigation yet — the Worker relocation shipped in this release only covers post-construction state and computation, not the initial parse/scan.
+
+The scan half is measured (`npm run bench:registry-alloc`; figures and method in `bench/baselines.json` under `b1.registry_scan`). At 4096×4096 with **every** pixel assigned to a sector — an upper bound, since real maps carry void pixels — the scan alone took **8.7 s at 1,000 sectors and 9.9 s at 10,000** on the recorded hardware, a 2011-era Intel i5-2520M under container contention. Faster hardware will be substantially quicker; the point is the order of magnitude, not the number. Cost tracks pixel count far more than sector count, so an 8192×4096 bitmap should be expected to roughly double it — that is an extrapolation from the two measured points, not a measurement.
+
+Decode is **not** covered by that figure. The benchmark harness runs in Node, where `createImageBitmap` and `OffscreenCanvas` do not exist, so `SectorBitmapParser`'s cost is still unquantified and is additional to the above.
 
 **Mobile heap budget:**
-At the 4096×4096 mobile size cap, total base heap (source buffer + `pixelIndices` + auxiliary buffers including the `pixelIndicesMirror` context-loss recovery copy) runs to roughly 192 MB — see `docs/archive/ROADMAP.md` §12.3 for the full sizing table by map dimension. `sourceBuffer` is disposed immediately after `pixelIndices` extraction to keep this bounded; plan capacity accordingly for large maps.
+At the 4096×4096 mobile size cap, retained allocation after `loadMap()` measures **~147 MiB at 1,000 sectors and ~260 MiB at 10,000** — again with zero void pixels, so an upper bound. It is dominated by `pixelIndices` (64 MiB) and the `pixelIndicesMirror` context-loss recovery copy (32 MiB), both pixel-proportional and fixed; the rest is CSR adjacency and contour data, which scales with total border length and therefore with sector count. `sourceBuffer` is disposed immediately after `pixelIndices` extraction and is not part of that total.
+
+Peak allocation _during_ the scan is considerably higher than what it retains — roughly 348 MiB and 815 MiB above baseline at the two sector counts. Plan capacity against the peak, not the retained figure.
+
+The sizing table in `docs/archive/ROADMAP.md` §12.3 predates these measurements and is a superseded historical estimate; `docs/archive/` is frozen and is not updated.
 
 **`gl.MAX_TEXTURE_SIZE` hardware cap (bitmap dimensions):**
 The main index texture cannot exceed the device's `gl.MAX_TEXTURE_SIZE` limit — commonly 4096 px on mobile GPUs and 8192 px on desktop. A bitmap exceeding this limit throws a fatal WebGL error. The engine does not query or tile around this limit for the index texture (the GPU palette LUT itself does 2D-wrap automatically past `MAX_TEXTURE_SIZE` sector counts — a separate, already-solved constraint). If targeting mobile, keep bitmaps within 4096×4096.

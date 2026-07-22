@@ -51,3 +51,5 @@ Place every module in a subsystem directory; keep `src/` root for `index.ts` onl
 ## Build configuration
 
 `vite.config.ts` serves dual purpose: library build (`rollupOptions.external: ['three']` is mandatory — omitting it bundles Three.js and silently blows the 15 KB gzipped size budget) and Vitest browser-mode testing. See CLAUDE.md "Dev dependencies" for the pinned versions.
+
+Three tsconfigs, three typecheck surfaces, and every one of them has to be in Batch 1 of the post-task checklist. The root `tsconfig.json` pins `include: ["src"]`; `example/` has its own; `tsconfig.bench.json` covers `bench/` (root config plus Node types, DOM lib retained because bench specs import from `src/shared/types.ts`). A directory left out of all three is a directory where a module move deadens code silently — `bench/registry-alloc.spec.ts` sat uncompilable across a release for exactly that reason.

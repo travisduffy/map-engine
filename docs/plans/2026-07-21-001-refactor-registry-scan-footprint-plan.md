@@ -102,14 +102,14 @@ Separately, the scan builds one JS array per sector and pushes every non-void pi
 - No new dependency is needed. The fixture is built as a raw buffer in-process, so `sharp` is not involved; it remains a devDependency for the existing test fixtures only.
 - The size estimates below are unverified and are the benchmark's job to confirm or refute. They are recorded to show why the per-sector arrays are the suspected prize, not as findings.
 
-| Structure | Estimated size at 4096×4096 | Lifetime |
-| --- | --- | --- |
-| `sourceBuffer` (`Uint8ClampedArray`, W×H×4) | ~67 MB | Disposed after scan |
-| `pixelIndices` (`Uint32Array`, W×H) | ~67 MB | Retained |
-| `pixelIndicesMirror` (`Uint16Array`, W×H) | ~34 MB | Retained |
-| `sectorPixelLists` (`number[][]`, one entry per non-void pixel) | ~134 MB | Transient, peaks alongside the row below |
-| `_sectorPixels` (`Uint32Array[]`, one entry per non-void pixel) | ~67 MB | Retained |
-| Per-sector buffers (bboxes, centroids, counters) | Sector-proportional, small | Retained |
+| Structure                                                       | Estimated size at 4096×4096 | Lifetime                                 |
+| --------------------------------------------------------------- | --------------------------- | ---------------------------------------- |
+| `sourceBuffer` (`Uint8ClampedArray`, W×H×4)                     | ~67 MB                      | Disposed after scan                      |
+| `pixelIndices` (`Uint32Array`, W×H)                             | ~67 MB                      | Retained                                 |
+| `pixelIndicesMirror` (`Uint16Array`, W×H)                       | ~34 MB                      | Retained                                 |
+| `sectorPixelLists` (`number[][]`, one entry per non-void pixel) | ~134 MB                     | Transient, peaks alongside the row below |
+| `_sectorPixels` (`Uint32Array[]`, one entry per non-void pixel) | ~67 MB                      | Retained                                 |
+| Per-sector buffers (bboxes, centroids, counters)                | Sector-proportional, small  | Retained                                 |
 
 A single exploratory run at the R2 fixture size, taken while reviewing this document, put the scan at 8.4 s with a 208 MB heap delta, a 194 MB ArrayBuffer delta, and 588 MB peak RSS. That was one unrepeated sample on a contended container with no forced GC — directional support for the premise, not a baseline, and R1-R7 exist to produce the real figures. It does suggest the transient estimate above is closer to right than low, and it sets the scale the R6 timeout budget has to absorb.
 
@@ -230,6 +230,7 @@ flowchart TB
 **Patterns to follow:** `test/fixtures/borders/generate-perimeter-cases.js` for deterministic scripted construction; `src/shared/utils.ts` `toHexKey` for key formatting.
 
 **Test scenarios:**
+
 - A 4×4 / 4-sector request returns a buffer of length `width * height * 4` with alpha 255 at every pixel.
 - Every key in the returned definition appears at least once in the buffer.
 - No pixel carries the void colour `000000`.
@@ -292,6 +293,7 @@ flowchart TB
 **Patterns to follow:** the readonly-field-assigned-in-constructor-body shape already used across `SectorRegistry`'s field block, which `erasableSyntaxOnly` requires.
 
 **Test scenarios:**
+
 - Covers AE1. A definition entry whose colour appears nowhere in the bitmap → the predicate returns false, `setSectorColor` warns, and the palette entry is left untouched.
 - Covers AE2. A sector present in both bitmap and definition → the predicate returns true, `setSectorColor` writes the palette entry, and the renderer's dirty flag is set.
 - Covers AE3. A hex key absent from the definition → `resetSectorColor` warns and no-ops.
@@ -321,13 +323,13 @@ flowchart TB
 
 ## Verification Contract
 
-| Gate | Command | Applies to |
-| --- | --- | --- |
-| Type checking, batch 1 | `npm run typecheck`, `npm run typecheck:example`, `npm run typecheck:bench` (run in parallel) | All units |
-| Tests and build, batch 2 | `npm run test`, `npm run build` (run in parallel, after batch 1) | All units |
-| Size budget | `npm run size` — must stay under 15 KB gzipped | U5 |
-| Benchmark run | `npm run bench:registry-alloc` | U1, U3, U4, U6 |
-| Formatting | `npm run format` | End of session |
+| Gate                     | Command                                                                                       | Applies to     |
+| ------------------------ | --------------------------------------------------------------------------------------------- | -------------- |
+| Type checking, batch 1   | `npm run typecheck`, `npm run typecheck:example`, `npm run typecheck:bench` (run in parallel) | All units      |
+| Tests and build, batch 2 | `npm run test`, `npm run build` (run in parallel, after batch 1)                              | All units      |
+| Size budget              | `npm run size` — must stay under 15 KB gzipped                                                | U5             |
+| Benchmark run            | `npm run bench:registry-alloc`                                                                | U1, U3, U4, U6 |
+| Formatting               | `npm run format`                                                                              | End of session |
 
 When a `*.gl.spec.ts` gate fails, re-run with `npx vitest run --no-file-parallelism` before treating it as a real regression — those gates false-fail when several run in parallel on this box.
 
@@ -348,11 +350,11 @@ Global:
 
 Per unit:
 
-| Unit | Done when |
-| --- | --- |
-| U1 | `typecheck:bench` exists, passes, and catches a deliberately broken import |
-| U2 | Generator tests pass and a registry builds from its output without warnings |
-| U3 | A run reports both counters at both sample points and a peak above retained |
-| U4 | Pre-removal baselines recorded; `bench/SPEC.md` matches the implemented procedure |
-| U5 | Suite green with `test/MapRenderer.test.ts` unmodified; no `getSectorPixels` in `src/` |
-| U6 | Post-removal baselines recorded; both README claims corrected |
+| Unit | Done when                                                                              |
+| ---- | -------------------------------------------------------------------------------------- |
+| U1   | `typecheck:bench` exists, passes, and catches a deliberately broken import             |
+| U2   | Generator tests pass and a registry builds from its output without warnings            |
+| U3   | A run reports both counters at both sample points and a peak above retained            |
+| U4   | Pre-removal baselines recorded; `bench/SPEC.md` matches the implemented procedure      |
+| U5   | Suite green with `test/MapRenderer.test.ts` unmodified; no `getSectorPixels` in `src/` |
+| U6   | Post-removal baselines recorded; both README claims corrected                          |

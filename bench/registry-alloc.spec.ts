@@ -168,7 +168,8 @@ async function measure(sectorCount: number): Promise<Measurement> {
     peakRssDeltaBytes: peak.peakRss - baseline.rss,
     retainedRssDeltaBytes: retained.rss - baseline.rss,
     retainedHeapDeltaBytes: retained.heapUsed - baseline.heapUsed,
-    retainedArrayBufferDeltaBytes: retained.arrayBuffers - baseline.arrayBuffers,
+    retainedArrayBufferDeltaBytes:
+      retained.arrayBuffers - baseline.arrayBuffers,
     samplerIntervalMs: peak.intervalMs,
     samplerSamples: peak.samples,
   }
