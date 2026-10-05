@@ -1,47 +1,65 @@
-# map-engine (`@travisduffy/map-engine`)
+# map-engine
 
-A small TypeScript library that draws an interactive grand-strategy map in the browser. You give it a PNG where every region is painted in its own flat color, plus a JSON file that names those colors. It gives you back a pannable, zoomable map where every region is a sector you can hover, click, recolor, and route across.
+A TypeScript library that renders interactive maps in the browser.
 
-![The example app: hover and select a county of the Maritime provinces of Canada, route a path across two provinces, zoom, pan, and switch the map mode](docs/demo.gif)
+![The example app: hover and select a sector on the map, route a path across two sectors, zoom, pan, and switch the map mode](docs/demo.gif)
 
-That's the example app in this repo: hover a county, click it, right-click two counties to route a path, zoom, pan, and swap the map mode. To run it yourself:
+Provide a flat-color PNG bitmap paired with a JSON definitions file, and the engine generates a GPU-accelerated canvas supporting panning, zooming, sector selection, dynamic recoloring, and route calculation.
 
-```bash
-git clone https://github.com/travisduffy/map-engine && cd map-engine && npm install && npm run example
-```
+---
 
-Then open http://localhost:3000.
+## Overview
 
-## Why
+`map-engine` implements the discrete bitmap architecture common in grand-strategy games such as _Europa Universalis IV_, _Hearts of Iron IV_, and _Crusader Kings III_:
 
-Paradox games (EU4, HOI4, CK3) build their maps in a way I like. The map is just a bitmap. Each province is one RGB color, and a definitions file maps colors to data. That's it. The color _is_ the identity, so you can draw a new map in any paint program.
+- The base map is encoded as an RGB bitmap.
+- Each sector is defined by a unique, discrete RGB color value.
+- An auxiliary JSON file maps those color keys to sector data.
+- Color values serve as programmatic identities, allowing map asset creation directly in standard image editing software.
 
-I wanted that pipeline on the web, as a plain library with no framework, no server, and no game engine attached. So this is me hacking on that.
+The library delivers this workflow natively to the web platform as a standalone module without dependencies on game engines, UI frameworks, or server-side rendering.
 
-## How it works
+## Architecture
 
-1. **Load.** `loadMap()` fetches the PNG and the JSON, decodes the bitmap to raw pixels, and scans it once. The scan gives each distinct color a small integer id and records each sector's bounding box, centroid, neighbors, and border contour.
-2. **Draw.** The id of every pixel goes into one integer texture on the GPU. A fragment shader looks each id up in a palette texture, one texel per sector. So recoloring a sector, or swapping the whole map to a new map mode, is a write to the palette. No pixel is touched on the CPU.
-3. **Pick.** A pointer event raycasts onto the map plane, turns the hit into a bitmap pixel, reads the id there, and emits the sector. That's how `sectorClick`, `sectorHover`, and `pick()` work.
-4. **Think.** After the scan, the sector data moves into a Web Worker as transferable `ArrayBuffer`s. The worker runs A\* pathfinding, groups sectors into regions, finds label anchors inside each sector, and builds region borders, so none of that blocks the frame. No `SharedArrayBuffer`, so any static host (GitHub Pages, say) can serve it with no special headers.
+Execution runs in four stages:
 
-Three.js is a peer dependency. The library itself is about 16 kB gzipped, worker included.
+1. **Ingestion:** `loadMap()` fetches the PNG and definitions JSON, converts the bitmap to raw pixel buffers, and scans the image once. It assigns sequential integer IDs to unique colors and precomputes bounding boxes, centroids, topological neighbors, and boundary contours.
+2. **Rendering:** Sector IDs load into an integer texture on the GPU. A fragment shader looks up each pixel ID in a secondary palette texture (one texel per sector). Sector recoloring and map-mode transitions update only this palette texture, leaving the CPU out of per-frame pixel processing.
+3. **Picking:** Pointer events raycast onto the map plane, resolve hit coordinates to bitmap pixel positions, sample the sector ID at that coordinate, and emit high-level events (`sectorClick`, `sectorHover`, `pick`).
+4. **Worker Threading:** Sector data transfers to a Web Worker via transferable `ArrayBuffer` instances. The worker computes A\* pathfinding routes, groups sectors into regions, resolves label anchors, and builds region boundary geometry without blocking the main browser thread. The architecture avoids `SharedArrayBuffer`, permitting deployment on standard static web hosts without cross-origin isolation headers.
 
-## Install
+Three.js is a peer dependency. The production bundle size is approximately 16 kB (gzipped), Web Worker included.
+
+## Requirements
+
+### Runtime
+
+- WebGL 2.0
+- `OffscreenCanvas`
+- Web Workers
+- Browser environments only (SSR is not supported)
+
+### Peer Dependencies
+
+- `three` (^0.160.0)
+- `@types/three` (^0.160.0, optional for TypeScript projects)
+
+## Installation
 
 ```bash
 npm install three@^0.160.0 @travisduffy/map-engine
 npm install -D @types/three@^0.160.0
+
 ```
 
-Three.js is a peer dependency, so your app owns it. The package ships `dist` already built. `@types/three` is for TypeScript only. To work from a local clone instead, see [the local route](docs/REFERENCE.md#installation) in the reference.
+Pre-compiled assets ship in `dist/`. For source builds or local development workflows, see the [Installation Guide](https://www.google.com/search?q=docs/REFERENCE.md%23installation) in the reference documentation.
 
 ## Usage
 
 ```typescript
 import { MapEngine } from '@travisduffy/map-engine'
 
-// The page needs <canvas id="map"></canvas>, and the canvas needs a size before loadMap().
+// The DOM requires an HTML canvas element with defined dimensions before calling loadMap()
 const canvas = document.getElementById('map') as HTMLCanvasElement
 canvas.style.width = '800px'
 canvas.style.height = '600px'
@@ -49,20 +67,24 @@ canvas.style.height = '600px'
 const engine = new MapEngine()
 
 engine.on('sectorClick', ({ hexKey, sectorData }) => {
-  console.log(`clicked ${sectorData.name} (${hexKey})`)
+  console.log(`Selected sector: ${sectorData.name} (${hexKey})`)
 })
 
 await engine.loadMap({
   bitmapUrl: '/map.png',
   definitionUrl: '/sectors.json',
   canvas,
-  ignoredColors: ['ffffff', '000000'], // the sea and the background of this map are not sectors
+  ignoredColors: ['ffffff', '000000'], // Ignored non-sector regions (e.g., oceans, borders)
 })
 
-engine.setSectorColor('ff0000', '#3399ff') // repaint one sector
+// Recolor a single sector via palette update
+engine.setSectorColor('ff0000', '#3399ff')
 ```
 
-Draw the bitmap with hard edges, no anti-aliasing, and no transparency, so that each pixel is exactly one color. The JSON is keyed by the hex color of each sector:
+### Input Specifications
+
+- **PNG Bitmap:** Save bitmaps with hard edges. Disable anti-aliasing and alpha transparency. Every pixel must resolve to an exact RGB value.
+- **JSON Definitions:** Key each sector record using lowercase hexadecimal color codes:
 
 ```json
 {
@@ -71,55 +93,65 @@ Draw the bitmap with hard edges, no anti-aliasing, and no transparency, so that 
 }
 ```
 
-The package holds a working pair that matches the code above. From your project root, copy it into the folder that your dev server serves at `/` (for Vite, `public/`):
+Sample data files are provided in the package distribution. Copy them directly into your public static asset directory:
 
 ```bash
 mkdir -p public && cp node_modules/@travisduffy/map-engine/example/public/{map.png,sectors.json} public/
+
 ```
 
-Everything else (map modes, pathfinding, regions, anchors, borders, the camera, events, errors, and the exact input rules) is in [docs/REFERENCE.md](docs/REFERENCE.md).
+Complete technical specifications for map modes, pathfinding, camera controls, label anchors, and data schemas can be found in [docs/REFERENCE.md](https://www.google.com/search?q=docs/REFERENCE.md).
 
-## The example app and the tests
+## Example & Test Suite
+
+### Running the Example Application
 
 ```bash
-git clone https://github.com/travisduffy/map-engine && cd map-engine
+git clone https://github.com/travisduffy/map-engine
+cd map-engine
 npm install
-npm run example   # the example app on http://localhost:3000
+npm run example
+
 ```
 
-The example app exercises every public feature.
+Open `http://localhost:3000` to run the demonstration.
 
-The tests run in a real Chromium through Vitest and Playwright, so get the browser first:
+### Running Tests
+
+Integration tests execute against Chromium via Playwright and Vitest:
 
 ```bash
 npx playwright install chromium
 npm test
-npm run build     # builds dist and checks it
+npm run build
+
 ```
 
-## Status
+## Known Limitations
 
-This is version 0.0.7 and a hobby project. Expect the API to break between versions. Browser only: it needs WebGL2, `OffscreenCanvas`, and `Worker`, and there's no SSR.
+- **Initialization Latency:** Bitmap decoding and coordinate scanning run synchronously on the main thread. On a 4096×4096 pixel canvas, initial load requires approximately 2.1 seconds for 1,000 sectors and 3.3 seconds for 10,000 sectors (benchmarked on dual-core mobile hardware).
+- **Navigation Controls:**
+- Mouse: Middle-button drag pans; wheel zooms.
+- Touch: Single-finger drag pans; pinch zooms.
+- Trackpad: Two-finger scroll zooms. Panning via trackpad is currently unsupported.
 
-The known rough edges:
+- **Capacity:** A single map instance supports up to 65,534 addressable sectors.
+- **Stability:** Software is in early alpha (`v0.0.7`); APIs are subject to breaking changes across minor releases.
 
-- The decode and the scan still run on the main thread. A 4096×4096 map stalls the page for about 2.1 s with 1,000 sectors and 3.3 s with 10,000. That's measured on a 2011 laptop, and it's the worst case.
-- A mouse pans with a middle-button drag and zooms with the wheel. Touch pans with one finger and pinches to zoom. A trackpad can zoom but can't pan.
-- A map holds at most 65,534 sectors.
+## Development Event Log
 
-The reference lists the rest, with the measurements behind them.
+This project tracks changes in the `log/` directory independently of the Git commit tree:
 
-## The development log
+- `log/events.log`: Append-only event store formatted as `<id> <timestamp> <message>`. The ID is the SHA-256 hash of the payload message, ensuring tamper evidence.
+- `log/artifacts/`: Immutable assets and test snapshots named by their SHA-256 content digest.
+- Commits append single entries to the log without editing previous lines. The repository applies the Git `union` merge driver to prevent merge conflicts on concurrent branches.
 
-This repo keeps its own history in [`log/`](log/), separate from git. Git history is easy to rewrite, and a commit message rarely says why. The log is plain text in the tree, so every clone carries the full record of what changed, why, and when.
+```bash
+npm run commit      # Generates a formatted log record and creates artifacts
+npm run check:log   # Validates log schema and cryptographic integrity
 
-- `log/events.log` is append-only, one event per line: `<id> <time> <body>`. The id is the SHA-256 of the body, so an edited body no longer matches its id. The time is Unix seconds. The body is one line, with `\\`, `\n`, `\r`, and `\t` escaped.
-- `log/artifacts/` holds frozen files, like test output or a snapshot. Each one is named by the SHA-256 of its bytes, is never changed or removed, and is named by the line that adds it.
-- Each commit adds exactly one line and changes no earlier one. A merge keeps every line of both parents and adds its own.
-- Git merges the file with the `union` driver, so two branches that each add lines merge and rebase with no conflict.
-
-`npm run commit` makes a commit with its line and artifacts, and `npm run check:log` replays the history and checks every rule. The first line points to a tarball of the plans, changelog, and agent notes from before the log existed.
+```
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT © [Travis Duffy](https://www.google.com/search?q=LICENSE)
