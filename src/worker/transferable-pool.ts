@@ -1,5 +1,5 @@
-import { MappingRequiredError } from '../shared/errors'
-import type { WorkerMessage } from '../shared/types'
+import { MappingRequiredError } from '../shared/errors.js'
+import type { WorkerMessage } from '../shared/types.js'
 
 /**
  * @internal Main-thread side of the Transferable ring-pool handoff

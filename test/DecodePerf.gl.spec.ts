@@ -30,7 +30,7 @@ describe('decode cost — SectorBitmapParser', () => {
     expect(warm.buffer.length).toBe(4096 * 4096 * 4)
 
     // Best-of-N, minimum kept: contention only ever makes a run slower
-    // (.claude/rules/testing.md).
+    // (.claude/rules/testing.md, in the legacy snapshot under log/artifacts/).
     const parseMs: number[] = []
     const decodeMs: number[] = []
     const readbackMs: number[] = []

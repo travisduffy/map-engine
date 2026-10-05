@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 
-import type { ThreeRenderBackendInternalAccess } from './IThreeRenderBackend'
+import type { ThreeRenderBackendInternalAccess } from './IThreeRenderBackend.js'
 
 /**
  * Renders group-perimeter border segments (CA-6) as a single

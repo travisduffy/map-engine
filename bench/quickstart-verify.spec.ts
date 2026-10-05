@@ -76,6 +76,24 @@ async function hoverUntilSectorFound(
   )
 }
 
+/** Takes screenshots of the canvas until one differs from `before`, and fails after 5 s. Returns the changed screenshot. */
+async function screenshotUntilChanged(
+  page: Page,
+  before: Buffer
+): Promise<Buffer> {
+  let after = before
+  await expect
+    .poll(
+      async () => {
+        after = await page.locator('#map').screenshot()
+        return Buffer.compare(before, after)
+      },
+      { timeout: 5_000 }
+    )
+    .not.toBe(0)
+  return after
+}
+
 async function driveInteractionSurface(
   page: Page,
   baseUrl: string
@@ -117,16 +135,14 @@ async function driveInteractionSurface(
 
   // Map mode toggle — the only reliable proof the whole map recolored is a
   // pixel-level screenshot diff (per-sector click assertions above don't
-  // exercise the palette LUT path at all).
+  // exercise the palette LUT path at all). The recolor shows on the next
+  // rendered frame, and a slow machine can take more than one fixed wait to
+  // draw it, so poll for the change with a bound.
   const beforeToggle = await page.locator('#map').screenshot()
   await page.click('#btn-mapmode-grayscale')
-  await page.waitForTimeout(100)
-  const afterGrayscale = await page.locator('#map').screenshot()
-  expect(Buffer.compare(beforeToggle, afterGrayscale)).not.toBe(0)
+  const afterGrayscale = await screenshotUntilChanged(page, beforeToggle)
   await page.click('#btn-mapmode-default')
-  await page.waitForTimeout(100)
-  const afterDefault = await page.locator('#map').screenshot()
-  expect(Buffer.compare(afterGrayscale, afterDefault)).not.toBe(0)
+  await screenshotUntilChanged(page, afterGrayscale)
 
   return { consoleErrors, failedRequests }
 }

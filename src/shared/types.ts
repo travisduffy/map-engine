@@ -16,6 +16,11 @@ export interface MapConfig {
   definitionUrl: string
   /** Render target — must be in the DOM with non-zero CSS dimensions. */
   canvas: HTMLCanvasElement
+  /**
+   * Experimental. Hex keys (six digits, any case) of bitmap colors that are
+   * not sectors, such as the sea. They load as void and raise no warning.
+   */
+  ignoredColors?: readonly string[]
 }
 
 /**
@@ -40,6 +45,37 @@ export interface SectorBBox {
   minY: number
   maxX: number
   maxY: number
+}
+
+// @experimental
+// An inclusive `[minX, minY, maxX, maxY]` box of pixel indices, as `getBBox()`
+// returns it.
+export type BBox = readonly [number, number, number, number]
+
+// @experimental
+// A camera view in continuous bitmap coordinates. (0, 0) is the top-left
+// corner of the bitmap. A zoom of 1 is the initial fit of the whole bitmap,
+// and the engine clamps zoom to [0.5, 20].
+export interface MapView {
+  centerX: number
+  centerY: number
+  zoom: number
+}
+
+// @experimental
+// How `fitBounds()` frames a box: all of it in view, or the canvas filled.
+export type FitMode = 'contain' | 'cover'
+
+// @experimental
+// Options of `MapEngine.fitBounds()`. `padding` is in CSS pixels, default 0.
+// `keepOnResize` fits the region again on each canvas resize until the next
+// user pan or zoom, `setView()`, or `fitBounds()`, default false.
+export interface FitBoundsOptions {
+  padding?: number
+  keepOnResize?: boolean
+  // 'contain' (default) shows the whole box. 'cover' fills the canvas and may
+  // crop the box from view; pan reaches it.
+  fit?: FitMode
 }
 
 /**

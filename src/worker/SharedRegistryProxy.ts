@@ -6,8 +6,8 @@ import {
   CostsRequiredError,
   ModeNotReadyError,
   SectorLimitExceededError,
-} from '../shared/errors'
-import type { WorkerMessage } from '../shared/types'
+} from '../shared/errors.js'
+import type { WorkerMessage } from '../shared/types.js'
 
 /** Canonical error constructors keyed by `.name`, for `ERROR` rehydration. */
 const ERROR_CTORS: Record<string, new (...args: never[]) => Error> = {

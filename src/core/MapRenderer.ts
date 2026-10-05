@@ -1,15 +1,15 @@
 import type { OrthographicCamera, Scene, Mesh, Vector2 } from 'three'
 
-import { InputController } from '../input/InputController'
-import { BorderRenderer } from '../render/BorderRenderer'
-import { ThreeRenderBackend } from '../render/ThreeRenderBackend'
-import { parseColorToRgb } from '../shared/color'
+import { InputController } from '../input/InputController.js'
+import { BorderRenderer } from '../render/BorderRenderer.js'
+import { ThreeRenderBackend } from '../render/ThreeRenderBackend.js'
+import { parseColorToRgb } from '../shared/color.js'
 import type {
   IThreeRenderBackend,
   ThreeRenderBackendInternalAccess,
-} from '../render/IThreeRenderBackend'
-import type { SectorRegistry } from '../sector/SectorRegistry'
-import type { PickEvent } from '../shared/types'
+} from '../render/IThreeRenderBackend.js'
+import type { SectorRegistry } from '../sector/SectorRegistry.js'
+import type { BBox, FitMode, MapView, PickEvent } from '../shared/types.js'
 
 /**
  * Three.js scene orchestration for a loaded map: orthographic "contain"
@@ -97,6 +97,13 @@ export class MapRenderer {
    * (and therefore a flush) always follows a handoff (Known Risk 3).
    */
   public _postRenderHook: (() => void) | null = null
+  // Called inside the dirty branch of the loop, after the render, when the
+  // view differs from the last one that it reported.
+  public _onViewChange: ((view: MapView) => void) | null = null
+  private _lastView: MapView | null = null
+  // The region that the next canvas resize fits again; a user gesture clears it.
+  private _fitTarget: { bbox: BBox; padding: number; fit: FitMode } | null =
+    null
 
   /**
    * Computes the "contain" camera framing, builds (or accepts an injected)
@@ -217,6 +224,52 @@ export class MapRenderer {
       -maxY,
       Math.min(maxY, this.camera.position.y)
     )
+  }
+
+  public _getView(): MapView {
+    return {
+      centerX: this.camera.position.x + this._registry.width / 2,
+      centerY: this._registry.height / 2 - this.camera.position.y,
+      zoom: this.camera.zoom,
+    }
+  }
+
+  // @internal omitted fields keep the live view; zoom clamps to [0.5, 20].
+  public _setView(view: Partial<MapView>): void {
+    const next = { ...this._getView(), ...view }
+    this.camera.position.x = next.centerX - this._registry.width / 2
+    this.camera.position.y = this._registry.height / 2 - next.centerY
+    this.camera.zoom = Math.max(0.5, Math.min(20, next.zoom))
+    this.camera.updateProjectionMatrix()
+    this.clampPan()
+    this._isDirty = true
+    this._fitTarget = null
+  }
+
+  // @internal one bitmap pixel covers `zoom / _worldUnitsPerPixel` CSS pixels.
+  public _fitBounds(
+    bbox: BBox,
+    padding: number,
+    keepOnResize: boolean,
+    fit: FitMode = 'contain'
+  ): void {
+    const [minX, minY, maxX, maxY] = bbox
+    const availableWidth = Math.max(1, this._canvas.clientWidth - 2 * padding)
+    const availableHeight = Math.max(1, this._canvas.clientHeight - 2 * padding)
+    const pickRatio = fit === 'cover' ? Math.max : Math.min
+    this._setView({
+      centerX: (minX + maxX + 1) / 2,
+      centerY: (minY + maxY + 1) / 2,
+      zoom:
+        this._worldUnitsPerPixel *
+        pickRatio(
+          availableWidth / (maxX + 1 - minX),
+          availableHeight / (maxY + 1 - minY)
+        ),
+    })
+    if (keepOnResize) {
+      this._fitTarget = { bbox: [minX, minY, maxX, maxY], padding, fit }
+    }
   }
 
   /** @internal delegates to the backend's index-space pixel→sector-ID lookup (Epic 3 Task 3.4). */
@@ -406,17 +459,37 @@ export class MapRenderer {
       this.camera.bottom = -fhh
       this.camera.updateProjectionMatrix()
       this.clampPan()
+      if (this._fitTarget) {
+        const { bbox, padding, fit } = this._fitTarget
+        this._fitBounds(bbox, padding, true, fit)
+      }
       this._isDirty = true
     }
     if (this._isDirty) {
+      const view = this._onViewChange ? this._getView() : null
+      const last = this._lastView
+      const isViewChanged =
+        !!view &&
+        (!last ||
+          view.centerX !== last.centerX ||
+          view.centerY !== last.centerY ||
+          view.zoom !== last.zoom)
+      if (view && isViewChanged) {
+        this._lastView = { ...view }
+      }
       this._backend.render(this.scene, this.camera)
       if (this._postRenderHook) this._postRenderHook()
       this._isDirty = false
+      // Last, so that a handler that throws cannot skip this frame.
+      if (view && isViewChanged && this._onViewChange) {
+        this._onViewChange(view)
+      }
     }
   }
 
   /** Converts a CSS-pixel pointer delta to world units (frustum-scaled, zoom-compensated), moves the camera, then clamps the pan. */
   private _applyPan(delta: Vector2): void {
+    this._fitTarget = null
     const scaleX = (this._frustumHalfW * 2) / this._canvas.clientWidth
     const scaleY = (this._frustumHalfH * 2) / this._canvas.clientHeight
     this.camera.position.x -= (delta.x * scaleX) / this.camera.zoom
@@ -426,6 +499,7 @@ export class MapRenderer {
 
   /** Applies a zoom factor clamped to [0.5, 20], anchored at `ndcPoint` (the world point under the cursor stays fixed), then clamps the pan. */
   private _applyZoom(factor: number, ndcPoint: Vector2): void {
+    this._fitTarget = null
     const zoomBefore = this.camera.zoom
     const newZoom = Math.max(0.5, Math.min(20.0, zoomBefore * factor))
     this.camera.zoom = newZoom

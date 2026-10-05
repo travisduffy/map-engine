@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 
-import type { SectorRegistry } from '../sector/SectorRegistry'
-import type { PickEvent, PickResult } from '../shared/types'
-import type { MapRenderer } from './MapRenderer'
+import type { SectorRegistry } from '../sector/SectorRegistry.js'
+import type { PickEvent, PickResult } from '../shared/types.js'
+import type { MapRenderer } from './MapRenderer.js'
 
 /**
  * Resolves a pointer event to the sector beneath it (Epic 3 picking pipeline):

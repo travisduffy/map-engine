@@ -12,6 +12,7 @@
  *          computeAnchors, recomputeBorders
  *   Reads: getGroupBBox, getAnchor, getBorderSegments, project
  *   Borders: setBordersVisible
+ *   Camera: getView, setView, fitBounds, viewChange
  *
  * Advanced / Worker pattern (SectorBitmapParser + SectorRegistry direct usage):
  *   import { SectorBitmapParser, SectorRegistry } from 'map-engine'

@@ -163,7 +163,8 @@ self.onmessage = async (
   // numbers against scheduler noise (best-of-N over 16 timed passes total).
   // This containerized dev session runs several other real-GPU gl.spec
   // files concurrently in the full suite -- and the CLAUDE.md post-task
-  // checklist itself mandates running `npm run test` concurrently with
+  // checklist (now in the legacy snapshot under log/artifacts/) itself mandates
+  // running `npm run test` concurrently with
   // `npm run build` -- both of which make single-sample timings for a
   // CPU-bound computation like this noisy; best-of-N filters transient
   // scheduler/GC hiccups without inflating the tolerance beyond the

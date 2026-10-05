@@ -432,6 +432,62 @@ describe('SectorRegistry', () => {
     })
   })
 
+  describe('ignored colors', () => {
+    let warnSpy: ReturnType<typeof vi.spyOn>
+
+    beforeEach(() => {
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+      warnSpy.mockRestore()
+    })
+
+    const warnedMessages = () => warnSpy.mock.calls.map(c => c[0] as string)
+
+    it('ignored colors raise no bitmap-only warning', () => {
+      // ffff00 and 0000ff are bitmap-only here, and only ffff00 is ignored.
+      const partialDefinition: SectorDefinitionFile = {
+        ff0000: { name: 'Red Sector' },
+        '00ff00': { name: 'Green Sector' },
+      }
+      new SectorRegistry(
+        make4x4Buffer(),
+        4,
+        4,
+        partialDefinition,
+        new Set(['ffff00'])
+      )
+      expect(warnedMessages().some(m => m.includes('ffff00'))).toBe(false)
+      expect(warnedMessages().some(m => m.includes('0000ff'))).toBe(true)
+    })
+
+    it('an ignored color stays void and unpickable', () => {
+      const reg = new SectorRegistry(
+        make4x4Buffer(),
+        4,
+        4,
+        mismatchDefinition,
+        new Set(['ffff00'])
+      )
+      expect(reg.getSectorKeys()).not.toContain('ffff00')
+      expect(reg.getSectorAt(2, 2)).toBe('000000')
+      expect(warnedMessages().some(m => m.includes('ffff00'))).toBe(false)
+    })
+
+    it('an ignored color that is in the definition stays a sector', () => {
+      const reg = new SectorRegistry(
+        make4x4Buffer(),
+        4,
+        4,
+        definition,
+        new Set(['ff0000'])
+      )
+      expect(reg.getSectorKeys()).toContain('ff0000')
+      expect(reg.getSectorAt(0, 0)).toBe('ff0000')
+    })
+  })
+
   describe('no Three.js imports', () => {
     it('SectorRegistry has no Three.js dependency', async () => {
       // Verify statically — the import itself succeeds and the module

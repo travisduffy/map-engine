@@ -64,7 +64,7 @@ function makeRandom(seed: number): () => number {
  * Multiplication by an odd constant is a bijection modulo 2^24, so distinct IDs
  * always yield distinct colours; and since `id + 1` never reaches 2^24 (the
  * sector cap is 65534), the product is never congruent to zero — no sector can
- * collide with the `000000` void colour that `.claude/rules/sectors.md` reserves.
+ * collide with the `000000` void colour that the engine reserves for void pixels.
  */
 function sectorColor(id: number, multiplier: number): number {
   return (Math.imul(id + 1, multiplier) >>> 0) & 0xffffff

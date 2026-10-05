@@ -15,6 +15,7 @@ function test404Plugin(): Plugin {
 }
 
 export default defineConfig({
+  base: './',
   plugins: [test404Plugin()],
   server: {
     watch: {

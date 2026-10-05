@@ -77,7 +77,7 @@ So:
   typed-array conversions are both alive. Instrumenting the constructor was
   rejected — the peak is bench-only information, and sampling hooks in library
   code work against both the size budget and the "composable, not invasive"
-  invariant in `docs/vision.md`.
+  invariant in `docs/vision.md` (in the legacy snapshot under `log/artifacts/`).
 - **Retained** is the main thread's own post-GC delta, split into its V8 heap
   and ArrayBuffer components. Either counter alone hides roughly half the
   picture: the transient lists are heap objects, the retained spatial buffers

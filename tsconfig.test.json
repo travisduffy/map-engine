@@ -9,7 +9,7 @@
    * Overrides on the root config:
    *   - `types`: adds Vitest globals and Node types (a few specs reach for
    *     `Buffer` and `node:` builtins through Playwright's browser provider).
-   *   - `include`: `test/` rather than `src/`.
+   *   - `include`: `test/` and `scripts/` rather than `src/`.
    *
    * `lib` is inherited unchanged — these are DOM tests.
    */
@@ -17,5 +17,5 @@
   "compilerOptions": {
     "types": ["vite/client", "node", "vitest/globals"]
   },
-  "include": ["test"]
+  "include": ["test", "scripts"]
 }

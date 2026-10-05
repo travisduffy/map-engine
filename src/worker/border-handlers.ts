@@ -1,9 +1,9 @@
-import { MappingRequiredError } from '../shared/errors'
-import { getParentMapping } from './aggregation-handlers'
-import { registerCallHandler } from './call-handlers'
-import { getWorkerState } from './state'
-import { yieldIfNeeded } from './yield'
-import type { WorkerMessage } from '../shared/types'
+import { MappingRequiredError } from '../shared/errors.js'
+import { getParentMapping } from './aggregation-handlers.js'
+import { registerCallHandler } from './call-handlers.js'
+import { getWorkerState } from './state.js'
+import { yieldIfNeeded } from './yield.js'
+import type { WorkerMessage } from '../shared/types.js'
 
 /** Sentinel pixel value: the pixel belongs to no defined sector (void). */
 const VOID_ID = 0xffff

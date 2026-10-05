@@ -1,4 +1,4 @@
-import { MapInvalidatedError } from '../shared/errors'
+import { MapInvalidatedError } from '../shared/errors.js'
 
 /**
  * Coalesces concurrent `recomputeBorders()` requests (CA-6) so at most one

@@ -1,10 +1,10 @@
-import { SectorLimitExceededError } from '../shared/errors'
-import { toHexKey, packRgb } from '../shared/utils'
+import { SectorLimitExceededError } from '../shared/errors.js'
+import { toHexKey, packRgb } from '../shared/utils.js'
 import type {
   SectorData,
   SectorDefinitionFile,
   ISpatialRegistry,
-} from '../shared/types'
+} from '../shared/types.js'
 
 /** Sentinel pixel value: the pixel belongs to no defined sector (void). */
 const VOID_ID = 0xffff
@@ -66,7 +66,8 @@ export class SectorRegistry implements ISpatialRegistry {
     buffer: Uint8ClampedArray,
     width: number,
     height: number,
-    definition: SectorDefinitionFile
+    definition: SectorDefinitionFile,
+    ignoredColors: ReadonlySet<string> = new Set()
   ) {
     if (buffer.length !== width * height * 4) {
       throw new Error(
@@ -368,6 +369,9 @@ export class SectorRegistry implements ISpatialRegistry {
         (packed >>> 8) & 0xff,
         packed & 0xff
       )
+      if (ignoredColors.has(hexKey)) {
+        continue
+      }
       console.warn(
         `[MapEngine] Color '${hexKey}' found in the bitmap has no corresponding entry in sectors.json.`
       )
