@@ -1,10 +1,14 @@
 {
-  "name": "map-engine",
+  "name": "@travisduffy/map-engine",
   "version": "0.0.7",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/travisduffy/map-engine.git"
+  },
+  "homepage": "https://github.com/travisduffy/map-engine#readme",
+  "bugs": {
+    "url": "https://github.com/travisduffy/map-engine/issues"
   },
   "description": "Render an interactive map from a PNG bitmap and a JSON file with Three.js: color-coded sectors, picking, recoloring, and worker-side pathfinding.",
   "keywords": [
@@ -32,8 +36,13 @@
     "dist",
     "README.md",
     "docs/REFERENCE.md",
-    "docs/example.png"
+    "docs/example.png",
+    "example/public/map.png",
+    "example/public/sectors.json"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "workspaces": [
     "example"
   ],
