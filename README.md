@@ -1,10 +1,16 @@
-# map-engine
+# map-engine (`@travisduffy/map-engine`)
 
 A small TypeScript library that draws an interactive grand-strategy map in the browser. You give it a PNG where every region is painted in its own flat color, plus a JSON file that names those colors. It gives you back a pannable, zoomable map where every region is a sector you can hover, click, recolor, and route across.
 
-<!-- Screen recording of the example app goes here, in place of the image below. -->
+![The example app: hover and select a county of the Maritime provinces of Canada, route a path across two provinces, zoom, pan, and switch the map mode](docs/demo.gif)
 
-![The example app: the Maritime provinces of Canada, one sector per county, with a side panel](docs/example.png)
+That's the example app in this repo: hover a county, click it, right-click two counties to route a path, zoom, pan, and swap the map mode. To run it yourself:
+
+```bash
+git clone https://github.com/travisduffy/map-engine && cd map-engine && npm install && npm run example
+```
+
+Then open http://localhost:3000.
 
 ## Why
 
@@ -23,21 +29,19 @@ Three.js is a peer dependency. The library itself is about 16 kB gzipped, worker
 
 ## Install
 
-It's not on npm, so it installs from GitHub. Since npm 12, npm refuses a git dependency unless the project allows it, so allow git for your direct dependencies first:
-
 ```bash
-echo 'allow-git=root' >> .npmrc
-npm install three@^0.160.0 github:travisduffy/map-engine
+npm install three@^0.160.0 @travisduffy/map-engine
+npm install -D @types/three@^0.160.0
 ```
 
-npm builds `dist` during the install. For types, add `@types/three` as a dev dependency. To work from a local clone instead, see [the local route](docs/REFERENCE.md#installation) in the reference.
+Three.js is a peer dependency, so your app owns it. The package ships `dist` already built. `@types/three` is for TypeScript only. To work from a local clone instead, see [the local route](docs/REFERENCE.md#installation) in the reference.
 
 ## Usage
 
 ```typescript
-import { MapEngine } from 'map-engine'
+import { MapEngine } from '@travisduffy/map-engine'
 
-// The canvas must be in the page and have a size before loadMap().
+// The page needs <canvas id="map"></canvas>, and the canvas needs a size before loadMap().
 const canvas = document.getElementById('map') as HTMLCanvasElement
 canvas.style.width = '800px'
 canvas.style.height = '600px'
@@ -52,6 +56,7 @@ await engine.loadMap({
   bitmapUrl: '/map.png',
   definitionUrl: '/sectors.json',
   canvas,
+  ignoredColors: ['ffffff', '000000'], // the sea and the background of this map are not sectors
 })
 
 engine.setSectorColor('ff0000', '#3399ff') // repaint one sector
@@ -66,7 +71,13 @@ Draw the bitmap with hard edges, no anti-aliasing, and no transparency, so that 
 }
 ```
 
-`example/public/` holds a working pair that matches the code above. Everything else (map modes, pathfinding, regions, anchors, borders, the camera, events, errors, and the exact input rules) is in [docs/REFERENCE.md](docs/REFERENCE.md).
+The package holds a working pair that matches the code above. From your project root, copy it into the folder that your dev server serves at `/` (for Vite, `public/`):
+
+```bash
+mkdir -p public && cp node_modules/@travisduffy/map-engine/example/public/{map.png,sectors.json} public/
+```
+
+Everything else (map modes, pathfinding, regions, anchors, borders, the camera, events, errors, and the exact input rules) is in [docs/REFERENCE.md](docs/REFERENCE.md).
 
 ## The example app and the tests
 
