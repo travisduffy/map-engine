@@ -1,12 +1,11 @@
 # AGENTS.md
 
-This file holds every rule for an agent in this repository. `CLAUDE.md` holds
-one line that loads this file, so add each new rule here and not there.
+This file holds every rule for an agent in this repository.
 
 ## Ground rules
 
-- Make no commit, branch, tag, or push. The maintainer makes each one. Stage
-  your changes only when the maintainer asks.
+- Make no git write: no stage, commit, branch, tag, or push. The maintainer
+  makes each one.
 - Before you end a task, run the four typechecks, `npm test`, and
   `npm run build`, and make sure that each one exits 0.
 - Run `npm run format` on each file that you changed.
@@ -30,7 +29,7 @@ the public page, and `docs/REFERENCE.md` is the full reference.
 - `test/`: Vitest in browser mode with Playwright. `test/event-log.node.ts`
   runs under `node --test`, because it builds git repositories.
 - `bench/`: the benchmarks and the quickstart check, under Playwright.
-- `bin/`: the checks of the built `dist/`.
+- `bin/`: the checks of the built `dist/`, and the bench baseline capture.
 - `scripts/`: the event log tools. `event-log.ts` holds the log format.
 - `log/`: the event log, the durable history of the project.
 
@@ -51,18 +50,23 @@ the public page, and `docs/REFERENCE.md` is the full reference.
 - `npm run build:example`: the example app.
 - `npm run size`: the gzipped bytes of the entry and the worker together.
 - `npm run check:log`: the event log rules over the history.
-- `npm pack --dry-run`: the list of the files of the package.
 - `npm run bench:verify` and `npm run verify:quickstart`: the bench checks.
 - `npm run format`: Prettier over the repository.
 
 ## The event log
 
-- The section `The development log` of `README.md` describes the format, and
+- The section `Development Event Log` of `README.md` describes the format, and
   `scripts/event-log.ts` implements it. `npm run check:log` names the commit
   and the rule of each violation.
-- Make each commit with `npm run commit -- --subject "<line>" --body <file>
-[--artifact <file>]... [-- <path>...]`. It adds exactly one log line, files
-  each artifact under its hash, and refuses a non-empty index.
+- When the maintainer orders a commit, make it with the command below. It adds
+  exactly one log line, files each artifact under its hash, and refuses a
+  non-empty index.
+
+  ```bash
+  npm run commit -- --subject "<line>" --body <file> \
+    [--artifact <file>]... [-- <path>...]
+  ```
+
 - Add the line of a merge commit to `log/events.log` by hand before
   `git commit`, because a merge fills the index that `npm run commit` refuses.
 
