@@ -1,0 +1,29 @@
+{
+  /*
+   * The benchmark harness runs in Node under Playwright, not in the browser.
+   * It extends the root config so bench code compiles under the same strictness
+   * as `src/` (erasableSyntaxOnly, verbatimModuleSyntax, noUnusedLocals), but
+   * overrides two things:
+   *
+   *   - `types`: adds Node globals (process, Buffer, node:worker_threads).
+   *     `vite/client` is kept because bench specs import from `src/`, which
+   *     references Vite-injected types.
+   *   - `include`: the root pins `["src"]`, which is why the dead
+   *     `registry-alloc` benchmark survived a module reorg uncaught.
+   *   - `allowJs`/`checkJs`: `bench/rss-sampler.mjs` must stay plain JS —
+   *     node:worker_threads loads it directly, with no Playwright TypeScript
+   *     transform in the path — but it is the sampler every peak figure
+   *     depends on, so it is type-checked from its JSDoc rather than left as
+   *     the one file in the repo no check compiles.
+   *
+   * `lib` is deliberately inherited unchanged — bench specs import from
+   * `src/shared/types.ts`, which references `HTMLCanvasElement`.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"],
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["bench"]
+}

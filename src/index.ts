@@ -3,7 +3,7 @@
  * `MapEngine as default` is the single sanctioned default-export alias —
  * add no other default export.
  */
-export type * from './shared/types'
+export type * from './shared/types.js'
 export {
   SectorLimitExceededError,
   WebGL2NotSupportedError,
@@ -12,11 +12,12 @@ export {
   CostsRequiredError,
   ModeNotReadyError,
   MapInvalidatedError,
-} from './shared/errors'
-export { toHexKey } from './shared/utils'
-export { SectorBitmapParser } from './sector/SectorBitmapParser'
-export { SectorRegistry } from './sector/SectorRegistry'
-export { MapRenderer } from './core/MapRenderer'
-export { MapEngine } from './core/MapEngine'
-export { MapEngine as default } from './core/MapEngine'
-export { RenderClock } from './core/RenderClock'
+  WorkerStartError,
+} from './shared/errors.js'
+export { toHexKey } from './shared/utils.js'
+export { SectorBitmapParser } from './sector/SectorBitmapParser.js'
+export { SectorRegistry } from './sector/SectorRegistry.js'
+export { MapRenderer } from './core/MapRenderer.js'
+export { MapEngine } from './core/MapEngine.js'
+export { MapEngine as default } from './core/MapEngine.js'
+export { RenderClock } from './core/RenderClock.js'

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 
-import type { PickEvent } from '../shared/types'
+import type { PickEvent } from '../shared/types.js'
 
 /** Callback contract the owning `MapRenderer` supplies: `onDirty` flags a re-render, `pan`/`zoom` apply the camera transform, and the optional `pointerMove`/`click` forward resolved pick events. */
 interface InputControllerOptions {
@@ -13,7 +13,8 @@ interface InputControllerOptions {
 
 /**
  * Owns every pointer/wheel listener on the canvas (main-thread, DOM consumer).
- * Middle-button drag pans, wheel zooms about the cursor, and left-button drag
+ * Middle-button drag pans, wheel zooms about the cursor, one-finger touch drag
+ * pans, two-finger pinch zooms about the midpoint, and left-button drag
  * is tracked through a dead-zone state machine so a small press-release still
  * reads as a click while a real drag suppresses the synthesized click and
  * hover. Exposes the live gesture state (`isPanning`/`isLeftDragging`/
@@ -32,6 +33,12 @@ export class InputController {
   private _hasLeftDragged = false
   private _leftDragOrigin = { x: 0, y: 0 }
 
+  private readonly _touchPoints = new Map<number, { x: number; y: number }>()
+  private _isTouchPanning = false
+  private _touchOrigin = { x: 0, y: 0 }
+  private _pinchDistance = 0
+  private _pinchMid = { x: 0, y: 0 }
+
   private readonly _canvas: HTMLCanvasElement
   private readonly _onDirty: () => void
   private readonly _panCb: (delta: THREE.Vector2) => void
@@ -42,7 +49,7 @@ export class InputController {
   private readonly _boundPointerDown: (e: PointerEvent) => void
   private readonly _boundPointerMove: (e: PointerEvent) => void
   private readonly _boundPointerUp: (e: PointerEvent) => void
-  private readonly _boundPointerCancel: () => void
+  private readonly _boundPointerCancel: (e: PointerEvent) => void
   private readonly _boundWheel: (e: WheelEvent) => void
   private readonly _boundClick: ((e: PickEvent) => void) | null
 
@@ -54,6 +61,11 @@ export class InputController {
     this._zoomCb = options.zoom
 
     this._boundPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') {
+        this._touchDown(e)
+        return
+      }
+
       if (e.button === 1) {
         this._isPanPressed = true
         this._isPanning = false
@@ -73,6 +85,14 @@ export class InputController {
     }
 
     this._boundPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') {
+        this._touchMove(e)
+        if (options.pointerMove) {
+          options.pointerMove(e)
+        }
+        return
+      }
+
       if (this._isLeftPressed && (e.buttons & 1) === 0) {
         this._isLeftPressed = false
         this._isLeftDragActive = false
@@ -111,6 +131,11 @@ export class InputController {
     }
 
     this._boundPointerUp = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') {
+        this._touchUp(e)
+        return
+      }
+
       if (e.button === 1) {
         this._isPanPressed = false
         this._isPanning = false
@@ -120,7 +145,10 @@ export class InputController {
       }
     }
 
-    this._boundPointerCancel = () => {
+    this._boundPointerCancel = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') {
+        this._touchUp(e)
+      }
       this._isPanPressed = false
       this._isPanning = false
       this._isLeftPressed = false
@@ -160,9 +188,11 @@ export class InputController {
     this._onDirty()
   }
 
-  /** True while a middle-button pan press is active (used to suppress hover during a pan). */
+  // True during a middle-button pan or a touch pan or pinch gesture.
   get isPanning(): boolean {
-    return this._isPanPressed
+    return (
+      this._isPanPressed || this._isTouchPanning || this._touchPoints.size >= 2
+    )
   }
 
   /** True once a left-button press has crossed the drag dead zone (a real drag, not a click). */
@@ -175,6 +205,94 @@ export class InputController {
     return this._hasLeftDragged
   }
 
+  private _measurePinch() {
+    const [first, second] = [...this._touchPoints.values()]
+    return {
+      distance: Math.hypot(second.x - first.x, second.y - first.y),
+      mid: { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 },
+    }
+  }
+
+  private _touchDown(e: PointerEvent) {
+    // A third finger is ignored so it cannot disturb the pinch.
+    if (this._touchPoints.size >= 2) {
+      return
+    }
+
+    this._touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    try {
+      this._canvas.setPointerCapture(e.pointerId)
+    } catch {
+      // Synthetic test events may not have a capturable pointer ID.
+    }
+
+    if (this._touchPoints.size === 1) {
+      this._touchOrigin = { x: e.clientX, y: e.clientY }
+      this._hasLeftDragged = false
+      return
+    }
+
+    const { distance, mid } = this._measurePinch()
+    this._pinchDistance = distance
+    this._pinchMid = mid
+    this._hasLeftDragged = true
+  }
+
+  private _touchMove(e: PointerEvent) {
+    const last = this._touchPoints.get(e.pointerId)
+    if (!last) {
+      return
+    }
+
+    this._touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (this._touchPoints.size === 1) {
+      if (!this._isTouchPanning) {
+        const dist = Math.hypot(
+          e.clientX - this._touchOrigin.x,
+          e.clientY - this._touchOrigin.y
+        )
+        if (dist <= InputController._DRAG_DEAD_ZONE_PX) return
+
+        this._isTouchPanning = true
+        this._hasLeftDragged = true
+      }
+      this.onPan(new THREE.Vector2(e.clientX - last.x, e.clientY - last.y))
+      return
+    }
+
+    const { distance, mid } = this._measurePinch()
+    const rect = this._canvas.getBoundingClientRect()
+    const ndcX = ((mid.x - rect.left) / rect.width) * 2 - 1
+    const ndcY = -(((mid.y - rect.top) / rect.height) * 2 - 1)
+
+    if (this._pinchDistance > 0 && distance > 0) {
+      this.onZoom(distance / this._pinchDistance, new THREE.Vector2(ndcX, ndcY))
+    }
+    this.onPan(
+      new THREE.Vector2(mid.x - this._pinchMid.x, mid.y - this._pinchMid.y)
+    )
+    this._pinchDistance = distance
+    this._pinchMid = mid
+  }
+
+  private _touchUp(e: PointerEvent) {
+    if (!this._touchPoints.delete(e.pointerId)) {
+      return
+    }
+
+    if (this._touchPoints.size === 1) {
+      // Restart the pan from the finger that stays, so the view does not jump.
+      const [remaining] = [...this._touchPoints.values()]
+      this._touchOrigin = { ...remaining }
+      this._isTouchPanning = false
+      return
+    }
+
+    this._isTouchPanning = false
+    this._pinchDistance = 0
+  }
+
   /** Removes every listener this controller added (symmetric with the constructor). Call on renderer teardown. */
   destroy(): void {
     this._canvas.removeEventListener('pointerdown', this._boundPointerDown)
@@ -185,5 +303,8 @@ export class InputController {
     if (this._boundClick) {
       this._canvas.removeEventListener('click', this._boundClick)
     }
+    this._touchPoints.clear()
+    this._isTouchPanning = false
+    this._pinchDistance = 0
   }
 }

@@ -1,8 +1,8 @@
-import { registerCallHandler } from './call-handlers'
-import { polylabel } from './polylabel'
-import { getWorkerState } from './state'
-import { yieldIfNeeded } from './yield'
-import type { WorkerMessage } from '../shared/types'
+import { registerCallHandler } from './call-handlers.js'
+import { polylabel } from './polylabel.js'
+import { getWorkerState } from './state.js'
+import { yieldIfNeeded } from './yield.js'
+import type { WorkerMessage } from '../shared/types.js'
 
 /** Sentinel pixel value: the pixel belongs to no defined sector (void). */
 const VOID_ID = 0xffff

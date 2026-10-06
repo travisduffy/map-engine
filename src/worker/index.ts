@@ -1,11 +1,11 @@
-import { SimulationClock, type TickTelemetry } from './SimulationClock'
-import { handleReturnGroupBBoxes } from './aggregation-handlers'
-import { handleReturnAnchors } from './anchor-handlers'
-import { handleReturnBorderEdges } from './border-handlers'
-import { getCallHandler, registerCallHandler } from './call-handlers'
-import './pathfinding-handlers'
-import { setWorkerState } from './state'
-import type { WorkerMessage, BootstrapAckPayload } from '../shared/types'
+import { SimulationClock, type TickTelemetry } from './SimulationClock.js'
+import { handleReturnGroupBBoxes } from './aggregation-handlers.js'
+import { handleReturnAnchors } from './anchor-handlers.js'
+import { handleReturnBorderEdges } from './border-handlers.js'
+import { getCallHandler, registerCallHandler } from './call-handlers.js'
+import './pathfinding-handlers.js'
+import { setWorkerState } from './state.js'
+import type { WorkerMessage, BootstrapAckPayload } from '../shared/types.js'
 
 /** Reads sector `sectorId`'s `[minX, minY, maxX, maxY]` out of the flat SoA `bboxes` buffer. */
 function bboxAt(

@@ -76,3 +76,14 @@ export class MapInvalidatedError extends Error {
     this.name = 'MapInvalidatedError'
   }
 }
+
+// Thrown by `loadMap()` when the Worker fails before it acknowledges
+// BOOTSTRAP: its script did not load, or it threw during start.
+export class WorkerStartError extends Error {
+  constructor(detail: string) {
+    super(
+      `MapEngine: the worker failed before it acknowledged BOOTSTRAP (${detail}). The worker chunk sits in dist/assets, and its URL is relative to dist/index.js. Serve dist/assets with dist/index.js.`
+    )
+    this.name = 'WorkerStartError'
+  }
+}

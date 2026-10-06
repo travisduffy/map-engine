@@ -1,4 +1,4 @@
-import { yieldIfNeeded } from './yield'
+import { yieldIfNeeded } from './yield.js'
 
 /**
  * @internal Pole of Inaccessibility (mapbox `polylabel` behavior, CA-8) over

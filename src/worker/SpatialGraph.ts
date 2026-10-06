@@ -1,5 +1,5 @@
-import { PathNotFoundError } from '../shared/errors'
-import { yieldIfNeeded } from './yield'
+import { PathNotFoundError } from '../shared/errors.js'
+import { yieldIfNeeded } from './yield.js'
 
 /** Sentinel for "no predecessor" in `cameFrom` (§12.3) -- also the start node's own entry. */
 const NO_PREDECESSOR = 0xffff

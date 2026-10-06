@@ -94,6 +94,20 @@ describe('SectorRegistry', () => {
       expect(registry.pixelIndices[3]).toBe(1) // (3,0)
     })
 
+    it('pixelIndices maps blue sector pixels to id 2', () => {
+      expect(registry.pixelIndices[8]).toBe(2) // (0,2)
+      expect(registry.pixelIndices[9]).toBe(2) // (1,2)
+      expect(registry.pixelIndices[12]).toBe(2) // (0,3)
+      expect(registry.pixelIndices[13]).toBe(2) // (1,3)
+    })
+
+    it('pixelIndices maps yellow sector pixels to id 3', () => {
+      expect(registry.pixelIndices[10]).toBe(3) // (2,2)
+      expect(registry.pixelIndices[11]).toBe(3) // (3,2)
+      expect(registry.pixelIndices[14]).toBe(3) // (2,3)
+      expect(registry.pixelIndices[15]).toBe(3) // (3,3)
+    })
+
     it('pixelIndicesMirror matches pixelIndices values', () => {
       for (let i = 0; i < 16; i++) {
         expect(registry.pixelIndicesMirror[i]).toBe(
@@ -103,39 +117,46 @@ describe('SectorRegistry', () => {
     })
   })
 
-  describe('getSectorPixels', () => {
+  describe('hasSectorPixels', () => {
     let registry: SectorRegistry
 
     beforeEach(() => {
       registry = new SectorRegistry(make4x4Buffer(), 4, 4, definition)
     })
 
-    it('getSectorPixels("ff0000") returns Uint32Array [0,1,4,5]', () => {
-      expect(registry.getSectorPixels('ff0000')).toEqual(
-        new Uint32Array([0, 1, 4, 5])
-      )
+    it('returns true for every sector present in the bitmap', () => {
+      for (const hexKey of ['ff0000', '00ff00', '0000ff', 'ffff00']) {
+        expect(registry.hasSectorPixels(hexKey)).toBe(true)
+      }
     })
 
-    it('getSectorPixels("00ff00") returns Uint32Array [2,3,6,7]', () => {
-      expect(registry.getSectorPixels('00ff00')).toEqual(
-        new Uint32Array([2, 3, 6, 7])
-      )
+    it('returns false for a key absent from the definition', () => {
+      expect(registry.hasSectorPixels('aabbcc')).toBe(false)
     })
 
-    it('getSectorPixels("0000ff") returns Uint32Array [8,9,12,13]', () => {
-      expect(registry.getSectorPixels('0000ff')).toEqual(
-        new Uint32Array([8, 9, 12, 13])
-      )
+    it('returns false for a defined sector with no bitmap pixels', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const ghosted = new SectorRegistry(
+          make4x4Buffer(),
+          4,
+          4,
+          mismatchDefinition
+        )
+        expect(ghosted.hasSectorPixels('ffffff')).toBe(false)
+        expect(ghosted.hasSectorPixels('ff0000')).toBe(true)
+      } finally {
+        warnSpy.mockRestore()
+      }
     })
 
-    it('getSectorPixels("ffff00") returns Uint32Array [10,11,14,15]', () => {
-      expect(registry.getSectorPixels('ffff00')).toEqual(
-        new Uint32Array([10, 11, 14, 15])
-      )
-    })
-
-    it('getSectorPixels for unknown key returns undefined', () => {
-      expect(registry.getSectorPixels('aabbcc')).toBeUndefined()
+    it('retains one pixel tally per sector, in definition order', () => {
+      // Replaces the per-sector pixel-index assertions this block used to
+      // carry: those arrays are no longer built, and the tally backing the
+      // predicate is the counter the scan already keeps for centroids.
+      const counts = registry['_pixelCounts']
+      expect(counts).toHaveLength(4)
+      expect(Array.from(counts)).toEqual([4, 4, 4, 4])
     })
   })
 
@@ -408,6 +429,62 @@ describe('SectorRegistry', () => {
       const greenSegs = reg.contourPointers[2] - reg.contourPointers[1] // 00ff00
       expect(blueSegs).toBeGreaterThan(0)
       expect(greenSegs).toBeGreaterThan(0)
+    })
+  })
+
+  describe('ignored colors', () => {
+    let warnSpy: ReturnType<typeof vi.spyOn>
+
+    beforeEach(() => {
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+      warnSpy.mockRestore()
+    })
+
+    const warnedMessages = () => warnSpy.mock.calls.map(c => c[0] as string)
+
+    it('ignored colors raise no bitmap-only warning', () => {
+      // ffff00 and 0000ff are bitmap-only here, and only ffff00 is ignored.
+      const partialDefinition: SectorDefinitionFile = {
+        ff0000: { name: 'Red Sector' },
+        '00ff00': { name: 'Green Sector' },
+      }
+      new SectorRegistry(
+        make4x4Buffer(),
+        4,
+        4,
+        partialDefinition,
+        new Set(['ffff00'])
+      )
+      expect(warnedMessages().some(m => m.includes('ffff00'))).toBe(false)
+      expect(warnedMessages().some(m => m.includes('0000ff'))).toBe(true)
+    })
+
+    it('an ignored color stays void and unpickable', () => {
+      const reg = new SectorRegistry(
+        make4x4Buffer(),
+        4,
+        4,
+        mismatchDefinition,
+        new Set(['ffff00'])
+      )
+      expect(reg.getSectorKeys()).not.toContain('ffff00')
+      expect(reg.getSectorAt(2, 2)).toBe('000000')
+      expect(warnedMessages().some(m => m.includes('ffff00'))).toBe(false)
+    })
+
+    it('an ignored color that is in the definition stays a sector', () => {
+      const reg = new SectorRegistry(
+        make4x4Buffer(),
+        4,
+        4,
+        definition,
+        new Set(['ff0000'])
+      )
+      expect(reg.getSectorKeys()).toContain('ff0000')
+      expect(reg.getSectorAt(0, 0)).toBe('ff0000')
     })
   })
 

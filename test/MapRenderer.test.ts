@@ -787,6 +787,319 @@ describe('MapRenderer', () => {
     })
   })
 
+  describe('touch pan and pinch zoom', () => {
+    beforeEach(() => {
+      renderer = new MapRenderer(canvas, registry)
+    })
+
+    const touch = (
+      type: string,
+      pointerId: number,
+      clientX: number,
+      clientY: number
+    ) =>
+      canvas.dispatchEvent(
+        new PointerEvent(type, {
+          pointerType: 'touch',
+          pointerId,
+          clientX,
+          clientY,
+          button: 0,
+          buttons: 1,
+          bubbles: true,
+        })
+      )
+
+    it('one-finger touch drag moves the view', () => {
+      const before = renderer.camera.position.x
+      touch('pointerdown', 1, 100, 100)
+      touch('pointermove', 1, 150, 100)
+      expect(renderer.camera.position.x).toBeLessThan(before)
+    })
+
+    it('one-finger touch move inside the dead zone does not pan', () => {
+      const before = renderer.camera.position.x
+      touch('pointerdown', 1, 100, 100)
+      touch('pointermove', 1, 102, 100)
+      expect(renderer.camera.position.x).toBe(before)
+    })
+
+    it('two-finger pinch out increases camera.zoom', () => {
+      const before = renderer.camera.zoom
+      touch('pointerdown', 1, 350, 300)
+      touch('pointerdown', 2, 450, 300)
+      touch('pointermove', 2, 550, 300)
+      expect(renderer.camera.zoom).toBeGreaterThan(before)
+    })
+
+    it('two-finger pinch in decreases camera.zoom', () => {
+      const before = renderer.camera.zoom
+      touch('pointerdown', 1, 250, 300)
+      touch('pointerdown', 2, 550, 300)
+      touch('pointermove', 2, 450, 300)
+      expect(renderer.camera.zoom).toBeLessThan(before)
+    })
+
+    it('lifting one finger of a pinch does not jump the view', () => {
+      touch('pointerdown', 1, 350, 300)
+      touch('pointerdown', 2, 450, 300)
+      touch('pointermove', 1, 400, 300)
+      touch('pointerup', 2, 450, 300)
+      const before = renderer.camera.position.clone()
+      touch('pointermove', 1, 401, 300)
+      expect(renderer.camera.position.x).toBe(before.x)
+      expect(renderer.camera.position.y).toBe(before.y)
+      touch('pointermove', 1, 460, 300)
+      expect(renderer.camera.position.x).toBeLessThan(before.x)
+    })
+
+    it('a pinch with no move sets leftHasDragged', () => {
+      touch('pointerdown', 1, 350, 300)
+      touch('pointerdown', 2, 450, 300)
+      touch('pointerup', 2, 450, 300)
+      touch('pointerup', 1, 350, 300)
+      expect(renderer.leftHasDragged).toBe(true)
+    })
+
+    it('pointercancel of a touch ends the gesture', () => {
+      touch('pointerdown', 1, 100, 100)
+      touch('pointermove', 1, 150, 100)
+      canvas.dispatchEvent(
+        new PointerEvent('pointercancel', {
+          pointerType: 'touch',
+          pointerId: 1,
+          bubbles: true,
+        })
+      )
+      expect(renderer.isPanning).toBe(false)
+      const before = renderer.camera.position.x
+      touch('pointermove', 1, 200, 100)
+      expect(renderer.camera.position.x).toBe(before)
+    })
+
+    it('a third finger changes neither zoom nor position', () => {
+      touch('pointerdown', 1, 350, 300)
+      touch('pointerdown', 2, 450, 300)
+      touch('pointerdown', 3, 400, 400)
+      const zoom = renderer.camera.zoom
+      const position = renderer.camera.position.clone()
+      touch('pointermove', 3, 500, 500)
+      expect(renderer.camera.zoom).toBe(zoom)
+      expect(renderer.camera.position.x).toBe(position.x)
+      expect(renderer.camera.position.y).toBe(position.y)
+    })
+
+    it('isPanning is true during a touch pan', () => {
+      touch('pointerdown', 1, 100, 100)
+      touch('pointermove', 1, 150, 100)
+      expect(renderer.isPanning).toBe(true)
+    })
+
+    it('mouse left-drag still does not pan', () => {
+      const before = renderer.camera.position.x
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 0,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 200,
+          clientY: 100,
+          buttons: 1,
+          bubbles: true,
+        })
+      )
+      expect(renderer.camera.position.x).toBe(before)
+      expect(renderer.isPanning).toBe(false)
+    })
+  })
+
+  describe('camera API', () => {
+    const setCanvasWidth = (width: number) => {
+      Object.defineProperty(canvas, 'clientWidth', {
+        value: width,
+        configurable: true,
+      })
+    }
+
+    const expectBoxFilled = () => {
+      const [left, top] = renderer.project(0.5, 0.5)
+      const [right, bottom] = renderer.project(2.5, 2.5)
+      const slack = 1e-6
+      expect(left).toBeGreaterThanOrEqual(-slack)
+      expect(top).toBeGreaterThanOrEqual(-slack)
+      expect(right).toBeLessThanOrEqual(canvas.clientWidth + slack)
+      expect(bottom).toBeLessThanOrEqual(canvas.clientHeight + slack)
+      const spansWidth = Math.abs(right - left - canvas.clientWidth) < 1e-6
+      const spansHeight = Math.abs(bottom - top - canvas.clientHeight) < 1e-6
+      expect(spansWidth || spansHeight).toBe(true)
+    }
+
+    const useCanvas = (width: number, height: number) => {
+      renderer.destroy()
+      canvas.remove()
+      canvas = makeCanvas(width, height)
+      renderer = new MapRenderer(canvas, registry)
+    }
+
+    // The whole 4 by 4 bitmap as a box, in CSS pixels of the canvas.
+    const bitmapEdges = () => {
+      const [left, top] = renderer.project(-0.5, -0.5)
+      const [right, bottom] = renderer.project(3.5, 3.5)
+      return { left, top, right, bottom }
+    }
+
+    const expectBitmapCovers = () => {
+      const { left, top, right, bottom } = bitmapEdges()
+      const slack = 1e-6
+      expect(left).toBeLessThanOrEqual(slack)
+      expect(top).toBeLessThanOrEqual(slack)
+      expect(right).toBeGreaterThanOrEqual(canvas.clientWidth - slack)
+      expect(bottom).toBeGreaterThanOrEqual(canvas.clientHeight - slack)
+    }
+
+    beforeEach(() => {
+      renderer = new MapRenderer(canvas, registry)
+    })
+
+    it('_getView after construction is the contain fit', () => {
+      const view = renderer._getView()
+      expect(view.centerX).toBeCloseTo(2)
+      expect(view.centerY).toBeCloseTo(2)
+      expect(view.zoom).toBeCloseTo(1)
+    })
+
+    it('setView then _getView round-trips', () => {
+      renderer._setView({ centerX: 1, centerY: 3, zoom: 4 })
+      const view = renderer._getView()
+      expect(view.centerX).toBeCloseTo(1)
+      expect(view.centerY).toBeCloseTo(3)
+      expect(view.zoom).toBeCloseTo(4)
+    })
+
+    it('setView clamps zoom to [0.5, 20]', () => {
+      renderer._setView({ zoom: 100 })
+      expect(renderer._getView().zoom).toBe(20)
+      renderer._setView({ zoom: 0.1 })
+      expect(renderer._getView().zoom).toBe(0.5)
+    })
+
+    it('fitBounds contains the sector bbox', () => {
+      renderer._fitBounds([1, 1, 2, 2], 0, false)
+      expectBoxFilled()
+    })
+
+    it('keepOnResize fits again after a canvas resize', () => {
+      renderer._fitBounds([1, 1, 2, 2], 0, true)
+      const zoomBefore = renderer._getView().zoom
+      setCanvasWidth(500)
+      renderer['_loop']()
+      expect(renderer._getView().zoom).not.toBe(zoomBefore)
+      expectBoxFilled()
+    })
+
+    it('fitBounds contain on a tall canvas leaves a band above and below', () => {
+      useCanvas(300, 900)
+      renderer._fitBounds([0, 0, 3, 3], 0, false)
+      const { top, bottom } = bitmapEdges()
+      expect(top).toBeGreaterThan(0)
+      expect(bottom).toBeLessThan(canvas.clientHeight)
+    })
+
+    it('fitBounds cover on a tall canvas fills both axes', () => {
+      useCanvas(300, 900)
+      renderer._fitBounds([0, 0, 3, 3], 0, false)
+      const containZoom = renderer._getView().zoom
+      renderer._fitBounds([0, 0, 3, 3], 0, false, 'cover')
+      expectBitmapCovers()
+      expect(renderer._getView().zoom).toBeCloseTo(containZoom * 3)
+    })
+
+    it('fitBounds cover on a wide canvas fills both axes', () => {
+      useCanvas(1200, 300)
+      renderer._fitBounds([0, 0, 3, 3], 0, false)
+      const containZoom = renderer._getView().zoom
+      renderer._fitBounds([0, 0, 3, 3], 0, false, 'cover')
+      expectBitmapCovers()
+      expect(renderer._getView().zoom).toBeCloseTo(containZoom * 4)
+    })
+
+    it('cover with padding keeps a band of padding on the longer axis', () => {
+      useCanvas(300, 900)
+      renderer._fitBounds([0, 0, 3, 3], 50, false, 'cover')
+      const { top, bottom } = bitmapEdges()
+      expect(top).toBeCloseTo(50)
+      expect(bottom).toBeCloseTo(850)
+    })
+
+    it('keepOnResize with cover keeps the fill after a resize', () => {
+      useCanvas(300, 900)
+      renderer._fitBounds([0, 0, 3, 3], 0, true, 'cover')
+      setCanvasWidth(500)
+      renderer['_loop']()
+      expectBitmapCovers()
+    })
+
+    it('a pan after a cover fit stays inside the 10% bound', () => {
+      useCanvas(300, 900)
+      renderer._fitBounds([0, 0, 3, 3], 0, false, 'cover')
+      canvas.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: -100, bubbles: true })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          clientX: 100,
+          clientY: 100,
+          button: 1,
+          bubbles: true,
+        })
+      )
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 5000,
+          clientY: 5000,
+          buttons: 4,
+          bubbles: true,
+        })
+      )
+      const maxX = registry.width / 2 + registry.width * 0.1
+      const maxY = registry.height / 2 + registry.height * 0.1
+      expect(Math.abs(renderer.camera.position.x)).toBeLessThanOrEqual(maxX)
+      expect(Math.abs(renderer.camera.position.y)).toBeLessThanOrEqual(maxY)
+    })
+
+    it('a viewChange handler that throws does not skip the render', () => {
+      const render = vi.spyOn(renderer['_backend'], 'render')
+      renderer._onViewChange = () => {
+        throw new Error('handler failed')
+      }
+      expect(() => renderer['_loop']()).toThrow('handler failed')
+      expect(render).toHaveBeenCalledTimes(1)
+      expect(renderer['_isDirty']).toBe(false)
+    })
+
+    it('a wheel zoom ends keepOnResize', () => {
+      renderer._fitBounds([1, 1, 2, 2], 0, true)
+      const zoomFitted = renderer._getView().zoom
+      setCanvasWidth(500)
+      renderer['_loop']()
+      const zoomResized = renderer._getView().zoom
+      expect(zoomResized).not.toBe(zoomFitted)
+      canvas.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: -100, bubbles: true })
+      )
+      const zoomWheeled = renderer._getView().zoom
+      expect(zoomWheeled).not.toBe(zoomResized)
+      setCanvasWidth(400)
+      renderer['_loop']()
+      expect(renderer._getView().zoom).toBe(zoomWheeled)
+    })
+  })
+
   describe('destroy', () => {
     it('does not throw', () => {
       renderer = new MapRenderer(canvas, registry)

@@ -1,8 +1,8 @@
-import { MappingRequiredError } from '../shared/errors'
-import { registerCallHandler } from './call-handlers'
-import { getWorkerState } from './state'
-import { yieldIfNeeded } from './yield'
-import type { WorkerMessage } from '../shared/types'
+import { MappingRequiredError } from '../shared/errors.js'
+import { registerCallHandler } from './call-handlers.js'
+import { getWorkerState } from './state.js'
+import { yieldIfNeeded } from './yield.js'
+import type { WorkerMessage } from '../shared/types.js'
 
 /** Sentinel mapping entry: the sector belongs to no group (excluded from aggregation). */
 const VOID_GROUP = 0xffff

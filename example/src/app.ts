@@ -12,6 +12,7 @@ import { createRegions } from './features/regions'
 import { createBorders } from './features/borders'
 import { createAnchors } from './features/anchors'
 import { createMapModes } from './features/map-modes'
+import { createCamera } from './features/camera'
 
 /**
  * Feature registry, in mount order. Order matters in one place: `createRegions`
@@ -29,6 +30,7 @@ const FEATURES: FeatureFactory[] = [
   createBorders,
   createAnchors,
   createMapModes,
+  createCamera,
 ]
 
 /** Composition root: owns the engine lifecycle and the feature set. */
@@ -69,6 +71,8 @@ export class App {
         bitmapUrl: 'map.png', // relative — resolves under subpath deploys
         definitionUrl: 'sectors.json',
         canvas: this.canvas,
+        // No ignoredColors: map.png has no void color. A bitmap with a sea or a
+        // background color lists it there, e.g. ignoredColors: ['ffffff'].
       })
     } catch (err) {
       setStatus(

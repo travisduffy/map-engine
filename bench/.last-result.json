@@ -1,4 +1,40 @@
 {
-  "delta": 14352088,
-  "timestamp": "2026-06-15T01:17:04.848Z"
+  "sectors_1000": {
+    "sectorCount": 1000,
+    "width": 4096,
+    "height": 4096,
+    "coverage": 1,
+    "scanMsMin": 1790.6867539999994,
+    "scanMsSamples": [2023.90144, 1847.0768989999997, 1790.6867539999994],
+    "baselineRssBytes": 215113728,
+    "peakRssBytes": 639381504,
+    "peakRssDeltaBytes": 424267776,
+    "retainedRssDeltaBytes": 124637184,
+    "retainedHeapDeltaBytes": 36528,
+    "retainedArrayBufferDeltaBytes": 154567836,
+    "samplerIntervalMs": 5,
+    "samplerSamples": 392,
+    "samplerCoverage": 0.9684266048054198,
+    "capturedAt": "2026-07-22T18:35:11.359Z"
+  },
+  "sectors_10000": {
+    "sectorCount": 10000,
+    "width": 4096,
+    "height": 4096,
+    "coverage": 1,
+    "scanMsMin": 3009.923354999999,
+    "scanMsSamples": [
+      3381.5256900000004, 3085.3223150000003, 3009.923354999999
+    ],
+    "baselineRssBytes": 216682496,
+    "peakRssBytes": 1032396800,
+    "peakRssDeltaBytes": 815714304,
+    "retainedRssDeltaBytes": 187035648,
+    "retainedHeapDeltaBytes": -2393224,
+    "retainedArrayBufferDeltaBytes": 272608736,
+    "samplerIntervalMs": 5,
+    "samplerSamples": 645,
+    "samplerCoverage": 0.9537115183058094,
+    "capturedAt": "2026-07-22T18:35:26.960Z"
+  }
 }

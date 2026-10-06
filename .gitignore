@@ -1,6 +1,8 @@
 # Logs
 logs
 *.log
+# The event log is tracked, so its directory is exempt from *.log.
+!/log/**
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

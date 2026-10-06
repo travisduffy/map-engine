@@ -1,23 +1,27 @@
-import { SectorBitmapParser } from '../sector/SectorBitmapParser'
-import { SectorRegistry } from '../sector/SectorRegistry'
+import { SectorBitmapParser } from '../sector/SectorBitmapParser.js'
+import { SectorRegistry } from '../sector/SectorRegistry.js'
 import {
   MapInvalidatedError,
   ModeNotReadyError,
   CostsRequiredError,
-} from '../shared/errors'
-import { SharedRegistryProxy } from '../worker/SharedRegistryProxy'
+  WorkerStartError,
+} from '../shared/errors.js'
+import { SharedRegistryProxy } from '../worker/SharedRegistryProxy.js'
 import {
   TransferableGroupPool,
   TransferableAnchorPool,
   TransferableBorderPool,
-} from '../worker/transferable-pool'
-import { BorderCoalescer } from './BorderCoalescer'
-import { EventEmitter } from './EventEmitter'
-import { MapRenderer } from './MapRenderer'
-import { PointerPickResolver } from './PointerPickResolver'
-import { RenderClock } from './RenderClock'
+} from '../worker/transferable-pool.js'
+import { BorderCoalescer } from './BorderCoalescer.js'
+import { EventEmitter } from './EventEmitter.js'
+import { MapRenderer } from './MapRenderer.js'
+import { PointerPickResolver } from './PointerPickResolver.js'
+import { RenderClock } from './RenderClock.js'
 import type {
+  BBox,
+  FitBoundsOptions,
   MapConfig,
+  MapView,
   PickEvent,
   SectorData,
   PickResult,
@@ -26,12 +30,40 @@ import type {
   BootstrapAckPayload,
   WorkerMessage,
   MapModeId,
-} from '../shared/types'
+} from '../shared/types.js'
+
+type PendingCamera =
+  | { kind: 'view'; view: Partial<MapView> }
+  | { kind: 'fit'; bbox: BBox; options: FitBoundsOptions }
+
+const CANCELLED_LOAD_MESSAGE =
+  'MapEngine: loadMap() was cancelled by dispose().'
+
+const assertFinite = (method: string, field: string, value: number) => {
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`MapEngine.${method}: ${field} must be finite`)
+  }
+}
+
+const normalizeIgnoredColors = (colors: readonly string[] = []) => {
+  const ignored = new Set<string>()
+  for (const color of colors) {
+    const hex = color.toLowerCase()
+    if (!/^[0-9a-f]{6}$/.test(hex)) {
+      throw new RangeError(
+        'MapEngine.loadMap: ignoredColors must be six hex digits'
+      )
+    }
+    ignored.add(hex)
+  }
+  return ignored
+}
 
 export class MapEngine {
   private _isLoaded: boolean = false
   private _isDestroyed: boolean = false
   private _isLoading: boolean = false
+  private _pendingCamera: PendingCamera | null = null
   private _parser: SectorBitmapParser
   private readonly _events: EventEmitter
   private _registry: SectorRegistry | null = null
@@ -40,7 +72,10 @@ export class MapEngine {
   private _frameCallbacks: FrameCallback[] = []
   private readonly _renderClock: RenderClock
   private _tickRate: number = 60
-  private _worker: Worker
+  private _worker: Worker | null
+  private _loadGeneration = 0
+  private _workerFailure: WorkerStartError | null = null
+  private _rejectAck: ((err: Error) => void) | null = null
   private _proxy: SharedRegistryProxy | null = null
   private _isRegistryInvalidated: boolean = false
   private _lastBootstrapAck: BootstrapAckPayload | null = null
@@ -57,7 +92,7 @@ export class MapEngine {
     this._parser = new SectorBitmapParser()
     this._events = new EventEmitter()
     this._renderClock = new RenderClock()
-    this._worker = this._createWorker()
+    this._worker = this._spawnWorker()
     this._borderCoalescer = new BorderCoalescer(
       () => this._proxy!.call<void>('recomputeBorders'),
       () => !this._isDestroyed && this._isLoaded && !!this._proxy
@@ -67,13 +102,17 @@ export class MapEngine {
   /** Registers `handler` for a pick event (`sectorClick`/`sectorHover`). Throws once destroyed. */
   on(event: 'sectorClick', handler: (result: PickResult) => void): void
   on(event: 'sectorHover', handler: (result: PickResult | null) => void): void
+  on(event: 'viewChange', handler: (view: MapView) => void): void
   on(event: string, handler: Function): void {
     if (this._isDestroyed) throw new Error('MapEngine: destroyed')
     this._events.on(event, handler)
   }
 
   /** Removes a previously registered pick-event handler; a no-op if it was never registered. Throws once destroyed. */
-  off(event: 'sectorClick' | 'sectorHover', handler: Function): void {
+  off(
+    event: 'sectorClick' | 'sectorHover' | 'viewChange',
+    handler: Function
+  ): void {
     if (this._isDestroyed) throw new Error('MapEngine: destroyed')
     this._events.off(event, handler)
   }
@@ -120,7 +159,7 @@ export class MapEngine {
     this._tickRate = hz
   }
 
-  /** @internal read by the Task 1.5 BOOTSTRAP payload builder. */
+  /** @internal read by the BOOTSTRAP payload builder. */
   get tickRate(): number {
     return this._tickRate
   }
@@ -138,9 +177,12 @@ export class MapEngine {
     if (this._isLoading)
       throw new Error('MapEngine: loadMap() is already in progress')
 
+    // Checked before the teardown, so a bad entry leaves a loaded map alone.
+    const ignored = normalizeIgnoredColors(config.ignoredColors)
+
     if (this._isLoaded) {
-      // Reload lifecycle (Epic 3 Task 3.3): invalidate the previous
-      // session's in-flight proxy calls before re-bootstrapping.
+      // Reload lifecycle: invalidate the previous session's in-flight
+      // proxy calls before re-bootstrapping.
       this._proxy?.rejectAll(new MapInvalidatedError())
       this._proxy = null
       this._pool?.dispose()
@@ -151,8 +193,8 @@ export class MapEngine {
       this._borderPool = null
       this._borderCoalescer.reset()
       this._renderer?.destroy()
-      this._worker.terminate()
-      this._worker = this._createWorker()
+      this._worker?.terminate()
+      this._worker = null
       this._renderClock.reset()
       this._registry = null
       this._renderer = null
@@ -168,8 +210,15 @@ export class MapEngine {
     }
 
     this._isLoading = true
+    const generation = this._loadGeneration
+    // A dispose before this load stopped the worker, so start a new one.
+    const worker = (this._worker ??= this._spawnWorker())
+    let partialRenderer: MapRenderer | null = null
 
     try {
+      if (this._workerFailure) {
+        throw this._workerFailure
+      }
       const [{ buffer, width, height }, definition] = await Promise.all([
         this._parser.parse(config.bitmapUrl),
         fetch(config.definitionUrl).then(r => {
@@ -180,8 +229,15 @@ export class MapEngine {
           return r.json()
         }),
       ])
+      this._throwIfCancelled(generation)
 
-      const registry = new SectorRegistry(buffer, width, height, definition)
+      const registry = new SectorRegistry(
+        buffer,
+        width,
+        height,
+        definition,
+        ignored
+      )
       let renderer: MapRenderer
       const hook = (): void => {
         this._renderClock.tick(this._frameCallbacks)
@@ -193,6 +249,7 @@ export class MapEngine {
         e => this._picker?.handlePointer(e, false),
         e => this._picker?.handlePointer(e, true)
       )
+      partialRenderer = renderer
       // Suspend rendering across the Worker bootstrap round-trip — a real
       // rAF tick here would consume the render loop's "priming" frame before
       // loadMap() has even resolved.
@@ -224,17 +281,22 @@ export class MapEngine {
         tickHz: this._tickRate,
       }
 
-      const ackPromise = new Promise<BootstrapAckPayload>(resolve => {
+      const ackPromise = new Promise<BootstrapAckPayload>((resolve, reject) => {
+        this._rejectAck = reject
         const onMessage = (e: MessageEvent<WorkerMessage>): void => {
           if (e.data.type === 'BOOTSTRAP_ACK') {
-            this._worker.removeEventListener('message', onMessage)
+            worker.removeEventListener('message', onMessage)
+            this._rejectAck = null
             resolve(e.data.payload)
           }
         }
-        this._worker.addEventListener('message', onMessage)
+        worker.addEventListener('message', onMessage)
       })
 
-      this._worker.postMessage(
+      if (this._workerFailure) {
+        throw this._workerFailure
+      }
+      worker.postMessage(
         {
           type: 'BOOTSTRAP',
           payload: bootstrapPayload,
@@ -253,20 +315,20 @@ export class MapEngine {
       )
       this._isRegistryInvalidated = true
 
-      this._lastBootstrapAck = await ackPromise
-      this._proxy = new SharedRegistryProxy(this._worker, registrySnapshot)
-      this._pool = new TransferableGroupPool(this._worker, () => {
+      const ack = await ackPromise
+      this._throwIfCancelled(generation)
+      this._lastBootstrapAck = ack
+      this._rejectAck = null
+      this._proxy = new SharedRegistryProxy(worker, registrySnapshot)
+      this._pool = new TransferableGroupPool(worker, () => {
         renderer._isDirty = true
       })
-      this._anchorPool = new TransferableAnchorPool(this._worker, () => {
+      this._anchorPool = new TransferableAnchorPool(worker, () => {
         renderer._isDirty = true
       })
-      this._borderPool = new TransferableBorderPool(
-        this._worker,
-        (edges, count) => {
-          renderer._receiveBorderEdges(edges, count)
-        }
-      )
+      this._borderPool = new TransferableBorderPool(worker, (edges, count) => {
+        renderer._receiveBorderEdges(edges, count)
+      })
       // Single _postRenderHook slot shared by all three ring pools (F-C.7/
       // F-C.8 + CA-8/CA-6) -- a composite flushes each pool's bounce-back
       // independently.
@@ -275,6 +337,8 @@ export class MapEngine {
         this._anchorPool!.flushBounces()
         this._borderPool!.flushBounces()
       }
+      renderer._onViewChange = view => this._events.emit('viewChange', view)
+      this._applyPendingCamera(renderer)
       renderer._resumeLoop()
 
       this._registry = registry
@@ -288,7 +352,24 @@ export class MapEngine {
 
       this._isLoaded = true
       this._isLoading = false
+      // Nothing between `_applyPendingCamera` and this line awaits, so a
+      // `setView()` call cannot land between the apply and this clear. A failed load keeps the
+      // request for the retry, so the clear stays here.
+      this._pendingCamera = null
     } catch (err) {
+      if (partialRenderer && partialRenderer !== this._renderer) {
+        partialRenderer.destroy()
+      }
+      // A dispose already reset the shared state, and a newer load may own it.
+      if (generation !== this._loadGeneration) {
+        throw err
+      }
+      this._rejectAck = null
+      if (err instanceof WorkerStartError) {
+        // Replace the dead worker so that a retry of loadMap() starts clean.
+        worker.terminate()
+        this._worker = this._spawnWorker()
+      }
       this._isLoading = false
       throw err
     }
@@ -296,12 +377,17 @@ export class MapEngine {
 
   /**
    * Rejects all in-flight proxy calls with `MapInvalidatedError`, tears down
-   * the renderer/Worker, and resolves. `destroy()` is the existing sync
-   * teardown entry point and delegates here fire-and-forget (ROADMAP §8 B3.c).
+   * the renderer/Worker, and resolves. `destroy()` is the sync teardown
+   * entry point and delegates here fire-and-forget.
    */
   async dispose(): Promise<void> {
     // Step 1: idempotent — never throws
     if (this._isDestroyed) return
+
+    // A load in flight sees the new generation and rejects at its next check.
+    this._loadGeneration++
+    this._rejectAck?.(new MapInvalidatedError(CANCELLED_LOAD_MESSAGE))
+    this._rejectAck = null
 
     // Step 0 (new): reject in-flight proxy calls before tearing anything down
     this._proxy?.rejectAll(new MapInvalidatedError())
@@ -316,6 +402,7 @@ export class MapEngine {
     // CA-7: discard the registered palette data (Epic 4 Task 4.3).
     this._mapModes.clear()
     this._currentMapMode = null
+    this._pendingCamera = null
 
     // Step 0b: clear frame callbacks
     this._frameCallbacks = []
@@ -333,13 +420,15 @@ export class MapEngine {
     this._picker = null
     this._isLoading = false
 
-    // Steps 6–7: conditionally mark destroyed
+    // Steps 6–7: stop the worker, and mark destroyed only when loaded
+    this._worker?.terminate()
     if (this._isLoaded) {
-      this._worker.terminate()
       this._isDestroyed = true
+    } else {
+      // If _isLoaded === false (partial failure), do NOT set _isDestroyed:
+      // the next loadMap() starts a new worker and retries.
+      this._worker = null
     }
-    // If _isLoaded === false (partial failure), do NOT set _isDestroyed or terminate
-    // the Worker (never bootstrapped yet) — allow retry via loadMap()
   }
 
   /** Synchronous teardown entry point; delegates to `dispose()` fire-and-forget (ROADMAP §8 B3.c). */
@@ -387,6 +476,24 @@ export class MapEngine {
     if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     return this._registry!.getSectorKeys()
+  }
+
+  // Returns the numeric id of a hex key (its index in `getSectorKeys()`), or
+  // `undefined` for an unknown key. Throws if destroyed or not loaded.
+  getSectorId(hexKey: string): number | undefined {
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    return this._registry!.getNumericId(hexKey)
+  }
+
+  // Returns the hex key of a numeric id, or `undefined` for an id out of
+  // range. Throws if destroyed or not loaded.
+  getSectorKey(id: number): string | undefined {
+    if (this._isDestroyed) throw new Error('MapEngine: destroyed')
+    if (!this._isLoaded)
+      throw new Error('MapEngine: not loaded — call loadMap() first')
+    return this._registry!.idToHex[id]
   }
 
   /** Overrides a sector's fill color via the GPU palette LUT (O(1) write, no pixel iteration). Throws if destroyed or not loaded. */
@@ -674,6 +781,129 @@ export class MapEngine {
     if (!this._isLoaded)
       throw new Error('MapEngine: not loaded — call loadMap() first')
     return this._renderer!.project(x, y)
+  }
+
+  // Returns the camera view in bitmap pixels, or `null` before `loadMap()` has
+  // resolved. Throws once destroyed.
+  getView(): MapView | null {
+    if (this._isDestroyed) {
+      throw new Error('MapEngine: destroyed')
+    }
+    if (!this._isLoaded) {
+      return null
+    }
+    return this._renderer!._getView()
+  }
+
+  // Sets the camera; an omitted field keeps its value. Zoom clamps to [0.5,
+  // 20] and the center to the bitmap. Before load it stores one request (the
+  // last call wins) that `loadMap()` applies before the first frame. Throws
+  // `RangeError` on a non-finite number, and once destroyed.
+  setView(view: Partial<MapView>): void {
+    if (this._isDestroyed) {
+      throw new Error('MapEngine: destroyed')
+    }
+    assertFinite('setView', 'centerX', view.centerX ?? 0)
+    assertFinite('setView', 'centerY', view.centerY ?? 0)
+    assertFinite('setView', 'zoom', view.zoom ?? 1)
+    if (!this._isLoaded) {
+      this._pendingCamera = { kind: 'view', view: { ...view } }
+      return
+    }
+    this._renderer!._setView(view)
+  }
+
+  // Frames a `[minX, minY, maxX, maxY]` bbox of inclusive pixel indices, such
+  // as `getBBox()` returns. `padding` keeps CSS pixels clear on each side;
+  // `keepOnResize` fits again on each canvas resize until the next user pan or
+  // zoom, `setView()`, or `fitBounds()`. Before load it stores one request
+  // that `loadMap()` applies before the first frame. Zoom clamps to [0.5, 20],
+  // so a very small box or a large padding does not fill the canvas. Throws
+  // `RangeError` on a bad bbox, padding, or fit, and once destroyed.
+  fitBounds(bbox: BBox, options: FitBoundsOptions = {}): void {
+    if (this._isDestroyed) {
+      throw new Error('MapEngine: destroyed')
+    }
+    const [minX, minY, maxX, maxY] = bbox
+    assertFinite('fitBounds', 'minX', minX)
+    assertFinite('fitBounds', 'minY', minY)
+    assertFinite('fitBounds', 'maxX', maxX)
+    assertFinite('fitBounds', 'maxY', maxY)
+    if (minX > maxX || minY > maxY) {
+      throw new RangeError('MapEngine.fitBounds: bbox must have min <= max')
+    }
+    const padding = options.padding ?? 0
+    assertFinite('fitBounds', 'padding', padding)
+    if (padding < 0) {
+      throw new RangeError('MapEngine.fitBounds: padding must be >= 0')
+    }
+    const fit = options.fit ?? 'contain'
+    if (fit !== 'contain' && fit !== 'cover') {
+      throw new RangeError(
+        'MapEngine.fitBounds: fit must be "contain" or "cover"'
+      )
+    }
+    if (!this._isLoaded) {
+      this._pendingCamera = {
+        kind: 'fit',
+        bbox: [minX, minY, maxX, maxY],
+        options: { ...options },
+      }
+      return
+    }
+    this._renderer!._fitBounds(
+      bbox,
+      padding,
+      options.keepOnResize ?? false,
+      fit
+    )
+  }
+
+  // Runs before the loop resumes, so the first rendered frame has the view.
+  private _applyPendingCamera(renderer: MapRenderer) {
+    const pending = this._pendingCamera
+    if (!pending) {
+      return
+    }
+    if (pending.kind === 'view') {
+      renderer._setView(pending.view)
+      return
+    }
+    const {
+      padding = 0,
+      keepOnResize = false,
+      fit = 'contain',
+    } = pending.options
+    renderer._fitBounds(pending.bbox, padding, keepOnResize, fit)
+  }
+
+  private _throwIfCancelled(generation: number) {
+    if (generation !== this._loadGeneration) {
+      throw new MapInvalidatedError(CANCELLED_LOAD_MESSAGE)
+    }
+  }
+
+  // Wraps the worker seam with listeners that turn a start failure into
+  // `WorkerStartError`. They attach at creation, because the `error` event of
+  // a script that did not load fires before `loadMap()` listens.
+  private _spawnWorker(): Worker {
+    const worker = this._createWorker()
+    const fail = (detail: string) => {
+      if (worker !== this._worker || this._isLoaded) {
+        return
+      }
+      this._workerFailure = new WorkerStartError(detail)
+      this._rejectAck?.(this._workerFailure)
+    }
+    worker.addEventListener('error', error =>
+      fail(error.message || 'the worker script did not load')
+    )
+    worker.addEventListener('messageerror', () =>
+      fail('a message could not be deserialized')
+    )
+    // A failure of an earlier worker does not carry over to this one.
+    this._workerFailure = null
+    return worker
   }
 
   /** Spins up the module Worker from the bundled worker entry. Called at construction and again on every `loadMap()` reload — a fresh Worker means a fresh, empty registry/graph. */

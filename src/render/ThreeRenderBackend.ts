@@ -1,10 +1,10 @@
 import * as THREE from 'three'
 
-import { WebGL2NotSupportedError } from '../shared/errors'
+import { WebGL2NotSupportedError } from '../shared/errors.js'
 import type {
   IThreeRenderBackend,
   ThreeRenderBackendInternalAccess,
-} from './IThreeRenderBackend'
+} from './IThreeRenderBackend.js'
 
 /** Void/unknown-pixel sentinel in the numeric sector-ID space (matches `pixelIndices`). */
 const VOID_ID = 0xffff

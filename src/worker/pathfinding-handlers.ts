@@ -1,7 +1,7 @@
-import { CostsRequiredError } from '../shared/errors'
-import { SpatialGraph } from './SpatialGraph'
-import { registerCallHandler } from './call-handlers'
-import { getWorkerState } from './state'
+import { CostsRequiredError } from '../shared/errors.js'
+import { SpatialGraph } from './SpatialGraph.js'
+import { registerCallHandler } from './call-handlers.js'
+import { getWorkerState } from './state.js'
 
 // Rebuilt from scratch on every setTraversalCosts; null until costs are first supplied.
 let graph: SpatialGraph | null = null

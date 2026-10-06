@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import type {
   IThreeRenderBackend,
   ThreeRenderBackendInternalAccess,
-} from './IThreeRenderBackend'
+} from './IThreeRenderBackend.js'
 
 /**
  * No-op test double for logic tests that don't need a real GPU context.

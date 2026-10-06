@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 
 import { MapEngine } from '../src/core/MapEngine'
-import { MapInvalidatedError } from '../src/shared/errors'
+import { MapRenderer } from '../src/core/MapRenderer'
+import { MapInvalidatedError, WorkerStartError } from '../src/shared/errors'
 import { makeCanvas } from './test-utils'
 
 describe('MapEngine — constructor and event subscription', () => {
@@ -90,6 +91,18 @@ describe('MapEngine — constructor and event subscription', () => {
 
 const BITMAP_URL = '/test/fixtures/test-4x4.png'
 const DEFINITION_URL = '/test/fixtures/test-4x4.json'
+// The bitmap is 4x4, and zoom 1 is the fit of the whole bitmap, so one zoom
+// unit is 75 CSS pixels per bitmap pixel on a 300x900 canvas. A 2x2 box
+// fits at 150 or 450 CSS pixels per box pixel, and both zooms stay under the
+// clamp of 20.
+const ZOOM_CONTAIN = 2
+const ZOOM_COVER = 6
+
+const waitFrames = async (count: number) => {
+  for (let i = 0; i < count; i++) {
+    await new Promise(resolve => requestAnimationFrame(resolve))
+  }
+}
 
 describe('MapEngine — loadMap(), lifecycle guards, and destroy()', () => {
   let canvas: HTMLCanvasElement
@@ -98,6 +111,7 @@ describe('MapEngine — loadMap(), lifecycle guards, and destroy()', () => {
   afterEach(() => {
     engine?.destroy()
     canvas?.remove()
+    vi.restoreAllMocks()
   })
 
   it('loadMap() resolves with valid test fixtures', async () => {
@@ -191,6 +205,81 @@ describe('MapEngine — loadMap(), lifecycle guards, and destroy()', () => {
     ).resolves.toBeUndefined()
   })
 
+  const failNextWorker = () =>
+    vi
+      .spyOn(MapEngine.prototype as any, '_createWorker')
+      .mockImplementationOnce(
+        () => new Worker('/test/__404__', { type: 'module' })
+      )
+
+  it('loadMap rejects when the worker fails to start', async () => {
+    failNextWorker()
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await expect(
+      engine.loadMap({
+        bitmapUrl: BITMAP_URL,
+        definitionUrl: DEFINITION_URL,
+        canvas,
+      })
+    ).rejects.toBeInstanceOf(WorkerStartError)
+  })
+
+  it('loadMap retries cleanly after a worker start failure', async () => {
+    failNextWorker()
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await expect(
+      engine.loadMap({
+        bitmapUrl: BITMAP_URL,
+        definitionUrl: DEFINITION_URL,
+        canvas,
+      })
+    ).rejects.toBeInstanceOf(WorkerStartError)
+    engine.destroy()
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    expect(engine.getSector('ff0000')).toEqual({ name: 'Red Sector' })
+  })
+
+  it('a worker start failure destroys the partial renderer', async () => {
+    failNextWorker()
+    const destroy = vi.spyOn(MapRenderer.prototype, 'destroy')
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await expect(
+      engine.loadMap({
+        bitmapUrl: BITMAP_URL,
+        definitionUrl: DEFINITION_URL,
+        canvas,
+      })
+    ).rejects.toBeInstanceOf(WorkerStartError)
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('a worker error after the acknowledgement does not fail the next loadMap', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    const config = {
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    }
+    // The render loop resumes after the acknowledgement and before the load
+    // completes, so an error event there meets no pending acknowledgement.
+    const worker: Worker = (engine as any)._worker
+    vi.spyOn(MapRenderer.prototype, '_resumeLoop').mockImplementationOnce(
+      () => {
+        worker.dispatchEvent(new ErrorEvent('error', { message: 'late' }))
+      }
+    )
+    await engine.loadMap(config)
+    await expect(engine.loadMap(config)).resolves.toBeUndefined()
+  })
+
   it('loadMap() rejects when definitionUrl returns HTTP 200 non-JSON body', async () => {
     canvas = makeCanvas()
     engine = new MapEngine()
@@ -231,6 +320,191 @@ describe('MapEngine — loadMap(), lifecycle guards, and destroy()', () => {
     expect(() => engine.off('sectorHover', () => {})).toThrow(
       'MapEngine: destroyed'
     )
+  })
+
+  it('getView returns null before loadMap', () => {
+    engine = new MapEngine()
+    expect(engine.getView()).toBeNull()
+  })
+
+  it('fitBounds before loadMap applies at load', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    engine.fitBounds([0, 0, 1, 1], { padding: 8 })
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    const view = engine.getView()!
+    expect(view.centerX).toBeCloseTo(1)
+    expect(view.centerY).toBeCloseTo(1)
+
+    const unpadded = new MapEngine()
+    const unpaddedCanvas = makeCanvas()
+    unpadded.fitBounds([0, 0, 1, 1])
+    await unpadded.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas: unpaddedCanvas,
+    })
+    const unpaddedZoom = unpadded.getView()!.zoom
+    unpadded.destroy()
+    unpaddedCanvas.remove()
+    expect(view.zoom).toBeLessThan(unpaddedZoom)
+  })
+
+  it('camera methods throw after destroy of a loaded engine', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    engine.destroy()
+    expect(() => engine.getView()).toThrow('MapEngine: destroyed')
+    expect(() => engine.setView({ zoom: 2 })).toThrow('MapEngine: destroyed')
+    expect(() => engine.fitBounds([0, 0, 1, 1])).toThrow('MapEngine: destroyed')
+  })
+
+  it('viewChange fires once after setView', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    await waitFrames(2)
+    const handler = vi.fn()
+    engine.on('viewChange', handler)
+    engine.setView({ zoom: 3 })
+    await waitFrames(2)
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler.mock.calls[0][0].zoom).toBeCloseTo(3)
+  })
+
+  it('setView rejects a non-finite center with RangeError', () => {
+    engine = new MapEngine()
+    expect(() => engine.setView({ centerX: NaN })).toThrow(RangeError)
+    expect(() => engine.setView({ centerY: Infinity })).toThrow(RangeError)
+  })
+
+  it('setView before loadMap stores one request, the last call wins', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    engine.setView({ zoom: 3 })
+    engine.setView({ zoom: 5 })
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    const view = engine.getView()!
+    expect(view.zoom).toBeCloseTo(5)
+    expect(view.centerX).toBeCloseTo(2)
+    expect(view.centerY).toBeCloseTo(2)
+  })
+
+  it('setView after fitBounds before loadMap replaces the fit', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    engine.fitBounds([0, 0, 1, 1])
+    engine.setView({ zoom: 2 })
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    const view = engine.getView()!
+    expect(view.zoom).toBeCloseTo(2)
+    expect(view.centerX).toBeCloseTo(2)
+    expect(view.centerY).toBeCloseTo(2)
+  })
+
+  it('fitBounds rejects a bbox with min > max and a negative padding', () => {
+    engine = new MapEngine()
+    expect(() => engine.fitBounds([2, 0, 1, 1])).toThrow(RangeError)
+    expect(() => engine.fitBounds([0, 2, 1, 1])).toThrow(RangeError)
+    expect(() => engine.fitBounds([0, 0, 1, 1], { padding: -1 })).toThrow(
+      RangeError
+    )
+  })
+
+  it('fitBounds rejects an unknown fit mode', () => {
+    engine = new MapEngine()
+    expect(() =>
+      engine.fitBounds([0, 0, 1, 1], { fit: 'stretch' as never })
+    ).toThrow(RangeError)
+  })
+
+  it('a stored pre-load fitBounds keeps its fit mode', async () => {
+    canvas = makeCanvas(300, 900)
+    engine = new MapEngine()
+    engine.fitBounds([0, 0, 1, 1], { fit: 'cover' })
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    const coverZoom = engine.getView()!.zoom
+
+    const contain = new MapEngine()
+    const containCanvas = makeCanvas(300, 900)
+    try {
+      contain.fitBounds([0, 0, 1, 1])
+      await contain.loadMap({
+        bitmapUrl: BITMAP_URL,
+        definitionUrl: DEFINITION_URL,
+        canvas: containCanvas,
+      })
+      expect(contain.getView()!.zoom).toBeCloseTo(ZOOM_CONTAIN)
+      expect(coverZoom).toBeCloseTo(ZOOM_COVER)
+    } finally {
+      contain.destroy()
+      containCanvas.remove()
+    }
+  })
+
+  it('destroy clears a request stored before loadMap', () => {
+    engine = new MapEngine()
+    engine.setView({ zoom: 5 })
+    engine.destroy()
+    expect(engine['_pendingCamera']).toBeNull()
+  })
+
+  it('viewChange fires once on the first frame', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    const handler = vi.fn()
+    engine.on('viewChange', handler)
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    await waitFrames(3)
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler.mock.calls[0][0].zoom).toBeCloseTo(1)
+  })
+
+  it('off stops viewChange events', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    const handler = vi.fn()
+    engine.on('viewChange', handler)
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    await waitFrames(2)
+    const callsBefore = handler.mock.calls.length
+    engine.off('viewChange', handler)
+    engine.setView({ zoom: 3 })
+    await waitFrames(2)
+    expect(handler).toHaveBeenCalledTimes(callsBefore)
   })
 })
 
@@ -329,6 +603,56 @@ describe('MapEngine — pass-through methods and getters', () => {
     })
     expect(engine.renderer).toBeTruthy()
     expect(() => engine.registry).toThrow(MapInvalidatedError)
+  })
+
+  it('getSectorId and getSectorKey are inverses over getSectorKeys()', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    const keys = engine.getSectorKeys()
+    expect(keys.length).toBeGreaterThan(0)
+    for (const [index, key] of keys.entries()) {
+      expect(engine.getSectorId(key)).toBe(index)
+      expect(engine.getSectorKey(index)).toBe(key)
+    }
+  })
+
+  it('getSectorId returns undefined for an unknown key, and getSectorKey for an id out of range', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    const count = engine.getSectorKeys().length
+    expect(engine.getSectorId('unknown')).toBeUndefined()
+    expect(engine.getSectorKey(count)).toBeUndefined()
+    expect(engine.getSectorKey(-1)).toBeUndefined()
+    expect(engine.getSectorKey(0.5)).toBeUndefined()
+  })
+
+  it('getSectorId and getSectorKey throw "not loaded" before loadMap()', () => {
+    engine = new MapEngine()
+    expect(() => engine.getSectorId('ff0000')).toThrow('not loaded')
+    expect(() => engine.getSectorKey(0)).toThrow('not loaded')
+  })
+
+  it('getSectorId and getSectorKey throw "destroyed" after destroy()', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    engine.destroy()
+    expect(() => engine.getSectorId('ff0000')).toThrow('MapEngine: destroyed')
+    expect(() => engine.getSectorKey(0)).toThrow('MapEngine: destroyed')
   })
 
   it('pass-throughs throw "destroyed" after destroy() on fully-loaded engine', async () => {
@@ -673,5 +997,67 @@ describe('MapEngine — picking (sectorHover and sectorClick)', () => {
     )
     expect(handler).toHaveBeenCalledOnce()
     expect(handler.mock.calls[0][0].hexKey).toBe('ff0000')
+  })
+})
+
+describe('MapEngine — ignoredColors', () => {
+  let canvas: HTMLCanvasElement
+  let engine: MapEngine
+
+  afterEach(() => {
+    engine?.destroy()
+    canvas?.remove()
+    vi.restoreAllMocks()
+  })
+
+  it('ignoredColors are lower-cased before the check', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: MISMATCH_DEFINITION_URL,
+      canvas,
+      ignoredColors: ['FFFF00'],
+    })
+    const messages = warn.mock.calls.map(c => c[0] as string)
+    expect(messages.some(m => m.includes('ffff00'))).toBe(false)
+  })
+
+  it('loadMap rejects a malformed ignored color before it fetches', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await expect(
+      engine.loadMap({
+        bitmapUrl: BITMAP_URL,
+        definitionUrl: DEFINITION_URL,
+        canvas,
+        ignoredColors: ['fff'],
+      })
+    ).rejects.toThrow(
+      new RangeError('MapEngine.loadMap: ignoredColors must be six hex digits')
+    )
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('a reload with a malformed ignored color leaves the engine usable', async () => {
+    canvas = makeCanvas()
+    engine = new MapEngine()
+    await engine.loadMap({
+      bitmapUrl: BITMAP_URL,
+      definitionUrl: DEFINITION_URL,
+      canvas,
+    })
+    await expect(
+      engine.loadMap({
+        bitmapUrl: BITMAP_URL,
+        definitionUrl: DEFINITION_URL,
+        canvas,
+        ignoredColors: ['fff'],
+      })
+    ).rejects.toBeInstanceOf(RangeError)
+    expect(engine.getSector('ff0000')).toEqual({ name: 'Red Sector' })
+    expect(engine.getSectorKeys()).toContain('ff0000')
   })
 })

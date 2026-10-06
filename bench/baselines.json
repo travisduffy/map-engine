@@ -1,10 +1,129 @@
 {
-  "b1.constructor_alloc_bytes": {
-    "value": 16327600,
-    "unit": "bytes",
-    "capturedAt": "2026-05-14T15:29:24Z",
-    "hardware": "Linux x86_64",
-    "measurementMethod": "process.memoryUsage().heapUsed (Node.js v8 heap, --expose-gc)"
+  "b1.registry_scan": {
+    "note": "Supersedes b1.constructor_alloc_bytes (16327600 bytes, captured 2026-05-14). That figure was measured with an empty sector definition — which zeroes every sector-proportional structure in the scan — and sampled process.memoryUsage().heapUsed alone, which excludes ArrayBuffer backing stores. It corresponded to no structure the scan builds and has been removed rather than carried forward. The spec producing it had also stopped compiling during a module reorg; see bench/SPEC.md.",
+    "hardware": "Intel Core i5-2520M @ 2.50GHz (4 threads), 7 GiB RAM, Linux x86_64, Node v26.5.0 — containerized dev session, not reference hardware",
+    "measurementMethod": "bench/registry-alloc.spec.ts. Fixture generated in-process by test/fixtures/generate-registry-fixture.ts as a raw RGBA buffer (no PNG encode/decode in the sampled process). Scan wall-clock is performance.now() bracketing the SectorRegistry constructor, best of 3. Peak is process-wide RSS sampled every 5 ms from a node:worker_threads sampler (bench/rss-sampler.mjs) while the constructor's single synchronous block runs. Retained is the main thread's own post-forced-GC delta, split into V8 heap and ArrayBuffer components. Each fixture size runs in its own process.",
+    "caveats": [
+      "Peak is an RSS upper bound, not an allocation total: RSS includes pages the allocator has not returned to the OS. Only rss is process-wide in Node — heapUsed, heapTotal, external, and arrayBuffers are read from the calling thread's own V8 isolate, so an out-of-band sampler cannot read them. The heap/ArrayBuffer split is therefore available only for the retained sample.",
+      "Coverage is 1.0 — every pixel is assigned to a sector, zero void. Real maps carry void pixels, so these are an upper bound for maps of these dimensions.",
+      "Retained V8 heap deltas land near zero because the scan's retained structures are all typed arrays (ArrayBuffer-backed); the transient per-sector pixel lists are the heap-resident part and are gone by the time the retained sample is taken. The peak-over-retained gap is where they show up.",
+      "Wall-clock was measured on a 2011-era mobile CPU under container contention. Treat the ratio between pre- and post-removal figures as the signal, not the absolute milliseconds."
+    ],
+    "pre_removal": {
+      "capturedAt": "2026-07-22T13:36:16Z",
+      "gitRef": "0c4dd28",
+      "4096x4096_1k_sectors": {
+        "scan_ms_best_of_3": 9242.6,
+        "peak_rss_delta_bytes": 633712640,
+        "retained_rss_delta_bytes": 247808000,
+        "retained_heap_delta_bytes": -3196624,
+        "retained_arraybuffer_delta_bytes": 221672700,
+        "baseline_rss_bytes": 214638592,
+        "peak_rss_bytes": 848351232,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 1921,
+        "coverage": 1
+      },
+      "4096x4096_10k_sectors": {
+        "scan_ms_best_of_3": 10334.9,
+        "peak_rss_delta_bytes": 961765376,
+        "retained_rss_delta_bytes": 463314944,
+        "retained_heap_delta_bytes": -766608,
+        "retained_arraybuffer_delta_bytes": 339757600,
+        "baseline_rss_bytes": 217501696,
+        "peak_rss_bytes": 1179267072,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 2012,
+        "coverage": 1
+      }
+    },
+    "post_removal": {
+      "capturedAt": "2026-07-22T13:43:40Z",
+      "gitRef": "6a7968e",
+      "change": "SectorRegistry no longer builds or retains the per-sector pixel index arrays; the recolor precondition is served by the pixel tally the scan already keeps.",
+      "4096x4096_1k_sectors": {
+        "scan_ms_best_of_3": 8653.3,
+        "peak_rss_delta_bytes": 365326336,
+        "retained_rss_delta_bytes": 178843648,
+        "retained_heap_delta_bytes": -2975696,
+        "retained_arraybuffer_delta_bytes": 154567836,
+        "baseline_rss_bytes": 215805952,
+        "peak_rss_bytes": 581132288,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 1680,
+        "coverage": 1
+      },
+      "4096x4096_10k_sectors": {
+        "scan_ms_best_of_3": 9933.9,
+        "peak_rss_delta_bytes": 854634496,
+        "retained_rss_delta_bytes": 237277184,
+        "retained_heap_delta_bytes": -2824136,
+        "retained_arraybuffer_delta_bytes": 272608736,
+        "baseline_rss_bytes": 216289280,
+        "peak_rss_bytes": 1070923776,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 2043,
+        "coverage": 1
+      }
+    },
+    "post_scan_split": {
+      "capturedAt": "2026-07-22T16:55:57Z",
+      "change": "Scan split into two O(WxH) passes (identity, then border detection reading pixelIndices) and the hot loop rekeyed from hex strings onto packed RGB integers. Border detection previously resolved each pixel's colour three times — once as itself, twice as a neighbour — at one string allocation and one string-keyed Map lookup each.",
+      "equivalence": "All eleven output buffers digest-identical to the pre-split implementation at 7, 331, and 1,000 sectors on a 512x384 fixture.",
+      "4096x4096_1k_sectors": {
+        "scan_ms_best_of_3": 1857.2,
+        "peak_rss_delta_bytes": 426487808,
+        "retained_rss_delta_bytes": 125329408,
+        "retained_heap_delta_bytes": 38536,
+        "retained_arraybuffer_delta_bytes": 154567836,
+        "baseline_rss_bytes": 215322624,
+        "peak_rss_bytes": 641810432,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 397,
+        "sampler_coverage": 0.962,
+        "coverage": 1
+      },
+      "4096x4096_10k_sectors": {
+        "scan_ms_best_of_3": 3164.7,
+        "peak_rss_delta_bytes": 816369664,
+        "retained_rss_delta_bytes": 187633664,
+        "retained_heap_delta_bytes": -2391672,
+        "retained_arraybuffer_delta_bytes": 272608736,
+        "baseline_rss_bytes": 216645632,
+        "peak_rss_bytes": 1033015296,
+        "sampler_interval_ms": 5,
+        "sampler_samples": 748,
+        "sampler_coverage": 0.958,
+        "coverage": 1
+      },
+      "ab_control": {
+        "note": "The pre_removal and post_removal entries above were captured on a quieter box and are not directly comparable to these. This pair was measured back to back against the immediately preceding implementation under identical load, by stashing only src/sector/SectorRegistry.ts.",
+        "single_pass_1k_scan_ms": 11585,
+        "single_pass_10k_scan_ms": 13309,
+        "two_pass_string_keys_1k_scan_ms": 5406,
+        "two_pass_string_keys_10k_scan_ms": 6569,
+        "two_pass_packed_keys_1k_scan_ms": 1857,
+        "two_pass_packed_keys_10k_scan_ms": 3165,
+        "speedup": "6.2x at 1,000 sectors, 4.2x at 10,000. The pass split alone accounted for ~2x; rekeying onto packed integers delivered the rest."
+      }
+    },
+    "delta": {
+      "retained_arraybuffer": "-64.0 MiB at both sector counts — 4096*4096 pixels * 4 bytes, i.e. exactly the removed Uint32Array[] whose entries totalled one per non-void pixel. Independent of sector count, as expected: the arrays were pixel-proportional, not sector-proportional.",
+      "retained_rss": "-28% at 1k sectors, -49% at 10k.",
+      "peak_rss": "-42% at 1k sectors, -11% at 10k. The two do not agree, and the transient allocation removed is identical at both sizes, so treat the peak figures as the noisier of the two: RSS is a high-water mark over pages the allocator chose to hold, not an allocation total.",
+      "scan_ms": "-6.4% at 1k sectors, -3.9% at 10k. The per-pixel array push was never the dominant cost; the scan is dominated by the per-pixel hex-key construction and neighbour lookups."
+    }
+  },
+  "b4.decode": {
+    "capturedAt": "2026-07-22T17:35:00Z",
+    "hardware": "Intel Core i5-2520M @ 2.50GHz (4 threads), 7 GiB RAM, Linux x86_64 — containerized dev session, not reference hardware",
+    "measurementMethod": "test/DecodePerf.gl.spec.ts. Vitest browser mode (Playwright/Chromium) — createImageBitmap and OffscreenCanvas do not exist in the Node harness bench/ uses, which is why this is the one b-series entry produced from test/ rather than bench/. performance.now() bracketing, best of 5, warmed once first so the HTTP cache is primed and codec lazy-init has settled. The sub-step figures fetch the blob outside the timed region, so neither includes I/O.",
+    "fixture": "test/fixtures/maps/large.png (4096x4096)",
+    "parse_end_to_end_ms": 323,
+    "create_image_bitmap_ms": 79,
+    "offscreen_canvas_readback_ms": 225,
+    "note": "Readback costs roughly 3x the decode itself. The PNG decode is cheap; extracting the pixels back through a 2D context is what dominates. Combined with b1.registry_scan, total main-thread map load at 4096x4096 on this hardware is roughly 2.1 s at 1,000 sectors and 3.3 s at 10,000.",
+    "notThreshold": "Emits figures; no gate is asserted. There is no reference-hardware number to compare against, and a threshold set on a contended box would be flaky rather than informative."
   },
   "b2.palette_swap_median_ms": {
     "value": 0.4,

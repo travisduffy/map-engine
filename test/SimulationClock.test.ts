@@ -21,7 +21,9 @@ function callWorker<T>(engine: MapEngine, method: string): Promise<T> {
         resolve(msg.result as T)
       } else if (msg.type === 'ERROR' && msg.id === id) {
         worker.removeEventListener('message', onMessage)
-        reject(new Error(msg.error))
+        const err = new Error(msg.message)
+        err.name = msg.errorName
+        reject(err)
       }
     }
     worker.addEventListener('message', onMessage)

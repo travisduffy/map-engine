@@ -10,4 +10,5 @@ export default defineConfig({
       'map-engine': new URL('../src/index.ts', import.meta.url).pathname,
     },
   },
+  plugins: [],
 })
