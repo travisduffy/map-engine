@@ -1,6 +1,7 @@
 {
   "name": "@travisduffy/map-engine",
   "version": "0.0.7",
+  "private": true,
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -40,9 +41,6 @@
     "example/public/map.png",
     "example/public/sectors.json"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "workspaces": [
     "example"
   ],
