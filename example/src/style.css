@@ -243,3 +243,28 @@ button.active {
   font-size: 10px;
   flex-shrink: 0;
 }
+
+/* ── Phone layout ─────────────────────────────────────── */
+
+/* Stack the sidebar below the map so the map keeps the full width. */
+@media (max-width: 700px) {
+  body,
+  #app {
+    height: 100dvh;
+  }
+
+  #app {
+    flex-direction: column;
+  }
+
+  #map-container {
+    flex: 0 0 55%;
+  }
+
+  #sidebar {
+    width: auto;
+    flex: 1;
+    border-left: none;
+    border-top: 1px solid #333;
+  }
+}
