@@ -46,13 +46,7 @@ Three.js is a peer dependency. The production bundle size is approximately 16 kB
 
 ## Installation
 
-```bash
-npm install three@^0.160.0 @travisduffy/map-engine
-npm install -D @types/three@^0.160.0
-
-```
-
-Pre-compiled assets ship in `dist/`. For source builds or local development workflows, see the [Installation Guide](https://www.google.com/search?q=docs/REFERENCE.md%23installation) in the reference documentation.
+`map-engine` is still under development and is not published as a package. For local development workflows, see the [Installation Guide](docs/REFERENCE.md#installation) in the reference documentation.
 
 ## Usage
 
@@ -93,14 +87,9 @@ engine.setSectorColor('ff0000', '#3399ff')
 }
 ```
 
-Sample data files are provided in the package distribution. Copy them directly into your public static asset directory:
+Sample data files are in `example/public/`.
 
-```bash
-mkdir -p public && cp node_modules/@travisduffy/map-engine/example/public/{map.png,sectors.json} public/
-
-```
-
-Complete technical specifications for map modes, pathfinding, camera controls, label anchors, and data schemas can be found in [docs/REFERENCE.md](https://www.google.com/search?q=docs/REFERENCE.md).
+Complete technical specifications for map modes, pathfinding, camera controls, label anchors, and data schemas can be found in [docs/REFERENCE.md](docs/REFERENCE.md).
 
 ## Example & Test Suite
 
@@ -154,4 +143,4 @@ npm run check:log   # Validates log schema and cryptographic integrity
 
 ## License
 
-MIT © [Travis Duffy](https://www.google.com/search?q=LICENSE)
+MIT © [Travis Duffy](LICENSE)
